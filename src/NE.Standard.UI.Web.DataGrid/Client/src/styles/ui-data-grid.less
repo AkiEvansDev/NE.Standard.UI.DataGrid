@@ -1,0 +1,321 @@
+// The data grid over the framework's table: the table's own stylesheet draws the root, header, host, rows and cells; what's
+// written here is only what the grid adds, against the theme's --ui-* tokens and the framework's Less.
+
+@import (reference) "../../plugin/ne-standard-ui.less";
+
+// A row stands a step taller than the table's, with more air around its cells — a grid is a screen's main surface, read row by
+// row. The header keeps the table's height.
+.ui-data-grid .ui-table__host > .ui-table__row {
+    min-height: @ui-row-height-sm;
+}
+
+.ui-data-grid .ui-table__host > .ui-table__row > .ui-table__cell {
+    padding: @ui-space-2 @ui-space-3;
+}
+
+// A header cell that sorts is pressed like a button and walked like one; the page's own ring marks it when walked to.
+.ui-data-grid .ui-table__header > .ui-table__header-cell[data-ui-grid-sort] {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color @ui-motion-fast @ui-motion-ease;
+}
+
+    .ui-data-grid .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]:hover {
+        background: color-mix(in srgb, var(--ui-color-on-surface) @ui-table-tint, transparent);
+    }
+
+// The mark after the caption, in two states: sorting, the framework's arrow with its place among several sorted columns; idle,
+// the framework's faint two-way mark, so a header says what it offers rather than showing an arrow for a sort nobody asked for.
+.ui-data-grid__sort-mark,
+.ui-data-grid__sort-idle {
+    width: auto;
+    gap: 0.125rem;
+    margin-inline-start: @ui-space-1;
+    font-size: @ui-glyph-sm;
+}
+
+    // One at a time: the arrow belongs to a column that sorts, the two ways to one that does not.
+    .ui-data-grid__sort-mark {
+        display: none;
+    }
+
+    .ui-data-grid__sort-idle {
+        opacity: 0.35;
+        transition: opacity @ui-motion-fast @ui-motion-ease;
+    }
+
+    .ui-table__header-cell[data-ui-grid-sorted] > .ui-data-grid__sort-mark {
+        display: inline-flex;
+    }
+
+    .ui-table__header-cell[data-ui-grid-sorted] > .ui-data-grid__sort-idle {
+        display: none;
+    }
+
+    .ui-table__header-cell[data-ui-grid-sort]:hover > .ui-data-grid__sort-idle {
+        opacity: 0.7;
+    }
+
+    [data-ui-grid-sorted="desc"] > .ui-data-grid__sort-mark::before {
+        transform: rotate(180deg);
+    }
+
+    .ui-data-grid__sort-mark[data-ui-grid-sort-place]::after {
+        content: attr(data-ui-grid-sort-place);
+        font-size: 0.75em;
+        font-weight: var(--ui-text-title-font-weight);
+        line-height: 1;
+    }
+
+
+// The band and the pager are the grid's chrome, not its rows: the table's box carries the frame and scrolls, and these two stand
+// outside it, true for a wide grid as well as a narrow one. The totals footer is the opposite — it stays inside the box and
+// scrolls with the columns' tracks.
+.ui-data-grid__band {
+    display: flex;
+    align-items: center;
+    gap: @ui-space-2;
+    padding-bottom: @ui-space-2;
+}
+
+    // The search box takes the width the buttons leave.
+    .ui-data-grid__band > .ui-data-grid__filter {
+        flex: 1 1 auto;
+    }
+
+    .ui-data-grid__band > .ui-flyout {
+        flex: 0 0 auto;
+    }
+
+// The filters and columns buttons in the band use the field's own material, not an outline, since the band is a row of controls
+// beside the search field. The framework's field row makes them stand, hover and lift their edge exactly as the search box does.
+.ui-data-grid__band-button {
+    .ui-input-field();
+    color: inherit;
+    font: inherit;
+    font-size: var(--ui-text-body-font-size);
+    cursor: pointer;
+}
+
+    .ui-data-grid__band-button:hover {
+        border-color: var(--ui-field-hover);
+    }
+
+    .ui-data-grid__band-button > .ui-icon {
+        font-size: @ui-glyph-md;
+        color: var(--ui-text-muted);
+    }
+
+    // The count of filters in use, hidden at none via the `[hidden]` rule below since a class alone wouldn't outweigh it. Sized
+    // to the caption, so a whole-pixel text keeps the framework's badge circle and its centred figure on whole pixels.
+    .ui-data-grid__filters-count {
+        font-size: var(--ui-text-caption-font-size);
+        font-weight: var(--ui-text-title-font-weight);
+    }
+
+    .ui-data-grid__filters-count[hidden] {
+        display: none;
+    }
+
+// A filter: its parts side by side, a range's two ends sharing the width.
+.ui-data-grid__filter {
+    display: flex;
+    align-items: center;
+    gap: @ui-space-1;
+    min-width: 0;
+}
+
+    .ui-data-grid__filter-part {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    // The field fits its part regardless of the floor width the framework gives it standalone — a select's twelve rem would
+    // overflow a seven-rem column and get cut off at the grid's edge.
+    .ui-data-grid__filter-part > [data-ui-id] {
+        width: 100%;
+        min-width: 0;
+    }
+
+// The flyout's panel: the filters in a column, each its caption over its field; the panel spans the placement host the flyout is.
+.ui-data-grid__filter-panel {
+    display: flex;
+    flex-direction: column;
+    gap: @ui-space-3;
+    grid-column: 1 / -1;
+    min-width: 18rem;
+}
+
+    .ui-data-grid__filter-panel > .ui-data-grid__filter {
+        flex-wrap: wrap;
+    }
+
+    .ui-data-grid__filter-caption {
+        flex: 0 0 100%;
+        font-size: var(--ui-text-caption-font-size);
+        color: var(--ui-text-muted);
+    }
+
+// The chooser's panel holds the framework's own menu; the panel spans the placement host the flyout is, and the menu fills it.
+.ui-data-grid__columns-panel {
+    display: grid;
+    grid-column: 1 / -1;
+    min-width: 11rem;
+}
+
+// The footer of totals under the rows: a row of the header's tracks on the header's tint, in the header's weight, as an implicit
+// row of the scroll box's grid so the host keeps the stretching one.
+.ui-data-grid__footer {
+    --ui-row-wash: color-mix(in srgb, var(--ui-color-on-surface) @ui-table-tint, transparent);
+
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    grid-row: 4;
+    align-items: center;
+    min-height: 2.25rem;
+    background: var(--ui-row-wash);
+    border-top: var(--ui-border-width, 1px) solid var(--ui-color-border);
+    font-weight: var(--ui-text-title-font-weight);
+    font-variant-numeric: tabular-nums;
+}
+
+    .ui-data-grid:is(.ui-scroll-x--auto, .ui-scroll-x--always) .ui-data-grid__footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        background-color: var(--ui-surface-color, var(--ui-color-background));
+        background-image: linear-gradient(var(--ui-row-wash), var(--ui-row-wash));
+    }
+
+    .ui-data-grid__total {
+        .ui-text-nowrap();
+    }
+
+// The pager under the table and outside its frame, drawn only while the grid pages: a row of buttons on the page, as the band is.
+.ui-data-grid__pager {
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: @ui-space-1;
+    padding: @ui-space-2 0 0;
+    font-size: var(--ui-text-caption-font-size);
+}
+
+    .ui-data-grid[data-ui-grid-paging] > .ui-data-grid__pager {
+        display: flex;
+    }
+
+    .ui-data-grid__page-status {
+        margin-inline: @ui-space-2;
+        font-variant-numeric: tabular-nums;
+    }
+
+    // Four marks of the framework's own — the ends and the two chevrons — on the framework's own small ghost buttons.
+    .ui-data-grid__page-button > .ui-icon {
+        font-size: @ui-glyph-md;
+    }
+
+// A cell that edits hides while its editor stands in its track — a cell of the same row, absent until the engine opens it. No
+// pointer cursor of its own: rows are read far more than they're edited.
+.ui-data-grid__cell--editing {
+    display: none;
+}
+
+.ui-data-grid__editor {
+    display: none;
+}
+
+    // The field's text follows the column's edge, as the cell's did.
+    .ui-data-grid__editor.ui-table__cell--end input {
+        text-align: end;
+    }
+
+    .ui-data-grid__editor.ui-table__cell--center input {
+        text-align: center;
+    }
+
+    .ui-data-grid__editor--open {
+        display: flex;
+    }
+
+    // The field's text lands where the cell's text stood, at either edge: a ghost field insets its own by half a step and a
+    // border, so the value must not shift when the editor opens.
+    .ui-data-grid__editor > [data-ui-id] {
+        flex: 1 1 auto;
+        min-width: 0;
+        margin-inline: calc(-1 * (@ui-space-2 + var(--ui-border-width, 1px)));
+    }
+
+    // A checkbox has no box of its own to pull back: it takes its own width, and the cell's alignment stands it where the word it
+    // replaces stood; stretched and pulled, it opened left of the column's text and the cell jumped.
+    .ui-data-grid__editor > .ui-checkbox {
+        flex: 0 0 auto;
+        margin-inline: 0;
+    }
+
+    // Digits of one width, as the cell under the editor has them: a number whose spacing changed when the cell opened read as a shift.
+    .ui-data-grid__editor:is([data-ui-grid-kind="number"], [data-ui-grid-kind="money"], [data-ui-grid-kind="date"]) input {
+        font-variant-numeric: tabular-nums;
+    }
+
+// A row's detail: a band under its cells across every track, drawn only while the row stands open, with the opening chevron
+// turned a quarter. The cell holds the framework's ghost button, whose chevron is the click target the engine reads.
+.ui-data-grid__detail {
+    display: none;
+    grid-column: 1 / -1;
+    padding: @ui-space-3 @ui-space-3 @ui-space-4;
+    border-top: var(--ui-border-width, 1px) solid var(--ui-color-border);
+}
+
+    .ui-table__row[data-ui-grid-expanded] > .ui-data-grid__detail {
+        display: block;
+    }
+
+.ui-data-grid__cell--detail {
+    padding-inline: @ui-space-1;
+}
+
+    // Square and unpadded: a small button's side padding left the chevron no width at all in a forty-pixel column.
+    .ui-data-grid__cell--detail .ui-button {
+        min-width: @ui-button-height-sm;
+        padding: 0;
+        transition: transform @ui-motion-fast @ui-motion-ease;
+    }
+
+    .ui-table__row[data-ui-grid-expanded] > .ui-data-grid__cell--detail .ui-button {
+        transform: rotate(90deg);
+    }
+
+    // A row that opens on a click says so under the pointer, except where a cell answers the click itself.
+    .ui-data-grid[data-ui-grid-expand-click] .ui-table__row > .ui-table__cell:not([data-ui-no-row-open]) {
+        cursor: pointer;
+    }
+
+// The grid's own column of checkboxes: as narrow as the box, the header's over them. Its cells hold nothing but the box, so the
+// row's own air is cut here or it would sit around it twice and misalign the header's box.
+.ui-data-grid .ui-table__host > .ui-table__row > .ui-data-grid__cell--select,
+.ui-data-grid .ui-table__header > .ui-table__header-cell[data-ui-grid-select-all] {
+    padding-inline: @ui-space-1;
+}
+
+    // The box takes its own width and the cell's own centring places it: stretched, it stood at the start of whatever the padding left.
+    .ui-data-grid__cell--select > [data-ui-id],
+    .ui-table__header-cell[data-ui-grid-select-all] > [data-ui-id] {
+        flex: 0 0 auto;
+    }
+
+// A typed cell is one line of the row's own text, cut with an ellipsis where the column is narrower than the value.
+.ui-data-grid-cell {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    .ui-text-nowrap();
+}
+
+    // Digits of one width, so a column of numbers lines up.
+    .ui-data-grid-cell--number,
+    .ui-data-grid-cell--money,
+    .ui-data-grid-cell--date {
+        font-variant-numeric: tabular-nums;
+    }

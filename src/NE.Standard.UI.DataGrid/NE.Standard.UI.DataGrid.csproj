@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>NE.Standard.UI.DataGrid</PackageId>
+    <Description>A data grid component for the NE.Standard UI framework: the table with everything the built-in one leaves to an add-on — sorting by header, typed and formatted columns, editing in place, filters and a search box, paging, a footer of totals, pinned and responsive columns with a chooser, a detail row and CSV export. Platform-independent; the web rendering is NE.Standard.UI.Web.DataGrid.</Description>
+    <PackageTags>NE.Standard,UI,DataGrid,Table,Grid</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>NE.Test.Standard.UI.DataGrid</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!-- The framework is a sibling in the monorepo and a package in this slice's mirror. Either way the produced nupkg depends on
+       the framework at $(CoreVersion). The grid derives from the built-in table, so unlike a field it references the built-in
+       components rather than the authoring foundation alone; the generator turns its declared properties into their setters,
+       binders and descriptors exactly as it does for the built-ins. The CSV writer reads a row's property through the compiled
+       contract's ItemContext rather than a reflection path of its own. -->
+  <ItemGroup Condition="'$(InMonorepo)' == 'true'">
+    <ProjectReference Include="..\..\..\..\src\Generators\NE.Standard.UI.Generators\NE.Standard.UI.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <ProjectReference Include="..\..\..\..\src\Core\NE.Standard.UI.Components\NE.Standard.UI.Components.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Contracts\NE.Standard.UI.Compiled\NE.Standard.UI.Compiled.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(InMonorepo)' != 'true'">
+    <PackageReference Include="NE.Standard.UI.Generators" Version="$(CoreVersion)" PrivateAssets="all" />
+    <PackageReference Include="NE.Standard.UI.Components" Version="$(CoreVersion)" />
+    <PackageReference Include="NE.Standard.UI.Compiled" Version="$(CoreVersion)" />
+  </ItemGroup>
+
+</Project>
