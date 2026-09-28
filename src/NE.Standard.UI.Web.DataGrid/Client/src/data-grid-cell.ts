@@ -9,8 +9,11 @@ const KindAttribute = "data-ui-grid-kind";
 const FormatAttribute = "data-ui-grid-format";
 const CurrencyAttribute = "data-ui-grid-currency";
 const ChoicesAttribute = "data-ui-grid-choices";
-/** On a number or money cell: the value as it is, for a footer to add up. */
+/** On a number or money cell: the value as a number — a numeric text's too — for a footer to add up. */
 export const RawValueAttribute = "data-ui-grid-raw";
+
+// What double.TryParse reads under NumberStyles.Float, the invariant culture, on the server's side.
+const DecimalText = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\s*$/;
 
 const YesKey = "ui.grid.yes";
 const NoKey = "ui.grid.no";
@@ -58,8 +61,10 @@ export function applyCellValue(cell: Element, value: unknown, formatting: CellFo
     if (cell.textContent !== text)
         cell.textContent = text;
 
-    if ((shape.kind === "number" || shape.kind === "money") && typeof value === "number")
-        cell.setAttribute(RawValueAttribute, String(value));
+    const number = shape.kind === "number" || shape.kind === "money" ? toNumber(value) : null;
+
+    if (number !== null)
+        cell.setAttribute(RawValueAttribute, String(number));
     else if (cell.hasAttribute(RawValueAttribute))
         cell.removeAttribute(RawValueAttribute);
 }
@@ -102,17 +107,20 @@ export function formatCellValue(value: unknown, shape: CellShape, numbers: Numbe
     }
 }
 
-function toNumber(value: unknown): number | null {
+/**
+ * A number, or a text that reads as one the way the server's cell reads it — decimal digits with a point and an exponent, no
+ * grouping and no `0x`; null for anything else, and for a number no finite value holds.
+ */
+export function toNumber(value: unknown): number | null {
     if (typeof value === "number")
         return Number.isFinite(value) ? value : null;
 
-    if (typeof value === "string" && value.trim().length > 0) {
-        const parsed = Number(value);
+    if (typeof value !== "string" || !DecimalText.test(value))
+        return null;
 
-        return Number.isFinite(parsed) ? parsed : null;
-    }
+    const parsed = Number(value);
 
-    return null;
+    return Number.isFinite(parsed) ? parsed : null;
 }
 
 /** A moment off the wire, read as the framework reads one: by the clock it is written with, never by `new Date(text)` and the reader's zone. */

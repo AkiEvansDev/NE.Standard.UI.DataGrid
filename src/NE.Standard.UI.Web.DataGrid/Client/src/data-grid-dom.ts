@@ -19,6 +19,16 @@ export function ownDescendants(grid: HTMLElement, selector: string): HTMLElement
     return own;
 }
 
+/** The grid's first own match inside `within` (the grid itself unless given), a nested grid's left to it. */
+export function ownFirst<T extends HTMLElement = HTMLElement>(grid: HTMLElement, selector: string, within: ParentNode = grid): T | null {
+    for (const element of within.querySelectorAll<T>(selector)) {
+        if (element.closest(RootSelector) === grid)
+            return element;
+    }
+
+    return null;
+}
+
 /** The grid the element stands in, or null outside every grid. */
 export function gridOf(target: EventTarget | null): HTMLElement | null {
     return target instanceof Element ? target.closest<HTMLElement>(RootSelector) : null;

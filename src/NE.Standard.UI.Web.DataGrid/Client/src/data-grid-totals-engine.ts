@@ -1,9 +1,9 @@
-// The footer under the rows: a total per column that asked for one. Computed here from the typed cells' raw values for a paged
-// or virtualized host; for a windowed source, the server sends the total with the window, carried as a host attribute. Every
-// way writes through the same formatter the cells use.
+// The footer under the rows: a total per column that asked for one. Computed here — from the typed cells' raw values for a host
+// holding every row in the page, from the items a virtualized host holds; for a windowed source, the server sends the total with
+// the window, carried as a host attribute. Every way writes through the same formatter the cells use.
 
 import type { ItemRows, PluginEngineContext } from "ne-standard-ui";
-import { formatCellValue, RawValueAttribute, readCellShape } from "./data-grid-cell.ts";
+import { formatCellValue, RawValueAttribute, readCellShape, toNumber } from "./data-grid-cell.ts";
 import type { CellFormatting } from "./data-grid-cell.ts";
 import { HostSelector, RootSelector } from "./data-grid-dom.ts";
 
@@ -20,6 +20,8 @@ export type Aggregate = "sum" | "average" | "count" | "min" | "max";
 export class DataGridTotalsEngine {
     private readonly formatting: CellFormatting;
     private readonly rows: ItemRows;
+    private readonly pending = new Set<HTMLElement>();
+    private scheduled = false;
 
     public constructor(context: PluginEngineContext, formatting: CellFormatting) {
         this.formatting = formatting;
@@ -28,7 +30,7 @@ export class DataGridTotalsEngine {
 
         // Rows come and go, a filter hides one (its class), an edit changes a cell's value (its raw attribute), a window brings its
         // answer (the host's attribute).
-        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, WindowAggregatesAttribute] }, grids => this.syncAll(grids));
+        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, WindowAggregatesAttribute] }, grids => this.queue(grids));
     }
 
     private syncAll(grids: Iterable<HTMLElement>): void {
@@ -48,9 +50,10 @@ export class DataGridTotalsEngine {
         if (host === null)
             return;
 
-        const answered = host.getAttribute(HostModeAttribute) === "windowed" ? readAggregates(host) : null;
+        const windowed = host.getAttribute(HostModeAttribute) === "windowed";
+        const answered = windowed ? readAggregates(host) : null;
         // A virtualized host draws only the rows in view: the reading is over the items it holds, not over the page.
-        const held = answered === null ? this.rows.itemsOf(host) : null;
+        const held = windowed ? null : this.rows.itemsOf(host);
         const numbers = this.formatting.numbers.readCulture(grid);
         const dates = this.formatting.temporal.readCulture(grid);
 
@@ -58,8 +61,10 @@ export class DataGridTotalsEngine {
             const column = total.getAttribute(ColumnAttribute) ?? "";
             const property = total.getAttribute(PropertyAttribute) ?? column;
             const aggregate = (total.getAttribute(AggregateAttribute) ?? "") as Aggregate;
-            const value = answered !== null
-                ? answered[property] ?? null
+            // A windowed source's rows in the page are one window of many: only the source can total them, and a source that sent
+            // nothing leaves the footer blank rather than showing the window's sum as the column's.
+            const value = windowed
+                ? answered?.[property] ?? null
                 : held !== null
                     ? aggregate === "count" ? held.length : aggregateOf(aggregate, heldValues(held, property, this.rows))
                     : aggregate === "count" ? host.querySelectorAll(RowSelector).length : aggregateOf(aggregate, rawValues(host, column));
@@ -68,6 +73,28 @@ export class DataGridTotalsEngine {
             if (total.textContent !== text)
                 total.textContent = text;
         }
+    }
+
+    /**
+     * Totals once a frame at most: a scroll through a virtualized host swaps rows batch after batch, each a reading over every item
+     * it holds, and the footer's own writes come back as one more batch.
+     */
+    private queue(grids: Iterable<HTMLElement>): void {
+        for (const grid of grids)
+            this.pending.add(grid);
+
+        if (this.scheduled)
+            return;
+
+        this.scheduled = true;
+        requestAnimationFrame(() => {
+            this.scheduled = false;
+
+            const due = [...this.pending];
+
+            this.pending.clear();
+            this.syncAll(due.filter(grid => grid.isConnected));
+        });
     }
 }
 
@@ -86,15 +113,14 @@ function readAggregates(host: Element): Readonly<Record<string, unknown>> | null
     }
 }
 
-/** The values of one property over the items a host holds whole; an item with no number there is skipped. */
+/** The values of one property over the items a host holds whole, read as a cell reads its number; an item with none is skipped. */
 function heldValues(items: readonly unknown[], property: string, rows: ItemRows): number[] {
     const values: number[] = [];
 
     for (const item of items) {
-        const raw = rows.readPath(item, property);
-        const value = typeof raw === "number" ? raw : raw instanceof Date ? raw.getTime() : Number(raw);
+        const value = toNumber(rows.readPath(item, property));
 
-        if (raw !== null && raw !== undefined && raw !== "" && Number.isFinite(value))
+        if (value !== null)
             values.push(value);
     }
 
@@ -106,7 +132,7 @@ function rawValues(host: Element, column: string): number[] {
     const values: number[] = [];
 
     for (const row of host.querySelectorAll<HTMLElement>(RowSelector)) {
-        const cell = row.querySelector(`:scope > [${ColumnAttribute}="${column}"] [${RawValueAttribute}]`);
+        const cell = row.querySelector(`:scope > [${ColumnAttribute}="${CSS.escape(column)}"] [${RawValueAttribute}]`);
         const value = cell === null ? Number.NaN : Number(cell.getAttribute(RawValueAttribute));
 
         if (Number.isFinite(value))
@@ -130,10 +156,22 @@ export function aggregateOf(aggregate: Aggregate, values: readonly number[]): nu
         case "average":
             return values.reduce((total, value) => total + value, 0) / values.length;
         case "min":
-            return Math.min(...values);
+            return extremeOf(values, -1);
         case "max":
-            return Math.max(...values);
+            return extremeOf(values, 1);
         default:
             return null;
     }
+}
+
+/** The largest value for a positive sign, the smallest for a negative one — a loop, since spreading a large list overflows the stack. */
+function extremeOf(values: readonly number[], sign: 1 | -1): number {
+    let extreme = values[0];
+
+    for (let i = 1; i < values.length; i++) {
+        if ((values[i] - extreme) * sign > 0)
+            extreme = values[i];
+    }
+
+    return extreme;
 }

@@ -13,3 +13,10 @@ test("a total is one number over the values, and a count stands even over none",
     assert.equal(aggregateOf("sum", []), null);
     assert.equal(aggregateOf("average", []), null);
 });
+
+test("a least or greatest over more values than a call can take as arguments still answers", () => {
+    const values = Array.from({ length: 300_000 }, (_, index) => index % 1000 - 500);
+
+    assert.equal(aggregateOf("min", values), -500);
+    assert.equal(aggregateOf("max", values), 499);
+});

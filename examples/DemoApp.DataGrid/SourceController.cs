@@ -1,10 +1,6 @@
 using System.Globalization;
 using System.Linq;
 using System.Text;
-using NE.Standard.UI.Abstractions.Data;
-using NE.Standard.UI.Controllers;
-using NE.Standard.UI.Primitives.Annotations;
-using NE.Standard.UI.Primitives.Items;
 
 namespace DemoApp.DataGrid;
 
@@ -16,13 +12,13 @@ internal sealed partial class SourceController : UIControllerBase
 {
     private const string NotAsked = "The source has not been asked for anything but its first window.";
 
-    /// <summary>A hundred thousand orders, read a window at a time as the viewer scrolls.</summary>
+    /// <summary>A hundred thousand subscriptions, read a window at a time as the viewer scrolls.</summary>
     [RecursiveMember(false)]
-    public OrderSource ScrollingSource { get; } = new();
+    public SubscriptionSource ScrollingSource { get; } = new();
 
     /// <summary>The same hundred thousand, read a page at a time.</summary>
     [RecursiveMember(false)]
-    public OrderSource PagedSource { get; } = new();
+    public SubscriptionSource PagedSource { get; } = new();
 
     /// <summary>The terms the viewer set on each grid — bound two-way, so the server re-reads the window under them.</summary>
     [RecursiveMember]
@@ -38,12 +34,37 @@ internal sealed partial class SourceController : UIControllerBase
     public partial string PagedStatus { get; set; } = NotAsked;
 
     [RecursiveMember]
-    public partial string EditStatus { get; set; } = "Double-click a cell to edit it: the write goes through the source, which keeps it and reads the order anew.";
+    public partial string EditStatus { get; set; } = "Double-click a cell to edit it: the write goes through the source, which keeps it and reads the subscription anew.";
 
     /// <summary>A grid raised its query change: the value has reached the server, and the window was re-read under it.</summary>
     [UICommand]
     public void ScrollingQueryChanged()
         => ScrollingStatus = Describe(ScrollingQuery, ScrollingSource.MatchCount);
+
+    /// <summary>The controller narrows the scrolling grid itself; the grid's filter fields take the terms up.</summary>
+    [UICommand]
+    public void ShowPastDue()
+    {
+        UIItemFilterTerm[] filters =
+        [
+            new(nameof(Subscription.Status), UIComparisonOperator.Equal, nameof(SubscriptionStatus.PastDue)),
+            new(nameof(Subscription.Monthly), UIComparisonOperator.GreaterOrEqual, 100m)
+        ];
+
+        UIItemsQuery query = new(filters, ScrollingQuery?.Sorts ?? []);
+
+        ScrollingQuery = query;
+        ScrollingStatus = Describe(query, ScrollingSource.CountMatching(query));
+    }
+
+    [UICommand]
+    public void ClearFilters()
+    {
+        UIItemsQuery query = new([], ScrollingQuery?.Sorts ?? []);
+
+        ScrollingQuery = query;
+        ScrollingStatus = Describe(query, ScrollingSource.CountMatching(query));
+    }
 
     [UICommand]
     public void PagedQueryChanged()
@@ -53,13 +74,13 @@ internal sealed partial class SourceController : UIControllerBase
     [UICommand]
     public void CellEdited(string id, string column)
     {
-        Order? order = ScrollingSource.Items.FirstOrDefault(candidate => candidate.Id == id)
+        Subscription? subscription = ScrollingSource.Items.FirstOrDefault(candidate => candidate.Id == id)
             ?? PagedSource.Items.FirstOrDefault(candidate => candidate.Id == id);
 
-        // The same status line ColumnsController.CellEdited builds over its orders; the two controllers share no base.
-        EditStatus = order is null
+        // The same status line ColumnsController.CellEdited builds over its subscriptions; the two controllers share no base.
+        EditStatus = subscription is null
             ? string.Create(CultureInfo.InvariantCulture, $"Row {id} is not in either window.")
-            : string.Create(CultureInfo.InvariantCulture, $"{order.Number}: {column} is now {order.ValueOf(column)}.");
+            : string.Create(CultureInfo.InvariantCulture, $"{subscription.Number}: {column} is now {subscription.ValueOf(column)}.");
     }
 
     private static string Describe(UIItemsQuery? query, int matches)

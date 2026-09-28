@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { NumberCulturePack, TemporalCulturePack } from "ne-standard-ui";
-import { formatCellValue, toDate } from "../src/data-grid-cell.ts";
+import { formatCellValue, toDate, toNumber } from "../src/data-grid-cell.ts";
 import type { CellFormatting, CellShape } from "../src/data-grid-cell.ts";
 
 // The formatters are the framework's; here they are stand-ins that say what they were given, since the framework's own tests pin
@@ -44,6 +44,21 @@ test("a number and an amount go through the number formatter, the amount with th
     assert.equal(formatCellValue("42", shape("number"), numbers, dates, formatting), "$42|");
     assert.equal(formatCellValue(9, shape("money", { format: "C", currency: "€" }), numbers, dates, formatting), "€9|C");
     assert.equal(formatCellValue("n/a", shape("number"), numbers, dates, formatting), "n/a");
+});
+
+test("a numeric text is a number as the server reads one: decimal digits, a point, an exponent, and nothing else", () => {
+    assert.equal(toNumber(" -12.5 "), -12.5);
+    assert.equal(toNumber("1e3"), 1000);
+    assert.equal(toNumber(".5"), 0.5);
+    assert.equal(toNumber(7), 7);
+    assert.equal(toNumber(""), null);
+    assert.equal(toNumber(" "), null);
+    assert.equal(toNumber("0x10"), null);
+    assert.equal(toNumber("1,234"), null);
+    assert.equal(toNumber("Infinity"), null);
+    assert.equal(toNumber(Number.NaN), null);
+    assert.equal(toNumber(true), null);
+    assert.equal(formatCellValue("0x10", shape("number"), numbers, dates, formatting), "0x10");
 });
 
 test("a date is read off the wire as a local moment and goes through the temporal formatter", () => {

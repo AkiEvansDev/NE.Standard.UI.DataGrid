@@ -32,25 +32,25 @@ public abstract partial class DataGridCellComponent<T> : VisualComponentBase<T>
     /// <summary>
     /// Gets or sets what the value is, which decides the format and the alignment.
     /// </summary>
-    [UIComponentProperty(DefaultValue = UIDataGridColumnKind.Text, IsBindable = false, GenerateBinder = false)]
+    [UIComponentProperty(DefaultValue = UIDataGridColumnKind.Text, IsBindable = false)]
     public UIDataGridColumnKind Kind { get; set; }
 
     /// <summary>
     /// Gets or sets the format the value is written with: a standard number format or a date pattern; unset, the kind's own.
     /// </summary>
-    [UIComponentProperty(DefaultValue = null, IsBindable = false, GenerateBinder = false)]
+    [UIComponentProperty(DefaultValue = null, IsBindable = false)]
     public string? Format { get; set; }
 
     /// <summary>
     /// Gets or sets a money cell's currency symbol when it is not the page's.
     /// </summary>
-    [UIComponentProperty(DefaultValue = null, IsBindable = false, GenerateBinder = false)]
+    [UIComponentProperty(DefaultValue = null, IsBindable = false)]
     public string? Currency { get; set; }
 
     /// <summary>
     /// Gets or sets the captions an enum or boolean cell shows for its values.
     /// </summary>
-    [UIComponentProperty(DefaultValue = null, IsBindable = false, GenerateBinder = false)]
+    [UIComponentProperty(DefaultValue = null, IsBindable = false)]
     public IReadOnlyList<UIChoice>? Choices { get; set; }
 }
 

@@ -1,12 +1,3 @@
-using NE.Standard.UI.Abstractions.Styling;
-using NE.Standard.UI.Authoring.Components;
-using NE.Standard.UI.Authoring.Views;
-using NE.Standard.UI.Components.BuiltIns.Actions;
-using NE.Standard.UI.Components.BuiltIns.Inputs;
-using NE.Standard.UI.Components.BuiltIns.Layouts;
-using NE.Standard.UI.Extensions;
-using NE.Standard.UI.Primitives.Styling;
-
 namespace DemoApp.DataGrid;
 
 /// <summary>
@@ -22,13 +13,13 @@ internal sealed class ColumnsView : DataGridDemoView, IUIViewDefinition
     public override string Title => "Columns and editing";
 
     protected override string Description
-        => "A grid from NE.Standard.UI.DataGrid over thirty orders the page holds whole: sort by header, move a column, edit a cell, open a row's detail.";
+        => "A grid from NE.Standard.UI.DataGrid over thirty subscriptions the page holds whole: sort by header, move a column, edit a cell, open a row's detail.";
 
     protected override IVisualComponent[] CreateSections()
         =>
         [
-            UIPage.Section("Typed columns and template columns",
-                "The typed columns format the row's values: the quantity and the total are numbers, the date a pattern, the payment a yes or a no. The customer, the status and the fulfilment are template columns — any component bound to the row: two lines of text, a badge, a bar — sorted by a property the column names. Click a caption to sort, again to reverse, a third time to clear; hold Shift to sort by several. Drag a caption sideways to move its column, or press Ctrl with an arrow on it — the grid's own column of checkboxes stays where it is. Double-click a cell to edit it: Enter or a click elsewhere commits, Escape puts the value back, Tab moves along the row. An editable column carries the field its kind wants; a template column takes the editor the author bound, which is why the customer is edited in a search over the known customers and the status in a select over the enum. The chevron opens what the row holds under itself.",
+            Example("Typed columns and template columns",
+                "The typed columns format the row's values: the servers and the monthly price are numbers, the plan an enum, the start a date, the payment a yes or a no. The customer, the status and the usage are template columns — any component bound to the row: two lines of text, a badge, a bar — sorted by a property the column names. Click a caption to sort, again to reverse, a third time to clear; hold Shift to sort by several. Drag a caption sideways to move its column, or press Ctrl with an arrow on it — the grid's own column of checkboxes stays where it is. Double-click a cell to edit it: Enter or a click elsewhere commits, Escape puts the value back, Tab moves along the row. An editable column carries the field its kind wants; a template column takes the editor the author bound, which is why the customer is edited in a search over the known customers and the status in a select over the enum. Change the plan or the servers and the monthly price follows; it is the one column that does not edit. The chevron opens what the row holds under itself.",
                 new StackPanelComponent()
                     .SetOrientation(UIOrientation.Vertical)
                     .SetSpacing(8)
@@ -56,19 +47,27 @@ internal sealed class ColumnsView : DataGridDemoView, IUIViewDefinition
                             .OnClick(nameof(ColumnsController.DeleteSelected))
                         )
                     )
-                    .AddChild(OrderGrid.Create("orders")
-                        .BindItems(nameof(ColumnsController.Orders))
+                    .AddChild(SubscriptionGrid.Create("subscriptions")
+                        .BindItems(nameof(ColumnsController.Subscriptions))
                         .BindEditable(nameof(ColumnsController.Editing))
                         .OnCellEdit(nameof(ColumnsController.CellEdited))
                         .SetReorderableColumns(true)
                         // Many at a time, so the grid puts its own column of checkboxes before every other; the keys land here.
                         .SetSelectionMode(UISelectionMode.Many)
-                        .BindSelectedKeys(nameof(ColumnsController.SelectedOrders))
+                        .BindSelectedKeys(nameof(ColumnsController.SelectedSubscriptions))
                         .OnSelectionChange(nameof(ColumnsController.SelectionChanged))
                         .SetMaxHeight(UILayoutLength.Absolute(420))
                     )
-                    .AddChild(CreateStatus(nameof(ColumnsController.EditStatus)))
-                    .AddChild(CreateStatus(nameof(ColumnsController.SelectionStatus)))
+                    .AddChild(new TextComponent()
+                        .BindTitle(nameof(ColumnsController.EditStatus))
+                        .SetTitleType(UITextAppearance.Caption)
+                        .SetTitleColor(UIThemeColor.FromStyle(UIColorStyle.Muted))
+                    )
+                    .AddChild(new TextComponent()
+                        .BindTitle(nameof(ColumnsController.SelectionStatus))
+                        .SetTitleType(UITextAppearance.Caption)
+                        .SetTitleColor(UIThemeColor.FromStyle(UIColorStyle.Muted))
+                    )
             )
         ];
 }

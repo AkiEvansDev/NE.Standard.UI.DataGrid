@@ -19,15 +19,8 @@ namespace NE.Standard.UI.DataGrid;
 /// </remarks>
 public static class UIDataGridCsv
 {
-    /// <summary>The whole file as text, ready for <c>IUIDownloadService</c> once encoded.</summary>
-    public static string Write(IReadOnlyList<UITableColumn> columns, IEnumerable rows, UIDataGridCsvOptions? options = null)
-    {
-        using StringWriter writer = new(CultureInfo.InvariantCulture);
-
-        Write(writer, columns, rows, options);
-
-        return writer.ToString();
-    }
+    // To the second, without a zone: what a spreadsheet reads back as a moment.
+    private const string MomentFormat = "s";
 
     /// <summary>The file as UTF-8 behind a byte-order mark, which is what a spreadsheet needs to read it as UTF-8 at all.</summary>
     public static byte[] WriteBytes(IReadOnlyList<UITableColumn> columns, IEnumerable rows, UIDataGridCsvOptions? options = null)
@@ -41,6 +34,16 @@ public static class UIDataGridCsv
         body.CopyTo(bytes, mark.Length);
 
         return bytes;
+    }
+
+    /// <summary>The whole file as text, ready for <c>IUIDownloadService</c> once encoded.</summary>
+    public static string Write(IReadOnlyList<UITableColumn> columns, IEnumerable rows, UIDataGridCsvOptions? options = null)
+    {
+        using StringWriter writer = new(CultureInfo.InvariantCulture);
+
+        Write(writer, columns, rows, options);
+
+        return writer.ToString();
     }
 
     /// <summary>The header line and a line per row, in the order the columns were added.</summary>
@@ -76,13 +79,16 @@ public static class UIDataGridCsv
         }
     }
 
-    /// <summary>The property a column's cells read: its own, or the one it sorts by where the cells are a template; null writes no column.</summary>
+    /// <summary>
+    /// The property a column's cells read: its own, or the one it sorts by where the cells are a template; null writes no column —
+    /// a detail column, and a table's own column, whose key is a name or a position rather than a property.
+    /// </summary>
     private static string? PropertyOf(UITableColumn column)
         => column switch
         {
             UIDataGridColumn { DetailToggle: true } => null,
             UIDataGridColumn typed => typed.PropertyPath ?? typed.SortPath,
-            _ => column.Key
+            _ => null
         };
 
     private static string Caption(UITableColumn column, UIDataGridCsvOptions settings)
@@ -93,32 +99,57 @@ public static class UIDataGridCsv
     }
 
     /// <summary>
-    /// One cell: the formatter's answer when options carry one, else the plain value — a number without grouping, a round-trip
-    /// moment, a flag as true/false — so a spreadsheet reads it back typed.
+    /// One cell: the formatter's answer when options carry one, else the plain value — a number without grouping, a moment to the
+    /// second, a flag as true/false — so a spreadsheet reads it back typed. Text a spreadsheet would run as a formula is disarmed.
     /// </summary>
     private static string Cell(UITableColumn column, object? row, UIDataGridCsvOptions settings)
     {
         if (PropertyOf(column) is not string property || !ItemContext.TryReadProperty(row, property, out var value) || value is null)
             return string.Empty;
 
-        if (column is not UIDataGridColumn typed || settings.Format is null)
-            return AsValue(value, settings);
+        var text = column is UIDataGridColumn typed && settings.Format is not null
+            ? settings.Format(value, typed) ?? AsValue(value, settings)
+            : AsValue(value, settings);
 
-        return settings.Format(value, typed) ?? AsValue(value, settings);
+        return settings.EscapeFormulas && !IsTyped(value) && !IsNumberText(column, value) && StartsFormula(text) ? $"'{text}" : text;
     }
 
+    /// <summary>
+    /// A value as a spreadsheet reads it back: a moment with or without its offset in one shape, to the second and without a zone —
+    /// a spreadsheet keeps neither — so a <see cref="DateTimeOffset"/> is written as its UTC moment.
+    /// </summary>
     private static string AsValue(object value, UIDataGridCsvOptions settings)
         => value switch
         {
             bool flag => flag ? "true" : "false",
-            DateTime moment => moment.ToString("s", CultureInfo.InvariantCulture),
-            DateTimeOffset offset => offset.ToString("O", CultureInfo.InvariantCulture),
+            DateTime moment => moment.ToString(MomentFormat, CultureInfo.InvariantCulture),
+            DateTimeOffset offset => offset.UtcDateTime.ToString(MomentFormat, CultureInfo.InvariantCulture),
             DateOnly date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             IFormattable number and (decimal or double or float or int or long or short or byte or sbyte or uint or ulong or ushort)
                 => number.ToString(null, CultureInfo.InvariantCulture),
             string text => text,
             _ => Convert.ToString(value, settings.Culture ?? CultureInfo.InvariantCulture) ?? string.Empty
         };
+
+    /// <summary>
+    /// A value the grid's own types produced, whose text cannot carry a formula: a formatted negative number starts with a minus, and
+    /// a quote before it would turn the number into text.
+    /// </summary>
+    private static bool IsTyped(object value)
+        => value is bool or DateTime or DateTimeOffset or DateOnly or TimeOnly or Enum
+            or decimal or double or float or int or long or short or byte or sbyte or uint or ulong or ushort;
+
+    /// <summary>
+    /// A number column's numeric text, which the grid shows and totals as the number it reads as: a minus before it is the number's
+    /// sign, not a formula, and a quote would turn it into text.
+    /// </summary>
+    private static bool IsNumberText(UITableColumn column, object value)
+        => column is UIDataGridColumn { Kind: UIDataGridColumnKind.Number or UIDataGridColumnKind.Money } && value is string text
+            && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number);
+
+    /// <summary>Whether a spreadsheet would read the text as a formula (or a DDE call): it opens with one of the characters that start one.</summary>
+    private static bool StartsFormula(string text)
+        => text.Length > 0 && text[0] is '=' or '+' or '-' or '@' or '\t' or '\r';
 
     /// <summary>A field, quoted where it holds the separator, a quote or a line break, with its own quotes doubled (RFC 4180).</summary>
     private static void WriteField(TextWriter writer, UIDataGridCsvOptions settings, int index, string text)

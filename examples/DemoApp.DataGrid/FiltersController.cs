@@ -1,7 +1,3 @@
-using NE.Standard.UI.Abstractions.Recursive;
-using NE.Standard.UI.Controllers;
-using NE.Standard.UI.Primitives.Annotations;
-
 namespace DemoApp.DataGrid;
 
 /// <summary>
@@ -11,5 +7,5 @@ namespace DemoApp.DataGrid;
 internal sealed partial class FiltersController : UIControllerBase
 {
     [RecursiveMember(false)]
-    public RecursiveCollection<Order> Orders { get; } = [.. OrderCatalogue.Slice(2_000, 120)];
+    public RecursiveCollection<Subscription> Subscriptions { get; } = [.. SubscriptionCatalogue.Slice(2_000, 120)];
 }

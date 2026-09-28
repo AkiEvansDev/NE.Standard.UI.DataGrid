@@ -18,9 +18,18 @@ public sealed record UIDataGridCsvOptions
     /// <summary>The culture a value with no other form is written in; the invariant one unless given.</summary>
     public CultureInfo? Culture { get; init; }
 
-    /// <summary>What turns a caption or a choice into the page's words; without it they are written as the grid was authored.</summary>
+    /// <summary>
+    /// What turns a column's caption into the page's words; without it captions are written as the grid was authored. A cell's
+    /// choices are the <see cref="Format"/>'s to translate — <c>DataGridCellFormatter.AsCsvFormat</c> takes its own translator.
+    /// </summary>
     public Func<string, string>? Translate { get; init; }
 
-    /// <summary>What stands between two fields; a comma unless a culture writing its decimals with one asks for a semicolon.</summary>
+    /// <summary>What stands between two fields: a comma unless set — a semicolon suits a spreadsheet whose culture writes its decimals with a comma.</summary>
     public char Separator { get; init; } = ',';
+
+    /// <summary>
+    /// Whether text a spreadsheet would run as a formula — opening with <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, a tab or a carriage return —
+    /// is written behind a quote, so it opens as the words it is; on unless turned off. A number, a date or a flag is never touched.
+    /// </summary>
+    public bool EscapeFormulas { get; init; } = true;
 }

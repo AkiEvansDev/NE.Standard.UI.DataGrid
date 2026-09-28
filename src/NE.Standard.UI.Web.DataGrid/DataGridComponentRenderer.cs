@@ -6,6 +6,7 @@ using NE.Standard.UI.Abstractions.Styling;
 using NE.Standard.UI.Authoring.Components;
 using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Primitives.Constants;
+using NE.Standard.UI.Primitives.Items;
 using NE.Standard.UI.Primitives.Styling;
 using NE.Standard.UI.Web.Abstractions.Html;
 using NE.Standard.UI.Web.Abstractions.Rendering;
@@ -33,27 +34,37 @@ public class DataGridComponentRenderer : TableComponentRenderer
     /// <summary>On the root while the grid's <c>Editable</c> is off: no cell opens its editor.</summary>
     public const string ReadOnlyAttribute = "data-ui-grid-readonly";
 
-    /// <summary>On the root: a click anywhere on a row opens its detail; several rows may stand open at once. On an open row: it is open.</summary>
+    /// <summary>On the root: a click anywhere on a row, or Enter on the keyboard's row, opens its detail.</summary>
     public const string ExpandOnClickAttribute = "data-ui-grid-expand-click";
+
+    /// <summary>On the root: several rows may stand open at once.</summary>
     public const string MultipleDetailsAttribute = "data-ui-grid-multiple-details";
 
-    /// <summary>On the root while the grid pages: the pager under the rows is drawn, and the host carries <see cref="WebAttributes.WindowPaged"/>.</summary>
+    /// <summary>On the root while a windowed grid pages: the pager under the rows is drawn, and the host carries <see cref="WebAttributes.WindowPaged"/>.</summary>
     public const string PagingAttribute = "data-ui-grid-paging";
 
     /// <summary>On a pager's button: which page it turns to.</summary>
     public const string PageAttribute = "data-ui-grid-page";
 
-    /// <summary>On a footer cell: the total it shows and the property it is over; the kind and the format are the column's, as on a cell.</summary>
+    /// <summary>On a footer cell: the total it shows; the kind and the format are the column's, as on a cell.</summary>
     public const string AggregateAttribute = "data-ui-grid-aggregate";
+
+    /// <summary>On a footer cell: the row property its total is over.</summary>
     public const string PropertyAttribute = "data-ui-grid-property";
 
-    /// <summary>On a filter cell: the row property its term reads, the kind of the term, and on a range's parts which end each is.</summary>
+    /// <summary>On a filter: the row property its term reads.</summary>
     public const string FilterAttribute = "data-ui-grid-filter";
+
+    /// <summary>On a filter: the kind of term it writes.</summary>
     public const string FilterKindAttribute = "data-ui-grid-filter-kind";
+
+    /// <summary>On a range filter's part: which end of the range it is, <c>from</c> or <c>to</c>.</summary>
     public const string FilterBoundAttribute = "data-ui-grid-filter-bound";
 
-    /// <summary>On the cell and the header cell of the column of checkboxes; the header's carries the one that takes every row on screen.</summary>
+    /// <summary>On the cells of the column of checkboxes.</summary>
     public const string SelectCellAttribute = "data-ui-grid-select";
+
+    /// <summary>On that column's header cell, which carries the box over the rows the grid has drawn.</summary>
     public const string SelectAllAttribute = "data-ui-grid-select-all";
 
     protected const string GridClassName = "ui-data-grid";
@@ -67,6 +78,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
     protected const string BandButtonClassName = "ui-data-grid__band-button";
     protected const string FiltersCountClassName = "ui-data-grid__filters-count";
     protected const string FilterPanelClassName = "ui-data-grid__filter-panel";
+    protected const string FiltersClearClassName = "ui-data-grid__filters-clear";
     protected const string ColumnsPanelClassName = "ui-data-grid__columns-panel";
     protected const string SortMarkClassName = "ui-data-grid__sort-mark";
     protected const string SortIdleClassName = "ui-data-grid__sort-idle";
@@ -98,14 +110,17 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
         // One property, two marks: the root's for the pager, the host's for the window engine — the host's static mark is written
         // in ConfigureHost, the live one through the operation's target.
-        _ = RenderProperty<bool?>(context, root, DataGridComponent.PagingProperty, static (target, value) =>
+        if (IsWindowed(context))
         {
-            if (value == true)
-                _ = target.Attribute(PagingAttribute);
-        }, [
-            WebDomOperation.ToggleAttribute(PagingAttribute),
-            WebDomOperation.ToggleAttribute(WebAttributes.WindowPaged, target: $"[{WebAttributes.ItemsHost}]", condition: WebValueCondition.IsTrue)
-        ]);
+            _ = RenderProperty<bool?>(context, root, DataGridComponent.PagingProperty, static (target, value) =>
+            {
+                if (value == true)
+                    _ = target.Attribute(PagingAttribute);
+            }, [
+                WebDomOperation.ToggleAttribute(PagingAttribute),
+                WebDomOperation.ToggleAttribute(WebAttributes.WindowPaged, target: $"[{WebAttributes.ItemsHost}]", condition: WebValueCondition.IsTrue)
+            ]);
+        }
 
         base.RenderComponent(context, root);
     }
@@ -113,6 +128,10 @@ public class DataGridComponentRenderer : TableComponentRenderer
     /// <summary>Whether the grid draws its column of checkboxes: only where the rows may be chosen, many at a time.</summary>
     private static bool HasSelectionColumn(WebRenderContext context)
         => ReadRenderValue<UISelectionMode?>(context, ISelectableItemsComponent.SelectionModeProperty, null) is UISelectionMode.Many;
+
+    /// <summary>Whether the grid reads its rows a window at a time: only such a grid pages — one holding all its rows has nothing to page.</summary>
+    private static bool IsWindowed(WebRenderContext context)
+        => ResolveHostMode(context) == UIItemsHostMode.Windowed;
 
     /// <summary>A grid sorts on the client by what the rows hold, so a static grid publishes its values as a virtualized one does.</summary>
     protected override bool PublishItemValues => true;
@@ -168,6 +187,15 @@ public class DataGridComponentRenderer : TableComponentRenderer
                         if (columns[i] is UIDataGridColumn { Filterable: true } filterable)
                             RenderTemplateVariant(context, panel, filterable.FilterTemplateKey);
                     }
+
+                    // Empties every filter of the panel at once; the engine enables it while one holds something.
+                    _ = panel.Element("button", clear =>
+                    {
+                        _ = clear.Class(FiltersClearClassName);
+                        _ = clear.Attribute("type", "button");
+                        _ = clear.Attribute("disabled");
+                        _ = clear.Text(context.Translate(DataGridStrings.ClearFilters));
+                    });
                 });
             }
 
@@ -191,55 +219,38 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
     /// <summary>
     /// A flyout the framework's engine reads: an anchor button with an icon and a word, and a content panel the caller fills. Drawn
-    /// here rather than composed, since a grid can't wrap its own parts in a core component at render time.
+    /// through the foundation's flyout markup rather than composed, since a grid can't wrap its own parts in a core component at
+    /// render time.
     /// </summary>
     private static void RenderBandFlyout(WebRenderContext context, IHtmlElementBuilder band, string icon, string wordKey, bool counted, string panelClassName, Action<IHtmlElementBuilder> renderPanel)
-    {
-        _ = band.Element("div", flyout =>
+        => FlyoutRenderer.RenderFlyout(band, UIPopupPlacement.BottomEnd, anchor =>
         {
-            _ = flyout.Class($"ui-flyout {WebClassNames.FlyoutPlacement(UIPopupPlacement.BottomEnd)}");
-
-            _ = flyout.Element("div", anchor =>
+            _ = anchor.Element("button", button =>
             {
-                _ = anchor.Class("ui-flyout__anchor");
+                _ = button.Class(BandButtonClassName);
+                _ = button.Attribute("type", "button");
+                IconValueRenderer.RenderIcon(button, icon);
+                _ = button.Element("span", word => _ = word.Text(context.Translate(wordKey)));
 
-                _ = anchor.Element("button", button =>
+                // The count of the filters in use, which the engine writes and hides at none.
+                if (counted)
                 {
-                    _ = button.Class(BandButtonClassName);
-                    _ = button.Attribute("type", "button");
-                    IconValueRenderer.RenderIcon(button, icon);
-                    _ = button.Element("span", word => _ = word.Text(context.Translate(wordKey)));
-
-                    // The count of the filters in use, which the engine writes and hides at none.
-                    if (counted)
+                    // The framework's own count badge, drawn in its classes, so its figure is centred the badge's way.
+                    _ = button.Element("span", count =>
                     {
-                        // The framework's own count badge, drawn in its classes, so its figure is centred the badge's way.
-                        _ = button.Element("span", count =>
-                        {
-                            _ = count.Class("ui-badge");
-                            _ = count.Class(WebClassNames.BadgeStyle(UIBadgeType.Primary));
-                            _ = count.Class(FiltersCountClassName);
-                            _ = count.Attribute("hidden");
-                            _ = count.Element("span", text => _ = text.Class("ui-badge__text"));
-                        });
-                    }
-                });
+                        _ = count.Class("ui-badge");
+                        _ = count.Class(WebClassNames.BadgeStyle(UIBadgeType.Primary));
+                        _ = count.Class(FiltersCountClassName);
+                        _ = count.Attribute("hidden");
+                        _ = count.Element("span", text => _ = text.Class("ui-badge__text"));
+                    });
+                }
             });
-
-            _ = flyout.Element("div", content =>
-            {
-                _ = content.Class("ui-flyout__content");
-                _ = content.Attribute("role", "dialog");
-                _ = content.Attribute("tabindex", "-1");
-
-                _ = content.Element("div", panel =>
-                {
-                    _ = panel.Class(panelClassName);
-                    renderPanel(panel);
-                });
-            });
-        });
-    }
+        }, content => content.Element("div", panel =>
+        {
+            _ = panel.Class(panelClassName);
+            renderPanel(panel);
+        }));
 
     /// <summary>
     /// The caption, the sort mark when the column sorts, then the resize handle. A sorting cell is a tab stop the engine answers
@@ -251,7 +262,8 @@ public class DataGridComponentRenderer : TableComponentRenderer
         ArgumentNullException.ThrowIfNull(cell);
         ArgumentNullException.ThrowIfNull(column);
 
-        // Over the checkboxes stands the one that takes every row the grid is holding — what the filters left, or the window read.
+        // Over the checkboxes stands the one that takes the rows the grid has drawn — what the filters left of a grid holding all
+        // its rows, the rows on the page of a virtualized or windowed one.
         if (column.Key == DataGridComponent.SelectionColumnKey)
         {
             _ = cell.Attribute(SelectAllAttribute);
@@ -285,7 +297,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(host);
 
-        if (ReadRenderValue<bool?>(context, DataGridComponent.PagingProperty, null) == true)
+        if (IsWindowed(context) && ReadRenderValue<bool?>(context, DataGridComponent.PagingProperty, null) == true)
             _ = host.Attribute(WebAttributes.WindowPaged);
     }
 
@@ -309,25 +321,28 @@ public class DataGridComponentRenderer : TableComponentRenderer
         if (!totals)
             return;
 
+        // A grid's footer cells are grid cells, as its rows' are.
+        var cellRole = CellRole(context);
+
         _ = parent.Element("div", footer =>
         {
             _ = footer.Class(FooterClassName);
             _ = footer.Attribute("role", "row");
 
             for (var i = 0; i < columns.Count; i++)
-                RenderTotalCell(footer, columns, i);
+                RenderTotalCell(footer, columns, i, cellRole);
         });
     }
 
     /// <summary>A footer cell: empty for a column with no total, else the total's name and the column's property, kind and format for the engine.</summary>
-    private static void RenderTotalCell(IHtmlElementBuilder footer, IReadOnlyList<UITableColumn> columns, int index)
+    private static void RenderTotalCell(IHtmlElementBuilder footer, IReadOnlyList<UITableColumn> columns, int index, string cellRole)
     {
         UITableColumn column = columns[index];
 
         _ = footer.Element("div", cell =>
         {
             _ = cell.Class($"{TotalClassName} {CellClassName}");
-            _ = cell.Attribute("role", "cell");
+            _ = cell.Attribute("role", cellRole);
             _ = cell.Attribute(ColumnAttribute, column.Key);
             // The column's index as the table writes it on a row's cells, so the footer's tracks hide and rearrange by the same
             // rules a moved column follows.
@@ -359,11 +374,17 @@ public class DataGridComponentRenderer : TableComponentRenderer
         });
     }
 
-    /// <summary>The pager under the table and outside its frame: four buttons and the line saying which rows the page holds, which the engine writes.</summary>
+    /// <summary>
+    /// The pager under the table and outside its frame, on a windowed grid: four buttons and the line saying which rows the page
+    /// holds, which the engine writes; drawn while the grid does not page too, since <c>Paging</c> is bindable.
+    /// </summary>
     protected override void RenderUnderTable(WebRenderContext context, IHtmlElementBuilder root, IReadOnlyList<UITableColumn> columns)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(root);
+
+        if (!IsWindowed(context))
+            return;
 
         _ = root.Element("div", pager =>
         {

@@ -53,7 +53,10 @@ public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UI
     /// <summary>The values an enum or boolean column may hold, each with the caption its cells show.</summary>
     public IReadOnlyList<UIChoice>? Choices { get; init; }
 
-    /// <summary>The property the rows sort by: the sort path when given, else the property the cell reads; null when the column cannot sort.</summary>
+    /// <summary>
+    /// The property the rows sort by: the sort path when given, else the property the cell reads — set whether or not the column
+    /// sorts, since filters, totals and an export read it too; null for a template column that names no sort path.
+    /// </summary>
     public string? EffectiveSortPath => SortPath ?? PropertyPath;
 
     /// <summary>The template-variant key an editable column's editor renders through.</summary>

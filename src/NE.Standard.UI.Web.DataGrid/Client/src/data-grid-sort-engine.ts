@@ -3,7 +3,7 @@
 
 import type { PluginEngineContext } from "ne-standard-ui";
 import { gridOf, RootSelector, setAttribute } from "./data-grid-dom.ts";
-import { readQuery, writeQuery } from "./data-grid-query.ts";
+import { QueryAttribute, readQuery, writeQuery } from "./data-grid-query.ts";
 import { cycleSort, sortStateOf } from "./data-grid-sort.ts";
 
 const SortAttribute = "data-ui-grid-sort";
@@ -12,7 +12,6 @@ const SortPlaceAttribute = "data-ui-grid-sort-place";
 const SortMarkSelector = ".ui-data-grid__sort-mark";
 const HeaderCellSelector = ":scope > .ui-table__scroll > .ui-table__header > [data-ui-grid-sort]";
 const ResizerSelector = ".ui-table__resizer";
-const QueryAttribute = "data-ui-items-query";
 
 export class DataGridSortEngine {
     public constructor(context: PluginEngineContext) {

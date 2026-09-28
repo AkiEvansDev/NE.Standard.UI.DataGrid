@@ -2,8 +2,6 @@ using DemoApp.DataGrid;
 using DemoApp.DataGrid.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Logging;
-using NE.Standard.UI.Web.Hosting;
-using NE.Standard.UI.Web.Startup;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 

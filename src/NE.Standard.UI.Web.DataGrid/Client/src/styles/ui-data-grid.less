@@ -67,7 +67,6 @@
         line-height: 1;
     }
 
-
 // The band and the pager are the grid's chrome, not its rows: the table's box carries the frame and scrolls, and these two stand
 // outside it, true for a wide grid as well as a narrow one. The totals footer is the opposite — it stays inside the box and
 // scrolls with the columns' tracks.
@@ -154,6 +153,30 @@
         flex: 0 0 100%;
         font-size: var(--ui-text-caption-font-size);
         color: var(--ui-text-muted);
+    }
+
+// Under the filters at the trailing edge, a word in the primary ink as a date picker's own Clear is; muted while nothing is set.
+.ui-data-grid__filters-clear {
+    align-self: flex-end;
+    min-height: @ui-list-row-height;
+    padding: 0 @ui-space-2;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ui-color-primary-ink);
+    font: inherit;
+    font-size: var(--ui-text-caption-font-size);
+    cursor: pointer;
+    .ui-interactive-base();
+}
+
+    .ui-data-grid__filters-clear:hover:not(:disabled) {
+        background: var(--ui-wash-hover);
+    }
+
+    .ui-data-grid__filters-clear:disabled {
+        color: var(--ui-text-muted);
+        cursor: default;
     }
 
 // The chooser's panel holds the framework's own menu; the panel spans the placement host the flyout is, and the menu fills it.
@@ -287,8 +310,10 @@
         transform: rotate(90deg);
     }
 
-    // A row that opens on a click says so under the pointer, except where a cell answers the click itself.
-    .ui-data-grid[data-ui-grid-expand-click] .ui-table__row > .ui-table__cell:not([data-ui-no-row-open]) {
+    // A row that opens on a click says so under the pointer, except where a cell answers the click itself — an editable one does
+    // not while editing is off. The grid's own rows only: a grid in a row's detail says so for itself.
+    .ui-data-grid[data-ui-grid-expand-click] > .ui-table__scroll > .ui-table__host > .ui-table__row > .ui-table__cell:not([data-ui-no-row-open]),
+    .ui-data-grid[data-ui-grid-expand-click][data-ui-grid-readonly] > .ui-table__scroll > .ui-table__host > .ui-table__row > .ui-data-grid__cell--editable {
         cursor: pointer;
     }
 

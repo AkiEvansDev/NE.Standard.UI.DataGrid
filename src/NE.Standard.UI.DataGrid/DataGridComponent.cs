@@ -25,8 +25,10 @@ namespace NE.Standard.UI.DataGrid;
 public abstract partial class DataGridComponent<T> : TableComponent<T>
     where T : DataGridComponent<T>, IUIComponentDefinition
 {
-    /// <summary>The argument a cell-edit command receives the row's key under, and the one it receives the column's key under.</summary>
+    /// <summary>The argument a cell-edit command receives the row's key under.</summary>
     private const string RowArgumentName = "id";
+
+    /// <summary>The argument a cell-edit command receives the column's key under.</summary>
     private const string ColumnArgumentName = "column";
 
     // DataGridStrings keys, spelled here because the words are the web package's and the component cannot reach
@@ -39,10 +41,16 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     internal const string NoKey = "ui.grid.no";
     internal const string SearchKey = "ui.grid.search";
     internal const string DetailsKey = "ui.grid.details";
+    internal const string SelectRowKey = "ui.grid.select-row";
+    internal const string SelectAllKey = "ui.grid.select-all";
 
-    /// <summary>The template variants the search box, the column chooser and a row's detail render through.</summary>
+    /// <summary>The template variant the search box renders through.</summary>
     public const string SearchTemplateKey = "search";
+
+    /// <summary>The template variant the column chooser's menu renders through.</summary>
     public const string ColumnsTemplateKey = "columns";
+
+    /// <summary>The template variant a row's detail renders through, and the key of the detail column.</summary>
     public const string DetailTemplateKey = "detail";
 
     /// <summary>
@@ -51,7 +59,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     /// </summary>
     public const string SelectionColumnKey = "selection";
 
-    /// <summary>The checkbox over that column, which takes or clears every row the grid is holding.</summary>
+    /// <summary>The checkbox over that column, which takes or clears the rows the grid has drawn.</summary>
     public const string SelectAllTemplateKey = "selection-all";
 
     // Every editor registers the cell-edit command when it is added, or when the command is named later, whichever comes second.
@@ -64,8 +72,9 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     /// </summary>
     protected DataGridComponent(string? id = null) : base(id)
     {
-        _ = SetTemplateVariantCore($"{UITableColumn.TemplatePrefix}:{SelectionColumnKey}", new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center));
-        _ = SetTemplateVariantCore(SelectAllTemplateKey, new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center));
+        // Alone in their cells with no words of their own, so each is named for a screen reader.
+        _ = SetTemplateVariantCore($"{UITableColumn.TemplatePrefix}:{SelectionColumnKey}", new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(SelectRowKey));
+        _ = SetTemplateVariantCore(SelectAllTemplateKey, new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(SelectAllKey));
     }
 
     /// <summary>
@@ -83,28 +92,28 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     public bool? Paging { get; set; }
 
     /// <summary>
-    /// Gets or sets whether the band holds a column chooser — a menu of check entries whose choices persist in the browser under
+    /// Gets whether the band holds a column chooser, set by <c>SetColumnChooser</c> — a menu of check entries whose choices persist in the browser under
     /// the grid's id. A column hidden below a tier (<c>HideColumnBelow</c>) is listed there too. Render-time only.
     /// </summary>
-    [UIComponentProperty(DefaultValue = false, IsBindable = false, GenerateBinder = false, GenerateSetter = false)]
+    [UIComponentProperty(DefaultValue = false, IsBindable = false, GenerateSetter = false)]
     public bool ColumnChooser { get; private set; }
 
     /// <summary>
     /// Gets or sets whether a click anywhere on a row opens its detail, beside the chevron of a detail column. Render-time only.
     /// </summary>
-    [UIComponentProperty(DefaultValue = false, IsBindable = false, GenerateBinder = false)]
+    [UIComponentProperty(DefaultValue = false, IsBindable = false)]
     public bool ExpandOnClick { get; set; }
 
     /// <summary>
     /// Gets or sets whether several rows may stand open at once; off, opening one closes the row that was open. Render-time only.
     /// </summary>
-    [UIComponentProperty(DefaultValue = false, IsBindable = false, GenerateBinder = false)]
+    [UIComponentProperty(DefaultValue = false, IsBindable = false)]
     public bool MultipleDetails { get; set; }
 
     /// <summary>
     /// Gets the row property the search box matches, set by <see cref="SetSearch"/>; null draws no box. Render-time only.
     /// </summary>
-    [UIComponentProperty(DefaultValue = null, IsBindable = false, GenerateBinder = false, GenerateSetter = false)]
+    [UIComponentProperty(DefaultValue = null, IsBindable = false, GenerateSetter = false)]
     public string? SearchPath { get; private set; }
 
     /// <summary>
@@ -189,13 +198,15 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     }
 
     /// <summary>
-    /// Adds the column whose chevron opens a row's detail, narrow and placed first so it stands at the start of the row.
+    /// Adds the column whose chevron opens a row's detail, narrow; it stands where it is added, so a grid that wants it at the start of
+    /// the row adds it first.
     /// </summary>
     public T AddDetailColumn(UIGridUnit? width = null, bool pinned = false)
     {
         UIDataGridColumn column = new(DetailTemplateKey, null, width ?? UIGridUnit.Absolute(40), UITextAlignment.Center) { DetailToggle = true, Pinned = pinned };
 
-        return AddColumn(column, new ButtonComponent().SetIcon(UIGlyphs.ChevronRight).SetType(UIButtonType.Ghost).SetSize(UIButtonSize.Small));
+        // The tooltip is what names an icon-only button for a reader who cannot see the chevron.
+        return AddColumn(column, new ButtonComponent().SetIcon(UIGlyphs.ChevronRight).SetType(UIButtonType.Ghost).SetSize(UIButtonSize.Small).SetTooltip(DetailsKey));
     }
 
     /// <summary>
@@ -259,11 +270,13 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
             UIDataGridColumnKind.Boolean => filter.AddChild(new SelectComponent()
                 .SetOptions(CreateOptions(column.Choices ?? UIChoices.Boolean(YesKey, NoKey)))
                 .SetPlaceholder(AnyKey)
-                .SetShowClearButton(true)),
+                .SetShowClearButton(true)
+            ),
             UIDataGridColumnKind.Enum => filter.AddChild(new SelectComponent()
                 .SetOptions(CreateOptions(column.Choices))
                 .SetPlaceholder(AnyKey)
-                .SetShowClearButton(true)),
+                .SetShowClearButton(true)
+            ),
             _ => filter.AddChild(new TextInputComponent().SetPlaceholder(FilterKey).SetShowClearButton(true).SetDebounceMilliseconds(300))
         };
 
@@ -348,6 +361,10 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
         };
     }
 
+    /// <summary>Whether a date pattern shows a time — an hour, a minute or a second token — so the editor offers one.</summary>
+    private static bool HasTimeToken(string? format)
+        => format is not null && (format.Contains('H', StringComparison.Ordinal) || format.Contains('h', StringComparison.Ordinal) || format.Contains('m', StringComparison.Ordinal) || format.Contains('s', StringComparison.Ordinal));
+
     /// <summary>
     /// Adds a column showing the amount at <paramref name="propertyPath"/> as money, in the page's currency format or
     /// <paramref name="currency"/>; edited in a number field when <paramref name="editable"/>.
@@ -370,7 +387,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     {
         IReadOnlyList<UIChoice>? choices = trueCaption is null && falseCaption is null
             ? null
-            : UIChoices.Boolean(trueCaption ?? "Yes", falseCaption ?? "No");
+            : UIChoices.Boolean(trueCaption ?? YesKey, falseCaption ?? NoKey);
 
         return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Boolean, null, null, choices, sortable, editable, filterable, width, alignment ?? UITextAlignment.Center, key, pinned: pinned);
     }
@@ -393,10 +410,6 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     public T AddEnumColumn<TEnum>(string caption, string propertyPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false)
         where TEnum : struct, Enum
         => AddEnumColumn(caption, propertyPath, UIChoices.FromEnum<TEnum>(), width, alignment, key, sortable, editable, filterable, pinned);
-
-    /// <summary>Whether a date pattern shows a time — an hour, a minute or a second token — so the editor offers one.</summary>
-    private static bool HasTimeToken(string? format)
-        => format is not null && (format.Contains('H', StringComparison.Ordinal) || format.Contains('h', StringComparison.Ordinal) || format.Contains('m', StringComparison.Ordinal) || format.Contains('s', StringComparison.Ordinal));
 
     /// <summary>
     /// Adds a column whose cells render <paramref name="template"/> against the row, sortable by <paramref name="sortPath"/>.

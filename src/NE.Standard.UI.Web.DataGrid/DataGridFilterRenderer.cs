@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using NE.Standard.UI.Abstractions.Binding.Addresses;
 using NE.Standard.UI.Abstractions.Identity;
+using NE.Standard.UI.Authoring.Components;
 using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Web.Abstractions.Html;
 using NE.Standard.UI.Web.Abstractions.Rendering;
@@ -14,7 +16,10 @@ namespace NE.Standard.UI.Web.DataGrid;
 /// </summary>
 public sealed class DataGridFilterRenderer : WebComponentRendererBase
 {
+    /// <summary>On the caption a filter wears when it stands apart from its column.</summary>
     public const string CaptionClassName = "ui-data-grid__filter-caption";
+
+    /// <summary>On each field's part: the one field of a text or choice filter, each end of a range.</summary>
     public const string PartClassName = "ui-data-grid__filter-part";
 
     public override string ComponentTypeKey => DataGridFilterComponent.ComponentTypeKey;
@@ -50,6 +55,9 @@ public sealed class DataGridFilterRenderer : WebComponentRendererBase
         {
             UIComponentId child = children[i];
             var bound = children.Count > 1 ? (i == 0 ? "from" : "to") : null;
+
+            // The field's value is the client's to clear: the panel's clear button empties every filter the way a push would.
+            context.Metadata.ExposeProperty(new UIPropertyAddress(child, IInputComponent.ValueProperty));
 
             _ = root.Element("div", part =>
             {

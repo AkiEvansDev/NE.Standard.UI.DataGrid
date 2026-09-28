@@ -5,6 +5,7 @@ namespace NE.Standard.UI.DataGrid;
 /// </summary>
 public enum UIDataGridAggregate
 {
+    /// <summary>No footer cell for the column.</summary>
     None = 0,
 
     /// <summary>The values added up.</summary>
@@ -16,7 +17,9 @@ public enum UIDataGridAggregate
     /// <summary>How many rows there are.</summary>
     Count = 3,
 
+    /// <summary>The smallest value.</summary>
     Min = 4,
 
+    /// <summary>The largest value.</summary>
     Max = 5,
 }

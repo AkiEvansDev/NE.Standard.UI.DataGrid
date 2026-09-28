@@ -113,19 +113,25 @@ function readPageState(host: Element): PageState {
 
 /**
  * Where the window a button asks for starts; null when the button leads nowhere. Forward steps by the rows the current window
- * holds; back steps by the page size, since the previous page starts a full page earlier regardless.
+ * holds; back and last land on a page boundary, so the pages the viewer steps through are the ones First starts counting from.
  */
 export function pageOffset(state: PageState, page: string): number | null {
     switch (page) {
         case "first":
             return state.offset > 0 ? 0 : null;
         case "previous":
-            return state.offset > 0 ? Math.max(0, state.offset - state.size) : null;
+            return state.offset > 0 ? Math.max(0, (Math.ceil(state.offset / state.size) - 1) * state.size) : null;
         case "next":
             return state.moreAfter ? state.offset + state.count : null;
-        case "last":
+        case "last": {
             // With no count there is no last page to name: the next one is as far as the pager can say.
-            return state.total === null ? (state.moreAfter ? state.offset + state.count : null) : (state.offset + state.count < state.total ? Math.max(0, state.total - state.size) : null);
+            if (state.total === null)
+                return state.moreAfter ? state.offset + state.count : null;
+
+            const lastStart = Math.max(0, Math.floor((state.total - 1) / state.size) * state.size);
+
+            return state.offset < lastStart ? lastStart : null;
+        }
         default:
             return null;
     }

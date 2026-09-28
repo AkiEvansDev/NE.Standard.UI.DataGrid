@@ -7,6 +7,7 @@ using NE.Standard.UI.Web.Renderers.Foundation;
 
 namespace NE.Standard.UI.Web.DataGrid;
 
+/// <summary>Registers the data grid's web rendering.</summary>
 public static class DataGridWebExtensions
 {
     private const string AssemblyName = "NE.Standard.UI.Web.DataGrid";

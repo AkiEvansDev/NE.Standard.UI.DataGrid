@@ -7,9 +7,7 @@ its stylesheet embedded in its assembly.
 
 The grid *is* the table: `DataGridComponent` derives from `TableComponent`, so its rows, its rules, its window over
 a source, its selection, its resizable columns and its chrome are the table's own, and a grid renders through the
-table's renderer rather than a copy of it. A fresh component would have copied the subgrid layout, the column engine
-and the selection and scroll machinery; deriving is the point, and what the table had to open for it went into the
-framework rather than into this package. What the grid adds:
+table's renderer. What the grid adds:
 
 - **Sorting by header**, **typed, formatted columns**, **editing in place**, **filters and a search box**, **paging**,
   **a footer of totals**, **wide grids with pinned columns**, **a column chooser and responsive columns**, **a detail row**,
@@ -21,9 +19,12 @@ one event and a form over a grid is the application's own.
 ## Install
 
 ```
-dotnet add package NE.Standard.UI.DataGrid --prerelease
-dotnet add package NE.Standard.UI.Web.DataGrid --prerelease
+dotnet add package NE.Standard.UI.DataGrid
+dotnet add package NE.Standard.UI.Web.DataGrid
 ```
+
+Both packages bring their namespaces as global usings, so the code below needs no `using` line for them; a project that
+sets `NEStandardUIImplicitUsings` to `false` writes its own.
 
 Register the web rendering beside the framework's renderers:
 
@@ -72,9 +73,10 @@ Name the property it sorts by and the caption sorts:
 ```csharp
 .AddColumn("Customer", new DefaultTextTemplate()
     .BindTitle(nameof(Order.Customer), UIBindingScope.Relative)
-    .BindDescription(nameof(Order.Country), UIBindingScope.Relative), sortPath: nameof(Order.Customer))
-.AddColumn("Fulfilment", new ProgressComponent()
-    .BindValue(nameof(Order.Fulfilment), UIBindingScope.Relative), sortPath: nameof(Order.Fulfilment))
+    .BindDescription(nameof(Order.Country), UIBindingScope.Relative),
+    sortPath: nameof(Order.Customer)
+)
+.AddColumn("Fulfilment", new ProgressComponent().BindValue(nameof(Order.Fulfilment), UIBindingScope.Relative), sortPath: nameof(Order.Fulfilment))
 ```
 
 ### Sorting by header
@@ -104,7 +106,8 @@ The source answers `UIItemWindowRequest.Query` — its `Sorts` are what the head
 A column that says `filterable: true` gets a filter: a text match for a text column, a from and a to for a number, money
 or date column, a select for a boolean or an enum column. A template column filters through `AddFilter(key, kind,
 choices)`, by the property its `sortPath` names. The filters stand behind a **Filters** button in the band over the
-header — a flyout with a captioned filter per column, and a count of the ones in use on the button.
+header — a flyout with a captioned filter per column, a **Clear filters** button under them that empties them all, and
+a count of the ones in use on the button.
 `SetSearch(propertyPath)` adds a search box to the band that matches one property as text. The band is a row of
 controls: the box is a field of the page's own shape and the two buttons take the same ground, height and corner.
 
@@ -120,7 +123,13 @@ Every field is a term of the same `Query` the headers sort by — a text match w
 browser, and a windowed one asks its source, which sees the terms in `UIItemWindowRequest.Query.Filters`. A query's
 terms are all required, which is why the search box matches one property: compose it on the row from the words a
 viewer would look for (`$"{Number} {Customer} {Country}"`) rather than expect the grid to guess which columns are text.
-A date term compares the picker's ISO text against the row's, so a date property reaches the wire in that shape.
+A date term compares the picker's ISO text against the row's, so a date property reaches the wire in that shape; the end of a
+date range is written as *before the next day*, so a row with a time, a fraction or a zone on its last day is still in.
+A term a field could have written is that field's: it shows in the field, and gives way to what the field says when the viewer
+edits a filter. Any other term the controller set in `Query` — on a property no field shows, or in a shape no field writes (an
+`Equal` on a text, a `Greater` on a number) — neither shows nor counts, and stays when the viewer edits, since the viewer has no
+way to take it back. A query the controller pushes shows in the fields: each term a field could have written goes into its
+field, and a field whose term went empties — except the one the viewer is typing in.
 
 ### Paging
 
@@ -128,13 +137,22 @@ A grid over a windowed source reads the next window as the viewer nears the end 
 `Paging` on (`SetPaging(true)`, or bound), the window is a page instead: a pager under the rows says which rows the page
 holds out of the source's count, and its four buttons ask the source for the first, the previous, the next or the last
 page. `WindowSize` is the page size. A query change — a header sorted, a filter typed — re-reads from the first page.
+Previous and Last land on a page boundary, so the pages the viewer steps through are the ones First counts from. A grid that
+holds all its rows draws no pager: it has nothing to page, and `Paging` there does nothing.
 
 ### CSV export
 
 The grid carries no export button: what leaves the screen as a file is the application's own command. `UIDataGridCsv` writes
-the rows over the grid's columns — the captions as the header line, a column that reads no property (a detail column) left out:
+the rows over the grid's columns — the captions as the header line, a column that reads no property (a detail column, and a
+table column the grid did not add itself, whose key is a name rather than a property) left out.
+The columns are the grid's `Columns`; build the grid in one factory method and take them from it, so the file and the screen
+cannot drift apart:
 
 ```csharp
+// in the view
+internal static IReadOnlyList<UITableColumn> ExportColumns { get; } = CreateGrid().Columns;
+
+// in the controller
 [UICommand]
 public async Task ExportAsync(CancellationToken cancellationToken)
 {
@@ -144,11 +162,16 @@ public async Task ExportAsync(CancellationToken cancellationToken)
 }
 ```
 
-By default the file carries **values**, not the cells' text: a number plain, a moment in the round-trip form, a flag as `true`
-or `false`, so a spreadsheet reads them back as numbers and dates. `new UIDataGridCsvOptions { Format =
-DataGridCellFormatter.AsCsvFormat(culture, translate), Translate = … }` writes what the cells show instead, through the same
-formatter they use — the writer is the component package's, so a controller can call it, and the formatter is the web
-package's; `Separator` takes a semicolon where a culture writes its decimals with a comma. `WriteBytes` puts a byte-order mark
+By default the file carries **values**, not the cells' text: a number plain, a moment to the second without a zone (a
+`DateTimeOffset` as its UTC moment — a spreadsheet keeps neither a zone nor an offset), a flag as `true` or `false`, so a
+spreadsheet reads them back as numbers and dates. Text that opens with `=`, `+`, `-`, `@`, a tab or a carriage return is
+written behind a quote, so a spreadsheet opens it as the words it is rather than running it as a formula; a number, a date, a
+flag and a number column's numeric text are never touched, and `EscapeFormulas = false` turns it off. `new UIDataGridCsvOptions
+{ Format = DataGridCellFormatter.AsCsvFormat(culture, translate), Translate = … }` writes what the cells show instead, through
+the same formatter they use — the writer is the component package's, so a controller can call it, and the formatter is the web
+package's. `Translate` turns the captions into the page's words and the formatter's own translator the choices; without one, a
+boolean that would write one of the grid's keys writes `true` or `false`. `Separator` is a comma unless set — a semicolon suits
+a culture that writes its decimals with a comma. `WriteBytes` puts a byte-order mark
 in front, which is what a spreadsheet needs to read the file as UTF-8.
 
 ### A detail row
@@ -170,14 +193,17 @@ new DataGridComponent("orders")
     .SetMultipleDetails(true)
 ```
 
-One row stands open at a time unless `MultipleDetails`. A cell that answers the click itself — an editable one — never opens
-the row. The detail is a child of the row, so it stripes, hides and scrolls with it; a windowed grid's rows, which the browser
-builds, get theirs through the framework's row decorators.
+One row stands open at a time unless `MultipleDetails`. With `ExpandOnClick`, Enter on the keyboard's row opens and closes it
+as a click does. A cell that answers the click itself — the checkbox, an editable one while the grid edits — never opens the
+row. The detail is a child of the row, so it stripes, hides and scrolls with it; it is drawn when the row opens, against the
+row's own item, whether the server painted the row or the browser built it. A press on a button, a field or the text inside an
+open detail is the detail's, not the row's. The detail column's chevron is named *Details* (`ui.grid.details`) for a reader,
+and says whether its detail is out.
 
 ### A column chooser and responsive columns
 
-`SetColumnChooser()` puts a button in the band that opens a menu of the columns, each a check entry; the viewer's choices
-are kept in the browser under the grid's id, beside the widths a resizable grid keeps, and painted before the first frame
+`SetColumnChooser()` puts a button in the band that opens a menu of the columns, each a check entry — the last column still
+showing cannot be unchecked; the viewer's choices are kept in the browser under the grid's id, beside the widths a resizable grid keeps, and painted before the first frame
 with them. A column may also give way on its own below a viewport tier:
 
 ```csharp
@@ -194,7 +220,7 @@ is refused for an author's column.
 
 ### Columns the viewer moves
 
-`SetReorderableColumns()` lets a caption be dragged along the header to another place — a line shows where the column would
+`SetReorderableColumns(true)` lets a caption be dragged along the header to another place — a line shows where the column would
 land — or moved with Ctrl and an arrow when the keyboard is on it. The order is kept in the browser under the grid's id
 beside the widths and the hidden columns, and painted before the first frame with them; the chooser's menu lists the columns
 in the order they stand. A pinned column and the grid's own column of checkboxes keep the places they were written in, and
@@ -226,7 +252,8 @@ of them draws the edge the rest scroll under. Resizing a pinned column moves the
 ### A footer of totals
 
 A column that says `aggregate: UIDataGridAggregate.Sum` (or `Average`, `Count`, `Min`, `Max`) gets a footer under the
-rows with the number under it, formatted as the column's cells are — a count as a plain number. Over rows the page
+rows with the number under it, formatted as the column's cells are — a count as a plain number; a numeric text in a number
+column counts as the number it reads as, as its cell shows it. Over rows the page
 holds it is computed in the browser, over the rows the filters leave. Over a windowed source the source answers it
 beside its window, over every row the query leaves and not only the window:
 
@@ -237,8 +264,10 @@ beside its window, over every row the query leaves and not only the window:
 return new UIItemWindow<Order>(rows) { Offset = start, TotalCount = total, Aggregates = new Dictionary<string, object> { [nameof(Order.Total)] = sum } };
 ```
 
-The dictionary is keyed by the row property; the source computes what the footer asks for, which is the screen's own
-agreement — the request does not name the totals it wants.
+The dictionary is keyed by the row property. The request does not name the totals it wants, so the source computes the ones
+the grid's columns ask for. A windowed grid never sums its window as the column's total: a source that sends no `Aggregates`
+leaves the footer blank. A source whose totals a cell edit changes sets its own `Aggregates` in `TryWriteAsync`, as the demo does, so the new totals
+reach the page at once rather than with the next window.
 
 ### Editing in place
 
@@ -248,20 +277,26 @@ column takes the editor the author bound:
 
 ```csharp
 .AddNumberColumn("Quantity", nameof(Order.Quantity), "N0", editable: true)
-.AddEditableColumn("Status",
-    new TextComponent().BindBadgeText(nameof(Order.StatusCaption), UIBindingScope.Relative),
-    new SelectComponent().SetOptions(statuses).BindValue(nameof(Order.Status), UIBindingScope.Relative),
-    sortPath: nameof(Order.Status))
+.AddEditableColumn("Status", new TextComponent().BindBadgeText(nameof(Order.StatusCaption), UIBindingScope.Relative), new SelectComponent().SetOptions(statuses).BindValue(nameof(Order.Status), UIBindingScope.Relative), sortPath: nameof(Order.Status))
 .OnCellEdit(nameof(OrdersController.CellEdited))   // CellEdited(string id, string column)
 ```
 
 A double click on the cell, or F2 on the keyboard's row, opens the editor in the cell's own track. The editor is drawn at that
 moment and taken away again when it closes, so a grid of a hundred rows carries one editor rather than one per editable cell.
-Enter or a click elsewhere commits, Escape puts the value back, Tab and Shift+Tab move along the row's editable cells. The value
+Enter or a click elsewhere commits, Escape puts the value back, Tab and Shift+Tab move along the row's editable cells — in the
+order the viewer sees the columns, skipping a hidden one, as F2 opens the first of them. The value
 travels the framework's ordinary two-way path — the field's `Value` is bound to the row's property — so a row of a bound
 collection takes it directly, and a row of a windowed source takes it through the source's `TryWriteAsync`, which may refuse it
 and have the old value pushed back. `OnCellEdit` runs after the value has landed, with the row's key as `id` and the column's as
 `column`; a property column is keyed by its property and a template column by its sort path, unless you name a key.
+
+The grid's own `Editable` switch, on by default, says whether editable cells open their editors at all. It is bindable, so a
+mode can turn the whole grid read-only without touching its columns:
+
+```csharp
+new DataGridComponent("orders")
+    .BindEditable(nameof(OrdersController.IsEditing))
+```
 
 The editor is any input: a search over the known values reads as naturally as a select. Give such a search
 `SetSelectionDisplayMode(UISearchSelectionDisplayMode.ReplaceWithSelectedItem)` — a search box keeps what was typed by
@@ -270,7 +305,9 @@ default, and a cell's editor should open on the value the row already holds.
 ### Choosing rows
 
 `SelectionMode = Many` puts a column of checkboxes before every other column, with a three-state one over them that takes or
-clears the rows the grid is holding — what the filters left, or the window the source answered. The column is the grid's own: it
+clears the rows the grid has drawn — what the filters left of a grid holding all its rows, the rows on the page of a
+virtualized or windowed one, never rows the source has not handed over; a row a filter hid is neither taken nor counted. The boxes are named *Select row* and *Select all rows* for a screen reader (`ui.grid.select-row`,
+`ui.grid.select-all`). The column is the grid's own: it
 carries no resize handle, the chooser never offers it and an export never writes it. While it is there a click on a row chooses
 nothing, that click belonging to the row's detail; Space on the keyboard's row still does.
 
@@ -296,4 +333,12 @@ take.
 ## Licence
 
 The framework's: **the Prosperity Public License 3.0.0** — free for noncommercial use, with a thirty-day trial
-for commercial use. See [LICENSE.md](LICENSE.md).
+for commercial use. See [LICENSE.md](https://github.com/AkiEvansDev/NE.Standard.UI.DataGrid/blob/main/LICENSE.md).
+
+## Contributing
+
+This repository is a **read-only mirror**. Development happens in a private repository alongside the
+framework — that is how the grid stays in step with the table it derives from — and everything here is
+generated from it, so pull requests are switched off.
+
+Issues are open and welcome.

@@ -1,13 +1,15 @@
 // The column chooser in the band: the framework's menu, a check entry per column, checked while it shows. A click writes through
 // the framework's table columns; marks follow the root's hidden-columns list, so a column the viewport hides below its tier
-// unchecks itself. No command stands behind an entry — the engine writes the check state a patch would.
+// unchecks itself. No command stands behind an entry — the engine writes the check state a patch would. The last column still
+// showing cannot be unchecked: a grid of no columns is an empty frame with nothing in it to say how it came back.
 
 import type { PluginEngineContext, TableColumns } from "ne-standard-ui";
-import { gridOf, RootSelector } from "./data-grid-dom.ts";
+import { gridOf, ownDescendants, RootSelector } from "./data-grid-dom.ts";
 
 const EntrySelector = ".ui-data-grid__columns-panel .ui-menu-item[data-ui-menu-item-kind=\"check\"]";
 const KeyAttribute = "data-ui-key";
 const CheckedClass = "ui-menu-item--checked";
+const DisabledClass = "ui-disabled";
 const HiddenAttribute = "data-ui-table-hidden";
 
 export class DataGridChooserEngine {
@@ -26,6 +28,9 @@ export class DataGridChooserEngine {
             // The entry is not a link and not a command; the menu's own click must not travel on and close the flyout over it.
             domEvent.preventDefault();
 
+            if (entry.classList.contains(DisabledClass))
+                return;
+
             this.tables.setColumnHidden(grid, keyOf(entry), entry.classList.contains(CheckedClass));
             this.syncEntries(grid);
         });
@@ -38,6 +43,10 @@ export class DataGridChooserEngine {
 
     private syncAll(grids: Iterable<HTMLElement>): void {
         for (const grid of grids) {
+            // Every style write inside a grid reaches here, a scrolled host's spacers among them; one with no chooser has nothing to do.
+            if (ownDescendants(grid, EntrySelector).length === 0)
+                continue;
+
             this.syncEntries(grid);
             this.syncOrder(grid);
         }
@@ -45,7 +54,7 @@ export class DataGridChooserEngine {
 
     /** The entries stand in the order the columns do: a menu that listed them as they were written would not answer a row that was rearranged. */
     private syncOrder(grid: HTMLElement): void {
-        const entries = [...grid.querySelectorAll<HTMLElement>(EntrySelector)];
+        const entries = ownDescendants(grid, EntrySelector);
         const items = new Map<string, HTMLElement>();
 
         for (const entry of entries)
@@ -61,12 +70,23 @@ export class DataGridChooserEngine {
             menu.appendChild(items.get(key)!);
     }
 
+    /** Every entry checked while its column shows; the one column left showing is checked and cannot be unchecked. */
     private syncEntries(grid: HTMLElement): void {
-        for (const entry of grid.querySelectorAll<HTMLElement>(EntrySelector)) {
-            const checked = !this.tables.isColumnHidden(grid, keyOf(entry));
+        const entries = ownDescendants(grid, EntrySelector);
+        const shown = entries.filter(entry => !this.tables.isColumnHidden(grid, keyOf(entry)));
+
+        for (const entry of entries) {
+            const checked = shown.includes(entry);
+            const last = checked && shown.length === 1;
 
             entry.classList.toggle(CheckedClass, checked);
             entry.setAttribute("aria-checked", String(checked));
+            entry.classList.toggle(DisabledClass, last);
+
+            if (last)
+                entry.setAttribute("aria-disabled", "true");
+            else
+                entry.removeAttribute("aria-disabled");
         }
     }
 }

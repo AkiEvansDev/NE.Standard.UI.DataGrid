@@ -37,12 +37,14 @@
   </PropertyGroup>
 
   <!-- The client builds as part of dotnet build, as the framework's own does: a type error or a failing test fails the build. -->
-  <Target Name="BuildDataGridClientAssets" BeforeTargets="PrepareResources" Condition="'$(SkipWebClientBuild)' != 'true'">
-    <Exec
-      WorkingDirectory="$(MSBuildProjectDirectory)\Client"
-      Command="npm install"
-      Condition="!Exists('$(MSBuildProjectDirectory)\Client\node_modules')" />
+  <!-- Installed again whenever the lockfile is newer than the install, not only when there is none: a dependency added
+       later (a linter, a bumped tool) would otherwise be missing from a clone that had restored before it. -->
+  <Target Name="RestoreDataGridClientPackages" Condition="'$(SkipWebClientBuild)' != 'true'" Inputs="$(MSBuildProjectDirectory)\Client\package-lock.json" Outputs="$(MSBuildProjectDirectory)\Client\node_modules\.package-lock.json">
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)\Client" Command="npm install" />
+    <Touch Files="$(MSBuildProjectDirectory)\Client\node_modules\.package-lock.json" AlwaysCreate="true" />
+  </Target>
 
+  <Target Name="BuildDataGridClientAssets" BeforeTargets="PrepareResources" DependsOnTargets="RestoreDataGridClientPackages" Condition="'$(SkipWebClientBuild)' != 'true'">
     <!-- Tests run here rather than from `npm run build`, as the framework's client does: a mirror builds, it
          does not test. -->
     <Exec
