@@ -14,8 +14,8 @@ public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UI
     /// <summary>The prefix an editable column's editor variant is keyed under.</summary>
     public const string EditTemplatePrefix = "edit";
 
-    /// <summary>The prefix a filterable column's filter variant is keyed under.</summary>
-    public const string FilterTemplatePrefix = "filter";
+    /// <summary>The prefix a filterable column's filter region is named under.</summary>
+    public const string FilterRegionPrefix = "filter";
 
     /// <summary>What the column holds; a template column the author drew is <see cref="UIDataGridColumnKind.Text"/> with no property.</summary>
     public UIDataGridColumnKind Kind { get; init; } = UIDataGridColumnKind.Text;
@@ -35,7 +35,7 @@ public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UI
     /// <summary>Whether the column's cells hold the chevron that opens and closes a row's detail, rather than a value.</summary>
     public bool DetailToggle { get; init; }
 
-    /// <summary>Whether the grid holds a filter for this column: the variant keyed <see cref="FilterTemplateKey"/>, a <c>DataGridFilterComponent</c> over the field or the two ends of a range.</summary>
+    /// <summary>Whether the grid holds a filter for this column: the grid's region named <see cref="FilterRegionName"/>, a <c>DataGridFilterComponent</c> over the field or the two ends of a range.</summary>
     public bool Filterable { get; init; }
 
     /// <summary>What the filter's field takes, when the column is a template one and says nothing by its kind.</summary>
@@ -62,6 +62,6 @@ public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UI
     /// <summary>The template-variant key an editable column's editor renders through.</summary>
     public string EditTemplateKey => $"{EditTemplatePrefix}:{Key}";
 
-    /// <summary>The template-variant key a filterable column's filter renders through.</summary>
-    public string FilterTemplateKey => $"{FilterTemplatePrefix}:{Key}";
+    /// <summary>The name of the grid's region a filterable column's filter stands in, in the band over the rows.</summary>
+    public string FilterRegionName => $"{FilterRegionPrefix}:{Key}";
 }

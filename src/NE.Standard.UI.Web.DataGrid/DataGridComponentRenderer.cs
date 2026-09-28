@@ -176,7 +176,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
             _ = band.Class(BandClassName);
 
             if (search)
-                RenderTemplateVariant(context, band, DataGridComponent.SearchTemplateKey);
+                RenderRegion(context, band, DataGridComponent.SearchRegionName);
 
             if (flyout)
             {
@@ -185,7 +185,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
                     for (var i = 0; i < columns.Count; i++)
                     {
                         if (columns[i] is UIDataGridColumn { Filterable: true } filterable)
-                            RenderTemplateVariant(context, panel, filterable.FilterTemplateKey);
+                            RenderRegion(context, panel, filterable.FilterRegionName);
                     }
 
                     // Empties every filter of the panel at once; the engine enables it while one holds something.
@@ -202,7 +202,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
             // The chooser is the framework's menu, a check entry per column the engine keeps checked while it shows; the entries
             // are chrome, so no command stands behind a click.
             if (chooser)
-                RenderBandFlyout(context, band, UIGlyphs.Columns, DataGridStrings.Columns, counted: false, ColumnsPanelClassName, panel => RenderTemplateVariant(context, panel, DataGridComponent.ColumnsTemplateKey));
+                RenderBandFlyout(context, band, UIGlyphs.Columns, DataGridStrings.Columns, counted: false, ColumnsPanelClassName, panel => RenderRegion(context, panel, DataGridComponent.ColumnsRegionName));
         });
     }
 
@@ -267,7 +267,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
         if (column.Key == DataGridComponent.SelectionColumnKey)
         {
             _ = cell.Attribute(SelectAllAttribute);
-            RenderTemplateVariant(context, cell, DataGridComponent.SelectAllTemplateKey);
+            RenderRegion(context, cell, DataGridComponent.SelectAllRegionName);
             return;
         }
 

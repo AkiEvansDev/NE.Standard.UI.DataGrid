@@ -4,6 +4,19 @@ One section per release of this slice, headed `## X.Y.Z` and named by the tag â€
 workflow cuts the matching section out to become the body of the GitHub release, and a tag with no section
 fails the release before anything is published.
 
+## 1.1.0
+
+- **The band's parts and the header's checkbox stand outside the rows.** The search box, the filters, the column chooser and
+  the select-all checkbox were the grid's template variants, compiled in a row's scope, so each asked for a row's key in its
+  address with no row around it and the page logged a parameter-count warning per filter and chooser; they are the grid's
+  regions now. **Breaking:** `SearchTemplateKey`, `ColumnsTemplateKey` and `SelectAllTemplateKey` are `SearchRegionName`,
+  `ColumnsRegionName` and `SelectAllRegionName`, and `UIDataGridColumn.FilterTemplateKey`/`FilterTemplatePrefix` are
+  `FilterRegionName`/`FilterRegionPrefix`.
+- **A sortable header lines its caption up with its column's values.** In a column aligned to the end the sort mark stood
+  after the caption and pushed it off the values' edge; it now stands before the caption, which ends where the values end. In a
+  centred column the caption stays centred on the values with the mark beside it, whatever the mark's width. The place of a
+  column among several sorted ones is the arrow's superscript, tight against it, so it no longer reads as part of the caption.
+
 ## 1.0.1
 
 - **The first stable release.** No `--prerelease` is needed any more. Until 2.0.0 the public surface may still move

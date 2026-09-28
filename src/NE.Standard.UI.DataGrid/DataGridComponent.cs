@@ -22,7 +22,7 @@ namespace NE.Standard.UI.DataGrid;
 /// A full-featured table: sorting by header, typed and formatted columns, and editing in place, on top of
 /// <see cref="TableComponent{T}"/>'s rows, rules, window and selection.
 /// </summary>
-public abstract partial class DataGridComponent<T> : TableComponent<T>
+public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionContainerComponent
     where T : DataGridComponent<T>, IUIComponentDefinition
 {
     /// <summary>The argument a cell-edit command receives the row's key under.</summary>
@@ -44,11 +44,11 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     internal const string SelectRowKey = "ui.grid.select-row";
     internal const string SelectAllKey = "ui.grid.select-all";
 
-    /// <summary>The template variant the search box renders through.</summary>
-    public const string SearchTemplateKey = "search";
+    /// <summary>The region the search box stands in, over the rows.</summary>
+    public const string SearchRegionName = "search";
 
-    /// <summary>The template variant the column chooser's menu renders through.</summary>
-    public const string ColumnsTemplateKey = "columns";
+    /// <summary>The region the column chooser's menu stands in, over the rows.</summary>
+    public const string ColumnsRegionName = "columns";
 
     /// <summary>The template variant a row's detail renders through, and the key of the detail column.</summary>
     public const string DetailTemplateKey = "detail";
@@ -59,8 +59,12 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     /// </summary>
     public const string SelectionColumnKey = "selection";
 
-    /// <summary>The checkbox over that column, which takes or clears the rows the grid has drawn.</summary>
-    public const string SelectAllTemplateKey = "selection-all";
+    /// <summary>The region of the checkbox over that column, which takes or clears the rows the grid has drawn.</summary>
+    public const string SelectAllRegionName = "selection-all";
+
+    // The band's parts and the header's checkbox stand outside every row: a template variant is compiled in the row's scope, so
+    // each would carry the row's key in its address with no row around it to supply one.
+    private readonly Dictionary<string, IVisualComponent> _regions = new(StringComparer.Ordinal);
 
     // Every editor registers the cell-edit command when it is added, or when the command is named later, whichever comes second.
     private readonly List<Action<string>> _editorRegistrations = [];
@@ -74,8 +78,14 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     {
         // Alone in their cells with no words of their own, so each is named for a screen reader.
         _ = SetTemplateVariantCore($"{UITableColumn.TemplatePrefix}:{SelectionColumnKey}", new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(SelectRowKey));
-        _ = SetTemplateVariantCore(SelectAllTemplateKey, new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(SelectAllKey));
+        _regions[SelectAllRegionName] = new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(SelectAllKey);
     }
+
+    /// <inheritdoc/>
+    public IReadOnlyDictionary<string, IVisualComponent> Regions => _regions;
+
+    /// <inheritdoc/>
+    public bool HasRegions => _regions.Count > 0;
 
     /// <summary>
     /// Gets or sets whether editable cells open their editors at all; off, the grid only shows and searches. Bindable, so a mode
@@ -141,7 +151,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
             entries.Add(new MenuItem { Id = column.Key, Title = ChooserTitleOf(column), Kind = UIMenuItemKind.Check, Checked = true });
         }
 
-        _ = SetTemplateVariantCore(ColumnsTemplateKey, new MenuComponent().SetOrientation(UIOrientation.Vertical).SetItems(entries));
+        _regions[ColumnsRegionName] = new MenuComponent().SetOrientation(UIOrientation.Vertical).SetItems(entries);
     }
 
     /// <summary>A column's name in the chooser: its caption, the grid's own word for the detail chevron's column, else its key.</summary>
@@ -183,7 +193,9 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
         // ground.
         TextInputComponent field = new TextInputComponent().SetPlaceholder(SearchKey).SetShowClearButton(true).SetDebounceMilliseconds(300);
 
-        return SetTemplateVariantCore(SearchTemplateKey, new DataGridFilterComponent().SetProperty(propertyPath).SetKind(UIDataGridColumnKind.Text).AddChild(field));
+        _regions[SearchRegionName] = new DataGridFilterComponent().SetProperty(propertyPath).SetKind(UIDataGridColumnKind.Text).AddChild(field);
+
+        return Self;
     }
 
     /// <summary>
@@ -251,7 +263,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
     }
 
     /// <summary>
-    /// Installs the column's filter variant: a <see cref="DataGridFilterComponent"/> over a text field, a from/to pair, or a select —
+    /// Installs the column's filter region: a <see cref="DataGridFilterComponent"/> over a text field, a from/to pair, or a select —
     /// unbound, since the client writes the query.
     /// </summary>
     private T SetFilter(UIDataGridColumn column)
@@ -280,7 +292,9 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>
             _ => filter.AddChild(new TextInputComponent().SetPlaceholder(FilterKey).SetShowClearButton(true).SetDebounceMilliseconds(300))
         };
 
-        return SetTemplateVariantCore(column.FilterTemplateKey, filter);
+        _regions[column.FilterRegionName] = filter;
+
+        return Self;
     }
 
     private static List<OptionItem> CreateOptions(IReadOnlyList<UIChoice>? choices)
