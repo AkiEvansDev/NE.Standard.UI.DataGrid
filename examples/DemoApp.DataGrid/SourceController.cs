@@ -10,7 +10,7 @@ namespace DemoApp.DataGrid;
 /// </summary>
 internal sealed partial class SourceController : UIControllerBase
 {
-    private const string NotAsked = "The source has not been asked for anything but its first window.";
+    private const string NotAsked = "grid-demo.source.not-asked";
 
     /// <summary>A hundred thousand subscriptions, read a window at a time as the viewer scrolls.</summary>
     [RecursiveMember(false)]
@@ -28,13 +28,13 @@ internal sealed partial class SourceController : UIControllerBase
     public partial UIItemsQuery? PagedQuery { get; set; }
 
     [RecursiveMember]
-    public partial string ScrollingStatus { get; set; } = NotAsked;
+    public partial UIPhrase? ScrollingStatus { get; set; } = new(NotAsked);
 
     [RecursiveMember]
-    public partial string PagedStatus { get; set; } = NotAsked;
+    public partial UIPhrase? PagedStatus { get; set; } = new(NotAsked);
 
     [RecursiveMember]
-    public partial string EditStatus { get; set; } = "Double-click a cell to edit it: the write goes through the source, which keeps it and reads the subscription anew.";
+    public partial UIPhrase? EditStatus { get; set; } = new("grid-demo.source.edit-hint");
 
     /// <summary>A grid raised its query change: the value has reached the server, and the window was re-read under it.</summary>
     [UICommand]
@@ -77,35 +77,49 @@ internal sealed partial class SourceController : UIControllerBase
         Subscription? subscription = ScrollingSource.Items.FirstOrDefault(candidate => candidate.Id == id)
             ?? PagedSource.Items.FirstOrDefault(candidate => candidate.Id == id);
 
-        // The same status line ColumnsController.CellEdited builds over its subscriptions; the two controllers share no base.
         EditStatus = subscription is null
-            ? string.Create(CultureInfo.InvariantCulture, $"Row {id} is not in either window.")
-            : string.Create(CultureInfo.InvariantCulture, $"{subscription.Number}: {column} is now {subscription.ValueOf(column)}.");
+            ? UIPhrase.Of("grid-demo.source.row-gone", ("id", id))
+            : SubscriptionGrid.EditedLine(subscription, column, Context.Handle.Session.Language);
     }
 
-    private static string Describe(UIItemsQuery? query, int matches)
+    /// <summary>What the source was asked, as a phrase: the terms in a notation no language needs words for, the rows it matched.</summary>
+    private static UIPhrase Describe(UIItemsQuery? query, int matches)
     {
-        if (query is null || query.IsEmpty)
-            return string.Create(CultureInfo.InvariantCulture, $"No terms: the source answers in its own order, {matches:N0} rows.");
+        var rows = matches.ToString("N0", CultureInfo.InvariantCulture);
 
-        StringBuilder words = new();
+        if (query is null || query.IsEmpty)
+            return UIPhrase.Of("grid-demo.source.no-terms", ("count", matches), ("rows", rows));
+
+        StringBuilder terms = new();
 
         for (var i = 0; i < query.Sorts.Length; i++)
         {
             UIItemSortTerm sort = query.Sorts[i];
 
-            _ = words.Append(i == 0 ? "Sorted by " : ", then ");
-            _ = words.Append(sort.ItemProperty).Append(sort.Direction == UIItemsSortDirection.Descending ? " descending" : " ascending");
+            _ = terms.Append(i == 0 ? "" : ", ").Append(sort.ItemProperty).Append(sort.Direction == UIItemsSortDirection.Descending ? " ↓" : " ↑");
         }
 
         for (var i = 0; i < query.Filters.Length; i++)
         {
             UIItemFilterTerm filter = query.Filters[i];
 
-            _ = words.Append(i == 0 ? (words.Length > 0 ? "; filtered where " : "Filtered where ") : " and ");
-            _ = words.Append(CultureInfo.InvariantCulture, $"{filter.ItemProperty} {filter.Operator} {filter.Value}");
+            _ = terms.Append(i == 0 ? (terms.Length > 0 ? "; " : "") : ", ");
+            _ = terms.Append(CultureInfo.InvariantCulture, $"{filter.ItemProperty} {Symbol(filter.Operator)} {filter.Value}");
         }
 
-        return string.Create(CultureInfo.InvariantCulture, $"{words} — {matches:N0} rows match, read on the server.");
+        return UIPhrase.Of("grid-demo.source.matches", ("count", matches), ("rows", rows), ("terms", terms.ToString()));
     }
+
+    private static string Symbol(UIComparisonOperator comparison)
+        => comparison switch
+        {
+            UIComparisonOperator.Equal => "=",
+            UIComparisonOperator.NotEqual => "≠",
+            UIComparisonOperator.Greater => ">",
+            UIComparisonOperator.GreaterOrEqual => "≥",
+            UIComparisonOperator.Less => "<",
+            UIComparisonOperator.LessOrEqual => "≤",
+            UIComparisonOperator.Like or UIComparisonOperator.LikeIgnoreCase => "~",
+            _ => comparison.ToString()
+        };
 }

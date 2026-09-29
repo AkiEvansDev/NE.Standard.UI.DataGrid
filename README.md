@@ -82,8 +82,10 @@ Name the property it sorts by and the caption sorts:
 ### Sorting by header
 
 A click on a caption sorts by that column, a second click reverses, a third clears; Shift+click adds a column to
-a multi-column sort, and the marks say the direction and the place. A property column sorts unless it says
-`sortable: false`; a template column sorts when it names a `sortPath`; `AddTextColumn(caption, path, sortable)` says
+a multi-column sort, and the marks say the direction and the place. A sortable caption is a tab stop named *Sort by …*
+(`ui.grid.sort-by`, its caption looked up as the caption beside it is; a column with no caption is named by what it sorts, in
+words), and Enter or Space presses it as a click does, Shift with them included. A property column sorts unless
+it says `sortable: false`; a template column sorts when it names a `sortPath`; `AddTextColumn(caption, path, sortable)` says
 either.
 
 The sort is the items component's own **`Query`** — the viewer's terms beside the authored `SortBy` rules, the
@@ -108,8 +110,13 @@ or date column, a select for a boolean or an enum column. A template column filt
 choices)`, by the property its `sortPath` names. The filters stand behind a **Filters** button in the band over the
 header — a flyout with a captioned filter per column, a **Clear filters** button under them that empties them all, and
 a count of the ones in use on the button.
-`SetSearch(propertyPath)` adds a search box to the band that matches one property as text. The band is a row of
-controls: the box is a field of the page's own shape and the two buttons take the same ground, height and corner.
+`SetSearch(propertyPath)` adds a search box to the band that matches one property as text, its placeholder the page's
+"Search" (`ui.grid.search`) unless `SetSearchPlaceholder(text)` names another — a key or a text, before or after
+`SetSearch`. The band is a row of
+controls: the box is a field of the page's own shape and the two buttons take the same ground, height and corner, and the
+field's states — the edge under the pointer, and the active edge while the keyboard is on one or its flyout is open. A key
+pressed in the band, a flyout or the header is that control's own: the rows' keyboard, the editor's F2 and the detail's Enter
+answer only on the grid itself or in a row.
 
 ```csharp
 .AddTextColumn("Order", nameof(Order.Number), sortable: true, filterable: true)
@@ -135,8 +142,9 @@ field, and a field whose term went empties — except the one the viewer is typi
 
 A grid over a windowed source reads the next window as the viewer nears the end — the table's own behaviour. With
 `Paging` on (`SetPaging(true)`, or bound), the window is a page instead: a pager under the rows says which rows the page
-holds out of the source's count, and its four buttons ask the source for the first, the previous, the next or the last
-page. `WindowSize` is the page size. A query change — a header sorted, a filter typed — re-reads from the first page.
+holds out of the source's count, and its four buttons — named and hinted in the page's words, with the framework's tooltip —
+ask the source for the first, the previous, the next or the last page. A button with nowhere to go is turned off the
+framework's way (`ui-disabled`, `aria-disabled`), so the one the keyboard just pressed keeps the focus. `WindowSize` is the page size. A query change — a header sorted, a filter typed — re-reads from the first page.
 Previous and Last land on a page boundary, so the pages the viewer steps through are the ones First counts from. A grid that
 holds all its rows draws no pager: it has nothing to page, and `Paging` there does nothing.
 
@@ -145,8 +153,8 @@ holds all its rows draws no pager: it has nothing to page, and `Paging` there do
 The grid carries no export button: what leaves the screen as a file is the application's own command. `UIDataGridCsv` writes
 the rows over the grid's columns — the captions as the header line, a column that reads no property (a detail column, and a
 table column the grid did not add itself, whose key is a name rather than a property) left out.
-The columns are the grid's `Columns`; build the grid in one factory method and take them from it, so the file and the screen
-cannot drift apart:
+The columns are the grid's `Columns`; build the grid in one factory method and take them from it, so the file has the grid's
+own columns — in the order they were authored, whatever the viewer hid or moved:
 
 ```csharp
 // in the view
@@ -194,10 +202,11 @@ new DataGridComponent("orders")
 ```
 
 One row stands open at a time unless `MultipleDetails`. With `ExpandOnClick`, Enter on the keyboard's row opens and closes it
-as a click does. A cell that answers the click itself — the checkbox, an editable one while the grid edits — never opens the
-row. The detail is a child of the row, so it stripes, hides and scrolls with it; it is drawn when the row opens, against the
+as a click does; a double click, which opens the row, leaves the details as they stood before its first click; a row of a table
+inside a detail is that table's, and opens nothing of the grid's. A cell that answers the click itself — the checkbox, an
+editable one while the grid edits — never opens the row. The detail is a child of the row, so it stripes, hides and scrolls with it; it is drawn when the row opens, against the
 row's own item, whether the server painted the row or the browser built it. A press on a button, a field or the text inside an
-open detail is the detail's, not the row's. The detail column's chevron is named *Details* (`ui.grid.details`) for a reader,
+open detail is the detail's, not the row's. It fades in as it opens. The detail column's chevron is named *Details* (`ui.grid.details`) for a reader,
 and says whether its detail is out.
 
 ### A column chooser and responsive columns
@@ -284,14 +293,19 @@ column takes the editor the author bound:
 A double click on the cell, or F2 on the keyboard's row, opens the editor in the cell's own track. The editor is drawn at that
 moment and taken away again when it closes, so a grid of a hundred rows carries one editor rather than one per editable cell.
 Enter or a click elsewhere commits, Escape puts the value back, Tab and Shift+Tab move along the row's editable cells — in the
-order the viewer sees the columns, skipping a hidden one, as F2 opens the first of them. The value
+order the viewer sees the columns, skipping a hidden one, as F2 opens the first of them. A choice from the editor's list — a
+select's or a search's, by Enter or a click — keeps the keyboard in the editor, and the next Enter commits; leaving the window
+for another (Alt+Tab, the address bar) leaves the editor open and sends nothing, the change a browser raises on the way out
+included. An editor whose column hides under it (a narrower window) commits and leaves the keyboard on the grid. The value
 travels the framework's ordinary two-way path — the field's `Value` is bound to the row's property — so a row of a bound
 collection takes it directly, and a row of a windowed source takes it through the source's `TryWriteAsync`, which may refuse it
 and have the old value pushed back. `OnCellEdit` runs after the value has landed, with the row's key as `id` and the column's as
 `column`; a property column is keyed by its property and a template column by its sort path, unless you name a key.
 
 The grid's own `Editable` switch, on by default, says whether editable cells open their editors at all. It is bindable, so a
-mode can turn the whole grid read-only without touching its columns:
+mode can stop the cells editing without touching its columns — the keyboard still chooses and opens rows, and a double click on
+an editable cell opens its row as on any other cell. An editor open when editing turns off, or when the grid turns disabled or
+loading — itself or through a component around it — closes as Escape closes it, sending nothing:
 
 ```csharp
 new DataGridComponent("orders")
@@ -309,10 +323,17 @@ clears the rows the grid has drawn — what the filters left of a grid holding a
 virtualized or windowed one, never rows the source has not handed over; a row a filter hid is neither taken nor counted. The boxes are named *Select row* and *Select all rows* for a screen reader (`ui.grid.select-row`,
 `ui.grid.select-all`). The column is the grid's own: it
 carries no resize handle, the chooser never offers it and an export never writes it. While it is there a click on a row chooses
-nothing, that click belonging to the row's detail; Space on the keyboard's row still does.
+nothing, that click belonging to the row's detail. The keyboard still chooses, and adds to the ticks rather than replacing them:
+Space on the keyboard's row ticks or unticks it, Shift with an arrow takes the range from the row last clicked or ticked to the
+one it reaches, and Enter opens the row rather than choosing it. A row whose item refuses the choice (`CanSelect = false`) has
+its box turned off, and the box over them neither takes nor counts it; with no row to take, that box is turned off too — the
+framework's way, so a box keeps a focus it holds. The table's row template reads `CanSelect` off the item by name, so a
+bindable property of that name turns the box off and on as it changes (the demo's cancelled subscriptions).
 
-The chosen keys are the host's `SelectedKeys`, bound two-way like any value, and `OnSelectionChange` runs once they have reached
-the server — which is where a button that acts on the choice learns it has something to act on.
+The chosen keys are the host's `SelectedKeys`, bound two-way like any value, and `OnSelectionChange` runs whenever they change —
+at a box or from the keyboard — once they have reached the server, which is where a button that acts on the choice learns it
+has something to act on. A grid choosing one row (`SelectionMode = One`, `SelectedKey`) has no boxes: a click on a row chooses
+it, and `OnSelectionChange` runs for that too. A list the controller pushes is its own and runs nothing.
 
 ```csharp
 new DataGridComponent("orders")
@@ -328,7 +349,12 @@ the band's buttons are the framework's `ne-` glyphs (`UIGlyphs`), so they are th
 and cross. Its stylesheet imports the framework's Less contract (`Client/plugin/ne-standard-ui.less` — the tokens and the
 mixins, copied like the TypeScript contract beside it) rather than restating the motion, the focus ring or the field's ground.
 The engines are classes started once per page from the framework's engine context, in the shape the framework's own engines
-take.
+take, and they need the framework's plugin contract 2: the names the framework writes on the page come from its `names`, and
+whether a part answers the reader from its `states`, through which the grid also turns its own controls off
+(`states.setDisabled`). The grid's own names are spelled once, in `data-grid-names.ts`, which a test holds to the renderers'
+constants; a cell's text is held to the same corpus on the server and in the browser. Under forced colours the states the grid draws with a wash or
+a shadow — an open band button, a caption under the pointer or pressed, Clear filters under the pointer — take outlines in the
+system's colours, from the grid's own block.
 
 ## Licence
 

@@ -6,8 +6,7 @@ using NE.Standard.UI.Shell.Localization;
 namespace NE.Standard.UI.Web.DataGrid;
 
 /// <summary>
-/// The words the grid's chrome writes — a boolean cell's yes/no, a sortable header's name — translated by an application exactly
-/// as the framework's <see cref="UIStrings"/> are.
+/// The words the grid's chrome writes, translated by an application as the framework's <see cref="UIStrings"/> are.
 /// </summary>
 public sealed class DataGridStrings : IUIStringsSource
 {

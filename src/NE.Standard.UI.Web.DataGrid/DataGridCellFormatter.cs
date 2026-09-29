@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Web.Abstractions.Theming;
@@ -8,17 +9,17 @@ using NE.Standard.UI.Web.Abstractions.Theming;
 namespace NE.Standard.UI.Web.DataGrid;
 
 /// <summary>
-/// A cell's value as text, by the column's kind: the server half of what <c>data-grid-cell.ts</c> does on the client, over the
-/// same formatters, so a row painted here and one built there read the same.
+/// A cell's value as text by the column's kind — the server half of <c>data-grid-cell.ts</c>, both held to
+/// <c>datagrid-cell-corpus.json</c>.
 /// </summary>
-public static class DataGridCellFormatter
+public static partial class DataGridCellFormatter
 {
     // Just under decimal.MaxValue: a double at it may round past it and overflow the conversion.
     private const double LargestDecimal = 7.9e28;
 
     /// <summary>
-    /// The formatter a CSV takes through <see cref="UIDataGridCsvOptions.Format"/>: cells as the grid shows them. Without a
-    /// translator a boolean whose word would be one of the grid's own keys falls back to its plain value rather than the key.
+    /// A <see cref="UIDataGridCsvOptions.Format"/> writing cells as the grid shows them; without a translator a flag writes its
+    /// plain value rather than one of the grid's keys.
     /// </summary>
     public static Func<object, UIDataGridColumn, string?> AsCsvFormat(CultureInfo culture, Func<string, string>? translate)
     {
@@ -55,10 +56,7 @@ public static class DataGridCellFormatter
         };
     }
 
-    /// <summary>
-    /// A number of any CLR width as a decimal, and a text that reads as one invariantly, as the client's cell reads it; a flag, a
-    /// text that is no number, and a real no decimal holds — not a number, an infinity, past 7.9e28 — are written as they are.
-    /// </summary>
+    /// <summary>A number, or an invariant numeric text, as a decimal; false where a decimal cannot hold it.</summary>
     private static bool TryToDecimal(object value, out decimal number)
     {
         switch (value)
@@ -101,13 +99,16 @@ public static class DataGridCellFormatter
         return WebNumberFormat.Format(number, format, pack);
     }
 
+    /// <summary>A value as the client's cell writes it: a flag in the wire's own words rather than .NET's <c>True</c>.</summary>
     private static string AsText(object value, CultureInfo culture)
-        => value as string ?? Convert.ToString(value, culture) ?? string.Empty;
+        => value switch
+        {
+            string text => text,
+            bool flag => flag ? "true" : "false",
+            _ => Convert.ToString(value, culture) ?? string.Empty
+        };
 
-    /// <summary>
-    /// A moment in any of its shapes. Text is read by the clock it is written with, an offset after it tolerated and ignored, as the
-    /// client's cell reads it: converted to the server's own zone, a moment near midnight would show another day.
-    /// </summary>
+    /// <summary>A moment in any of its shapes; a text by the wall clock it is written with.</summary>
     private static bool TryToDateTime(object value, out DateTime moment)
     {
         switch (value)
@@ -121,23 +122,62 @@ public static class DataGridCellFormatter
             case DateOnly date:
                 moment = date.ToDateTime(TimeOnly.MinValue);
                 return true;
-            case string text when DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTimeOffset parsed):
-                moment = parsed.DateTime;
-                return true;
+            // An offset after the clock is ignored, as the client's cell does: converted to the server's zone, a moment near
+            // midnight would show another day.
+            case string text:
+                return TryReadWritten(text, out moment);
             default:
                 moment = default;
                 return false;
         }
     }
 
+    /// <summary>The wall clock a text in the wire's shapes names, as <c>temporal.parse</c> reads it; false for any other.</summary>
+    private static bool TryReadWritten(string text, out DateTime moment)
+    {
+        Match written = WrittenMomentRegex().Match(text.Trim());
+
+        moment = default;
+
+        if (!written.Success)
+            return false;
+
+        var year = ReadField(written, 1);
+        var month = ReadField(written, 2);
+        var day = ReadField(written, 3);
+        var hour = ReadField(written, 4);
+        var minute = ReadField(written, 5);
+        var second = ReadField(written, 6);
+
+        if (year < 1 || month is < 1 or > 12 || day < 1 || day > DateTime.DaysInMonth(year, month) || hour > 23 || minute > 59 || second > 59)
+            return false;
+
+        // The fraction's first three digits are the milliseconds; the rest is finer than a moment carries.
+        var fraction = written.Groups[7].Success ? written.Groups[7].Value.PadRight(3, '0')[..3] : "0";
+
+        moment = new DateTime(year, month, day, hour, minute, second, int.Parse(fraction, CultureInfo.InvariantCulture), DateTimeKind.Unspecified);
+        return true;
+    }
+
+    private static int ReadField(Match written, int group)
+        => written.Groups[group].Success ? int.Parse(written.Groups[group].ValueSpan, CultureInfo.InvariantCulture) : 0;
+
+    // temporal-format.ts's WrittenMomentPattern, with ASCII digits as JavaScript's \d reads them.
+    [GeneratedRegex("^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})(?:[T ]([0-9]{1,2}):([0-9]{1,2})(?::([0-9]{1,2})(?:\\.([0-9]+))?)?)?(?:Z|[+-][0-9]{2}(?::?[0-9]{2})?)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex WrittenMomentRegex();
+
+    /// <summary>A flag by its caption: a text says true in any case, anything else is false, and the captions are keyed by the two words.</summary>
     private static string FormatBoolean(object value, IReadOnlyList<UIChoice>? choices, CultureInfo culture, Func<string, string> translate)
     {
-        var text = value is bool flag ? (flag ? "true" : "false") : AsText(value, culture).ToLowerInvariant();
+        var flag = IsTrue(value, culture);
 
-        return FindChoice(choices, text) is { } caption
+        return FindChoice(choices, flag ? "true" : "false") is { } caption
             ? translate(caption)
-            : translate(text == "true" ? DataGridStrings.Yes : DataGridStrings.No);
+            : translate(flag ? DataGridStrings.Yes : DataGridStrings.No);
     }
+
+    private static bool IsTrue(object value, CultureInfo culture)
+        => value is bool truth ? truth : string.Equals(AsText(value, culture), "true", StringComparison.OrdinalIgnoreCase);
 
     private static string? FindChoice(IReadOnlyList<UIChoice>? choices, string value)
     {
@@ -155,6 +195,20 @@ public static class DataGridCellFormatter
 
     private static string FormatChoice(string text, IReadOnlyList<UIChoice>? choices, Func<string, string> translate)
         => FindChoice(choices, text) is { } caption ? translate(caption) : text;
+
+    /// <summary>A flag's or a choice's value as its choices are keyed — <c>true</c>/<c>false</c>, or the value's text; null for any other kind.</summary>
+    internal static string? ChoiceValue(object? value, UIDataGridColumnKind kind, CultureInfo culture)
+    {
+        if (value is null)
+            return null;
+
+        return kind switch
+        {
+            UIDataGridColumnKind.Boolean => IsTrue(value, culture) ? "true" : "false",
+            UIDataGridColumnKind.Enum => AsText(value, culture),
+            _ => null
+        };
+    }
 
     /// <summary>A number cell's value as the invariant number a footer adds up — a numeric text's too, as the cell shows it; null for any other.</summary>
     internal static string? RawNumber(object? value)

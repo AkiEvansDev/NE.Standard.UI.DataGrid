@@ -1,36 +1,41 @@
-// The footer under the rows: a total per column that asked for one. Computed here — from the typed cells' raw values for a host
-// holding every row in the page, from the items a virtualized host holds; for a windowed source, the server sends the total with
-// the window, carried as a host attribute. Every way writes through the same formatter the cells use.
+// The footer under the rows: a total per column that asked for one, computed here or, for a windowed source, sent by the server
+// with the window; written through the cells' formatter.
 
-import type { ItemRows, PluginEngineContext } from "ne-standard-ui";
-import { formatCellValue, RawValueAttribute, readCellShape, toNumber } from "./data-grid-cell.ts";
+import type { DomNames, ItemRows, PluginEngineContext } from "ne-standard-ui";
+import { formatCellValue, readCellShape, toNumber } from "./data-grid-cell.ts";
 import type { CellFormatting } from "./data-grid-cell.ts";
-import { HostSelector, RootSelector } from "./data-grid-dom.ts";
+import { hostSelector, RootSelector, rowSelector } from "./data-grid-dom.ts";
+import { GridAttributes, GridClasses } from "./data-grid-names.ts";
 
-const TotalSelector = ":scope > .ui-table__scroll > .ui-data-grid__footer > .ui-data-grid__total[data-ui-grid-aggregate]";
-const RowSelector = ":scope > .ui-table__row:not(.ui-hidden)";
-const ColumnAttribute = "data-ui-grid-column";
-const PropertyAttribute = "data-ui-grid-property";
-const AggregateAttribute = "data-ui-grid-aggregate";
-const HostModeAttribute = "data-ui-host-mode";
-const WindowAggregatesAttribute = "data-ui-window-aggregates";
+const AggregateAttribute = GridAttributes.aggregate;
+const ColumnAttribute = GridAttributes.column;
+const RawValueAttribute = GridAttributes.raw;
 
 export type Aggregate = "sum" | "average" | "count" | "min" | "max";
 
 export class DataGridTotalsEngine {
     private readonly formatting: CellFormatting;
     private readonly rows: ItemRows;
+    private readonly names: DomNames;
+    private readonly hostSelector: string;
+    private readonly totalSelector: string;
+    // The rows the filters leave: a hidden one stays in the page under the framework's class.
+    private readonly shownRowSelector: string;
     private readonly pending = new Set<HTMLElement>();
     private scheduled = false;
 
     public constructor(context: PluginEngineContext, formatting: CellFormatting) {
         this.formatting = formatting;
         this.rows = context.rows;
+        this.names = context.names;
+        this.hostSelector = hostSelector(context.names);
+        this.totalSelector = `:scope > .${context.names.tableScrollClass} > .${GridClasses.footer} > .${GridClasses.total}[${AggregateAttribute}]`;
+        this.shownRowSelector = `:scope > ${rowSelector(context.names)}:not(.${context.names.hiddenClass})`;
         this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector));
 
         // Rows come and go, a filter hides one (its class), an edit changes a cell's value (its raw attribute), a window brings its
         // answer (the host's attribute).
-        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, WindowAggregatesAttribute] }, grids => this.queue(grids));
+        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, context.names.windowAggregates] }, grids => this.queue(grids));
     }
 
     private syncAll(grids: Iterable<HTMLElement>): void {
@@ -40,18 +45,18 @@ export class DataGridTotalsEngine {
 
     /** Every total the footer asks for, from the window's answer or from the rows the page holds. */
     private syncTotals(grid: HTMLElement): void {
-        const totals = grid.querySelectorAll<HTMLElement>(TotalSelector);
+        const totals = grid.querySelectorAll<HTMLElement>(this.totalSelector);
 
         if (totals.length === 0)
             return;
 
-        const host = grid.querySelector<HTMLElement>(HostSelector);
+        const host = grid.querySelector<HTMLElement>(this.hostSelector);
 
         if (host === null)
             return;
 
-        const windowed = host.getAttribute(HostModeAttribute) === "windowed";
-        const answered = windowed ? readAggregates(host) : null;
+        const windowed = host.getAttribute(this.names.hostMode) === "windowed";
+        const answered = windowed ? readAggregates(host, this.names) : null;
         // A virtualized host draws only the rows in view: the reading is over the items it holds, not over the page.
         const held = windowed ? null : this.rows.itemsOf(host);
         const numbers = this.formatting.numbers.readCulture(grid);
@@ -59,15 +64,14 @@ export class DataGridTotalsEngine {
 
         for (const total of totals) {
             const column = total.getAttribute(ColumnAttribute) ?? "";
-            const property = total.getAttribute(PropertyAttribute) ?? column;
+            const property = total.getAttribute(GridAttributes.property) ?? column;
             const aggregate = (total.getAttribute(AggregateAttribute) ?? "") as Aggregate;
-            // A windowed source's rows in the page are one window of many: only the source can total them, and a source that sent
-            // nothing leaves the footer blank rather than showing the window's sum as the column's.
+            // A window is one of many: only the source can total it, and a blank beats the window's sum shown as the column's.
             const value = windowed
                 ? answered?.[property] ?? null
                 : held !== null
                     ? aggregate === "count" ? held.length : aggregateOf(aggregate, heldValues(held, property, this.rows))
-                    : aggregate === "count" ? host.querySelectorAll(RowSelector).length : aggregateOf(aggregate, rawValues(host, column));
+                    : aggregate === "count" ? host.querySelectorAll(this.shownRowSelector).length : aggregateOf(aggregate, rawValues(host, column, this.shownRowSelector));
             const text = value === null ? "" : formatCellValue(value, readCellShape(total), numbers, dates, this.formatting);
 
             if (total.textContent !== text)
@@ -75,10 +79,7 @@ export class DataGridTotalsEngine {
         }
     }
 
-    /**
-     * Totals once a frame at most: a scroll through a virtualized host swaps rows batch after batch, each a reading over every item
-     * it holds, and the footer's own writes come back as one more batch.
-     */
+    /** Totals once a frame at most: a virtualized scroll swaps rows batch after batch, and the footer's own writes come back as one more. */
     private queue(grids: Iterable<HTMLElement>): void {
         for (const grid of grids)
             this.pending.add(grid);
@@ -99,8 +100,8 @@ export class DataGridTotalsEngine {
 }
 
 /** The answer the source sent beside its window, by property; nothing when it sent none or it does not parse. */
-function readAggregates(host: Element): Readonly<Record<string, unknown>> | null {
-    const text = host.getAttribute(WindowAggregatesAttribute);
+function readAggregates(host: Element, names: DomNames): Readonly<Record<string, unknown>> | null {
+    const text = host.getAttribute(names.windowAggregates);
 
     if (text === null || text.length === 0)
         return null;
@@ -128,10 +129,10 @@ function heldValues(items: readonly unknown[], property: string, rows: ItemRows)
 }
 
 /** The raw values of one column's cells, over the rows the filters leave; a cell with no number is skipped. */
-function rawValues(host: Element, column: string): number[] {
+function rawValues(host: Element, column: string, shownRowSelector: string): number[] {
     const values: number[] = [];
 
-    for (const row of host.querySelectorAll<HTMLElement>(RowSelector)) {
+    for (const row of host.querySelectorAll<HTMLElement>(shownRowSelector)) {
         const cell = row.querySelector(`:scope > [${ColumnAttribute}="${CSS.escape(column)}"] [${RawValueAttribute}]`);
         const value = cell === null ? Number.NaN : Number(cell.getAttribute(RawValueAttribute));
 

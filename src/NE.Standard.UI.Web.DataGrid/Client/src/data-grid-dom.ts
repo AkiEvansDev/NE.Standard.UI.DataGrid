@@ -1,11 +1,20 @@
 // What every engine of the grid reads off the page: the grid's root, rows and host as the table's renderer lays them out, plus
 // small readings the engines share.
 
-export const RootSelector = ".ui-data-grid";
-export const RowSelector = ".ui-table__row";
+import type { DomNames, ItemRows } from "ne-standard-ui";
+import { ClientNames, GridClasses } from "./data-grid-names.ts";
+
+export const RootSelector = `.${GridClasses.root}`;
+
+/** A row of the table, the grid's own or a nested table's. */
+export function rowSelector(names: DomNames): string {
+    return `.${names.tableRowClass}`;
+}
+
 /** The rows' host, inside the box that carries the table's frame and its scroll. */
-export const HostSelector = ":scope > .ui-table__scroll > [data-ui-items-host]";
-const ComponentIdAttribute = "data-ui-id";
+export function hostSelector(names: DomNames): string {
+    return `:scope > .${names.tableScrollClass} > [${names.itemsHost}]`;
+}
 
 /** The grid's own matching descendants, a nested grid's left to it. */
 export function ownDescendants(grid: HTMLElement, selector: string): HTMLElement[] {
@@ -34,9 +43,21 @@ export function gridOf(target: EventTarget | null): HTMLElement | null {
     return target instanceof Element ? target.closest<HTMLElement>(RootSelector) : null;
 }
 
+/** Whether a key landed where the row keyboard answers it (`rows.isKeyTarget`), less an open detail, whose keys are its own. */
+export function isRowKeyTarget(rows: ItemRows, target: Element): boolean {
+    const detail = target.closest(`.${ClientNames.detailClass}`);
+
+    return rows.isKeyTarget(target) && (detail === null || gridOf(detail) !== gridOf(target));
+}
+
+/** One of the grid's own rows — in its host, not a table's inside a row's detail. */
+export function isOwnRow(grid: HTMLElement, row: Element, names: DomNames): boolean {
+    return row.parentElement !== null && row.parentElement === grid.querySelector(hostSelector(names));
+}
+
 /** The grid's component id, which the framework draws its variants by; null when the root carries none. */
-export function componentIdOf(grid: Element): number | null {
-    const id = Number(grid.getAttribute(ComponentIdAttribute));
+export function componentIdOf(grid: Element, names: DomNames): number | null {
+    const id = Number(grid.getAttribute(names.componentId));
 
     return Number.isInteger(id) ? id : null;
 }

@@ -1,31 +1,45 @@
-// The data grid over the framework's table: the table's own stylesheet draws the root, header, host, rows and cells; what's
-// written here is only what the grid adds, against the theme's --ui-* tokens and the framework's Less.
+// The data grid over the framework's table: only what the grid adds to the table's own stylesheet.
 
 @import (reference) "../../plugin/ne-standard-ui.less";
 
-// A row stands a step taller than the table's, with more air around its cells — a grid is a screen's main surface, read row by
-// row. The header keeps the table's height.
-.ui-data-grid .ui-table__host > .ui-table__row {
+// A sortable caption under the pointer but not over the resize handle, which overhangs the next caption: its wash would answer a
+// press that resizes.
+@ui-data-grid-sort-hover: ~":hover:not(:has(> .ui-table__resizer:is(:hover, [data-ui-splitting])))";
+
+// A row a step taller than the table's, with more air in its cells: a grid is a screen's main surface, read row by row. The grid's
+// own rows only, as every row and header rule here: a table in a row's detail keeps its own.
+.ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row {
     min-height: @ui-row-height-sm;
 }
 
-.ui-data-grid .ui-table__host > .ui-table__row > .ui-table__cell {
+.ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-table__cell {
     padding: @ui-space-2 @ui-space-3;
 }
 
-// A header cell that sorts is pressed like a button and walked like one; the page's own ring marks it when walked to.
-.ui-data-grid .ui-table__header > .ui-table__header-cell[data-ui-grid-sort] {
-    cursor: pointer;
+// A sorting header cell's wash is an inset shadow over its ground: a pinned caption's ground is opaque, and a translucent ground
+// would let the captions scrolled under it show through. At rest the shadow is clear, so only its colour moves.
+.ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort] {
     user-select: none;
-    transition: background-color @ui-motion-fast @ui-motion-ease;
+    box-shadow: inset 0 0 0 100vmax transparent;
+    transition: box-shadow @ui-motion-fast @ui-motion-ease;
 }
 
-    .ui-data-grid .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]:hover {
-        background: color-mix(in srgb, var(--ui-color-on-surface) @ui-table-tint, transparent);
+    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} {
+        box-shadow: inset 0 0 0 100vmax var(--ui-wash-hover);
     }
 
-// The mark beside the caption, in two states: sorting, the framework's arrow with its place among several sorted columns; idle,
-// the framework's faint two-way mark, so a header says what it offers rather than showing an arrow for a sort nobody asked for.
+    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:active {
+        box-shadow: inset 0 0 0 100vmax var(--ui-wash-active);
+    }
+
+    // The hand where a sortable caption also drags, since the press is what it is for. Outranks ui-table.less's grab on purpose,
+    // and never its grabbing.
+    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]:not([data-ui-table-dragging]) {
+        cursor: pointer;
+    }
+
+// The sort mark: the arrow while sorting, a faint two-way mark while idle, so a header says what it offers rather than showing an
+// arrow for a sort nobody asked for.
 .ui-data-grid__sort-mark,
 .ui-data-grid__sort-idle {
     width: auto;
@@ -51,8 +65,13 @@
         display: none;
     }
 
-    .ui-table__header-cell[data-ui-grid-sort]:hover > .ui-data-grid__sort-idle {
+    .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} > .ui-data-grid__sort-idle {
         opacity: 0.7;
+    }
+
+    // The arrow turns rather than flips, so a second press reads as the same column the other way.
+    .ui-data-grid__sort-mark::before {
+        transition: transform @ui-motion-fast @ui-motion-ease;
     }
 
     [data-ui-grid-sorted="desc"] > .ui-data-grid__sort-mark::before {
@@ -75,10 +94,9 @@
         margin-inline: 0 @ui-space-2;
     }
 
-// In a centred column the caption stays centred on the values, which a flex row would not do with the mark beside it: the caption
-// takes the middle track and the mark the last, whose twin before it takes an equal share. Short of room, the empty track gives
-// way first and the caption slides off centre rather than the mark leaving the cell.
-.ui-data-grid .ui-table__header > .ui-table__header-cell--center[data-ui-grid-sort] {
+// A centred caption stays centred on the values, which a flex row would not do with the mark beside it: an empty first track
+// balances the mark's. Short of room, it gives way before the mark leaves the cell.
+.ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell--center[data-ui-grid-sort] {
     display: grid;
     grid-template-columns: 1fr minmax(0, auto) 1fr;
 }
@@ -92,9 +110,7 @@
         justify-self: start;
     }
 
-// The band and the pager are the grid's chrome, not its rows: the table's box carries the frame and scrolls, and these two stand
-// outside it, true for a wide grid as well as a narrow one. The totals footer is the opposite — it stays inside the box and
-// scrolls with the columns' tracks.
+// The band and the pager stand outside the table's framed, scrolling box; the totals footer stays inside and scrolls with the tracks.
 .ui-data-grid__band {
     display: flex;
     align-items: center;
@@ -111,27 +127,22 @@
         flex: 0 0 auto;
     }
 
-// The filters and columns buttons in the band use the field's own material, not an outline, since the band is a row of controls
-// beside the search field. The framework's field row makes them stand, hover and lift their edge exactly as the search box does.
+// The band's buttons wear the field's material, not an outline, since the band is a row of controls beside the search field.
 .ui-data-grid__band-button {
     .ui-input-field();
+    .ui-field-states();
     color: inherit;
     font: inherit;
     font-size: var(--ui-text-body-font-size);
     cursor: pointer;
 }
 
-    .ui-data-grid__band-button:hover {
-        border-color: var(--ui-field-hover);
-    }
-
     .ui-data-grid__band-button > .ui-icon {
         font-size: @ui-glyph-md;
         color: var(--ui-text-muted);
     }
 
-    // The count of filters in use, hidden at none via the `[hidden]` rule below since a class alone wouldn't outweigh it. Sized
-    // to the caption, so a whole-pixel text keeps the framework's badge circle and its centred figure on whole pixels.
+    // Sized to the caption so the badge stays on whole pixels; hidden at none by the `[hidden]` rule, which a class would not outweigh.
     .ui-data-grid__filters-count {
         font-size: var(--ui-text-caption-font-size);
         font-weight: var(--ui-text-title-font-weight);
@@ -154,8 +165,7 @@
         min-width: 0;
     }
 
-    // The field fits its part regardless of the floor width the framework gives it standalone — a select's twelve rem would
-    // overflow a seven-rem column and get cut off at the grid's edge.
+    // The field fits its part despite its standalone floor width: a select's twelve rem would overflow a seven-rem column.
     .ui-data-grid__filter-part > [data-ui-id] {
         width: 100%;
         min-width: 0;
@@ -180,7 +190,7 @@
         color: var(--ui-text-muted);
     }
 
-// Under the filters at the trailing edge, a word in the primary ink as a date picker's own Clear is; muted while nothing is set.
+// A word in the primary ink, as a date picker's Clear is; disabled while nothing is set, easing into it as its wash eases out.
 .ui-data-grid__filters-clear {
     align-self: flex-end;
     min-height: @ui-list-row-height;
@@ -192,16 +202,12 @@
     font: inherit;
     font-size: var(--ui-text-caption-font-size);
     cursor: pointer;
+    transition: background-color @ui-motion-fast @ui-motion-ease, opacity @ui-motion-fast @ui-motion-ease;
     .ui-interactive-base();
 }
 
-    .ui-data-grid__filters-clear:hover:not(:disabled) {
-        background: var(--ui-wash-hover);
-    }
-
-    .ui-data-grid__filters-clear:disabled {
-        color: var(--ui-text-muted);
-        cursor: default;
+    .ui-data-grid__filters-clear@{ui-button-live} {
+        .ui-reveal-hover(@transition: false);
     }
 
 // The chooser's panel holds the framework's own menu; the panel spans the placement host the flyout is, and the menu fills it.
@@ -211,10 +217,10 @@
     min-width: 11rem;
 }
 
-// The footer of totals under the rows: a row of the header's tracks on the header's tint, in the header's weight, as an implicit
-// row of the scroll box's grid so the host keeps the stretching one.
+// The footer of totals: the header's tracks, on its ground so both ends of the rows share a tint, as an implicit row of the scroll
+// box's grid so the host keeps the stretching one.
 .ui-data-grid__footer {
-    --ui-row-wash: color-mix(in srgb, var(--ui-color-on-surface) @ui-table-tint, transparent);
+    --ui-row-wash: @ui-table-ground;
 
     display: grid;
     grid-template-columns: subgrid;
@@ -228,7 +234,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-    .ui-data-grid:is(.ui-scroll-x--auto, .ui-scroll-x--always) .ui-data-grid__footer {
+    .ui-data-grid:is(.ui-scroll-x--auto, .ui-scroll-x--always) > .ui-table__scroll > .ui-data-grid__footer {
         position: sticky;
         bottom: 0;
         z-index: 2;
@@ -264,8 +270,7 @@
         font-size: @ui-glyph-md;
     }
 
-// A cell that edits hides while its editor stands in its track — a cell of the same row, absent until the engine opens it. No
-// pointer cursor of its own: rows are read far more than they're edited.
+// A cell hides while its editor, a sibling cell, stands in its track. No pointer cursor: rows are read far more than edited.
 .ui-data-grid__cell--editing {
     display: none;
 }
@@ -275,8 +280,8 @@
 }
 
     // The field's text follows the column's edge, as the cell's did.
-    .ui-data-grid__editor.ui-table__cell--end input {
-        text-align: end;
+    .ui-data-grid__editor.ui-table__cell--end input.ui-field {
+        .ui-field-value-at-end();
     }
 
     .ui-data-grid__editor.ui-table__cell--center input {
@@ -287,28 +292,25 @@
         display: flex;
     }
 
-    // The field's text lands where the cell's text stood, at either edge: a ghost field insets its own by half a step and a
-    // border, so the value must not shift when the editor opens.
+    // The field's text lands where the cell's stood: a ghost field insets its own by half a step and a border.
     .ui-data-grid__editor > [data-ui-id] {
         flex: 1 1 auto;
         min-width: 0;
         margin-inline: calc(-1 * (@ui-space-2 + var(--ui-border-width, 1px)));
     }
 
-    // A checkbox has no box of its own to pull back: it takes its own width, and the cell's alignment stands it where the word it
-    // replaces stood; stretched and pulled, it opened left of the column's text and the cell jumped.
+    // A checkbox takes its own width, so the cell's alignment stands it where the word stood.
     .ui-data-grid__editor > .ui-checkbox {
         flex: 0 0 auto;
         margin-inline: 0;
     }
 
-    // Digits of one width, as the cell under the editor has them: a number whose spacing changed when the cell opened read as a shift.
+    // Digits of one width, as the cell's, so the number does not shift when the editor opens.
     .ui-data-grid__editor:is([data-ui-grid-kind="number"], [data-ui-grid-kind="money"], [data-ui-grid-kind="date"]) input {
         font-variant-numeric: tabular-nums;
     }
 
-// A row's detail: a band under its cells across every track, drawn only while the row stands open, with the opening chevron
-// turned a quarter. The cell holds the framework's ghost button, whose chevron is the click target the engine reads.
+// A row's detail: a band under its cells across every track, drawn only while the row stands open.
 .ui-data-grid__detail {
     display: none;
     grid-column: 1 / -1;
@@ -316,43 +318,64 @@
     border-top: var(--ui-border-width, 1px) solid var(--ui-color-border);
 }
 
+    // Fades in, opacity alone, so the rows under it move once rather than with it; the close is instant, the element being gone.
     .ui-table__row[data-ui-grid-expanded] > .ui-data-grid__detail {
         display: block;
+        transition: opacity @ui-motion-fast @ui-motion-enter;
+
+        @starting-style {
+            opacity: 0;
+        }
     }
 
 .ui-data-grid__cell--detail {
     padding-inline: @ui-space-1;
 }
 
-    // Square and unpadded: a small button's side padding left the chevron no width at all in a forty-pixel column.
+    // Square and unpadded: a small button's side padding leaves the chevron no width in a forty-pixel column.
     .ui-data-grid__cell--detail .ui-button {
         min-width: @ui-button-height-sm;
         padding: 0;
+    }
+
+    // The chevron turns, not the button: a transition on the button would replace `.ui-button`'s own list, its root fade among them.
+    .ui-data-grid__cell--detail .ui-button .ui-icon {
         transition: transform @ui-motion-fast @ui-motion-ease;
     }
 
-    .ui-table__row[data-ui-grid-expanded] > .ui-data-grid__cell--detail .ui-button {
+    .ui-table__row[data-ui-grid-expanded] > .ui-data-grid__cell--detail .ui-button .ui-icon {
         transform: rotate(90deg);
     }
 
-    // A row that opens on a click says so under the pointer, except where a cell answers the click itself — an editable one does
-    // not while editing is off. The grid's own rows only: a grid in a row's detail says so for itself.
-    .ui-data-grid[data-ui-grid-expand-click] > .ui-table__scroll > .ui-table__host > .ui-table__row > .ui-table__cell:not([data-ui-no-row-open]),
-    .ui-data-grid[data-ui-grid-expand-click][data-ui-grid-readonly] > .ui-table__scroll > .ui-table__host > .ui-table__row > .ui-data-grid__cell--editable {
+    // A row that opens on a click says so under the pointer, except over a cell that answers the click itself. The grid's own
+    // rows only: a grid in a row's detail says so for itself.
+    .ui-data-grid[data-ui-grid-expand-click] > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-table__cell:not([data-ui-no-row-open]) {
         cursor: pointer;
     }
 
-// The grid's own column of checkboxes: as narrow as the box, the header's over them. Its cells hold nothing but the box, so the
-// row's own air is cut here or it would sit around it twice and misalign the header's box.
-.ui-data-grid .ui-table__host > .ui-table__row > .ui-data-grid__cell--select,
-.ui-data-grid .ui-table__header > .ui-table__header-cell[data-ui-grid-select-all] {
+// The checkbox column, as narrow as the box: the row's air is cut here, or it would sit around the box twice and misalign the header's.
+.ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-data-grid__cell--select,
+.ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-select-all] {
     padding-inline: @ui-space-1;
 }
 
-    // The box takes its own width and the cell's own centring places it: stretched, it stood at the start of whatever the padding left.
+    // The box takes its own width so the cell's centring places it, not the start of whatever the padding left.
     .ui-data-grid__cell--select > [data-ui-id],
     .ui-table__header-cell[data-ui-grid-select-all] > [data-ui-id] {
         flex: 0 0 auto;
+    }
+
+    // A box that takes nothing is marked on its input, not on the checkbox's root: a disabled root makes the input inert, which
+    // drops a focus it holds, and would read as a disabled row to the row keyboard.
+    .ui-data-grid__cell--select .ui-checkbox__input.ui-disabled ~ .ui-checkbox__box,
+    .ui-table__header-cell[data-ui-grid-select-all] .ui-checkbox__input.ui-disabled ~ .ui-checkbox__box {
+        .ui-disabled-state();
+    }
+
+    // Nor a hand beside it: the root, the box and its gap, keeps the checkbox's pointer, which only a disabled root takes back.
+    .ui-data-grid__cell--select .ui-checkbox:has(> .ui-checkbox__input.ui-disabled),
+    .ui-table__header-cell[data-ui-grid-select-all] .ui-checkbox:has(> .ui-checkbox__input.ui-disabled) {
+        cursor: default;
     }
 
 // A typed cell is one line of the row's own text, cut with an ellipsis where the column is narrower than the value.
@@ -369,3 +392,23 @@
     .ui-data-grid-cell--date {
         font-variant-numeric: tabular-nums;
     }
+
+// Forced colours drop the washes the grid's states are drawn with, so each takes an outline in system colours where the keyboard's
+// ring is not. A package's own block, since the core's preferences.less cannot name a package's selectors.
+@media (forced-colors: active) {
+    .ui-data-grid__band-button[aria-expanded="true"] {
+        outline: 2px solid Highlight;
+        outline-offset: -2px;
+    }
+
+    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:not(@{ui-keyboard-focus}),
+    .ui-data-grid__filters-clear@{ui-button-live}:hover:not(@{ui-keyboard-focus}) {
+        outline: 1px dashed CanvasText;
+        outline-offset: -2px;
+    }
+
+    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:active:not(@{ui-keyboard-focus}),
+    .ui-data-grid__filters-clear@{ui-button-live}:active:not(@{ui-keyboard-focus}) {
+        outline: 2px solid Highlight;
+    }
+}

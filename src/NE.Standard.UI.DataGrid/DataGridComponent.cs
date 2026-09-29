@@ -19,8 +19,7 @@ using NE.Standard.UI.Primitives.Styling;
 namespace NE.Standard.UI.DataGrid;
 
 /// <summary>
-/// A full-featured table: sorting by header, typed and formatted columns, and editing in place, on top of
-/// <see cref="TableComponent{T}"/>'s rows, rules, window and selection.
+/// A <see cref="TableComponent{T}"/> with sorting by header, typed and formatted columns, and editing in place.
 /// </summary>
 public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionContainerComponent
     where T : DataGridComponent<T>, IUIComponentDefinition
@@ -54,8 +53,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     public const string DetailTemplateKey = "detail";
 
     /// <summary>
-    /// The key of the grid's own selection-checkbox column, added before every other while rows may be chosen. It carries no resize
-    /// handle, is absent from the chooser, and isn't part of <see cref="TableComponent{T}.Columns"/>, so exports skip it.
+    /// The key of the grid's own checkbox column, shown while many rows may be chosen; not in <see cref="TableComponent{T}.Columns"/>.
     /// </summary>
     public const string SelectionColumnKey = "selection";
 
@@ -70,10 +68,11 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     private readonly List<Action<string>> _editorRegistrations = [];
     private string? _cellEditCommand;
 
-    /// <summary>
-    /// Initializes the grid with its selection-checkbox column: framework chrome, not a bound field, checked and cleared by the
-    /// engine as rows are chosen.
-    /// </summary>
+    // The search box's placeholder, kept apart from the box so it may be named before or after SetSearch draws one.
+    private string _searchPlaceholder = SearchKey;
+    private TextInputComponent? _searchField;
+
+    /// <summary>Initializes the grid.</summary>
     protected DataGridComponent(string? id = null) : base(id)
     {
         // Alone in their cells with no words of their own, so each is named for a screen reader.
@@ -88,22 +87,19 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     public bool HasRegions => _regions.Count > 0;
 
     /// <summary>
-    /// Gets or sets whether editable cells open their editors at all; off, the grid only shows and searches. Bindable, so a mode
-    /// can switch it.
+    /// Gets or sets whether editable cells open their editors; off, a double click opens the row as on any other cell.
     /// </summary>
     [UIComponentProperty(DefaultValue = true)]
     public bool? Editable { get; set; }
 
     /// <summary>
-    /// Gets or sets whether a windowed grid pages its window with a pager under the rows, instead of loading the next window as the
-    /// viewer nears the end. A grid holding all its rows has nothing to page.
+    /// Gets or sets whether a windowed grid pages with a pager under the rows instead of loading more as the viewer nears the end.
     /// </summary>
     [UIComponentProperty(DefaultValue = false)]
     public bool? Paging { get; set; }
 
     /// <summary>
-    /// Gets whether the band holds a column chooser, set by <c>SetColumnChooser</c> — a menu of check entries whose choices persist in the browser under
-    /// the grid's id. A column hidden below a tier (<c>HideColumnBelow</c>) is listed there too. Render-time only.
+    /// Gets whether the band holds a column chooser, whose choices persist in the browser; set by <c>SetColumnChooser</c>. Render-time only.
     /// </summary>
     [UIComponentProperty(DefaultValue = false, IsBindable = false, GenerateSetter = false)]
     public bool ColumnChooser { get; private set; }
@@ -191,16 +187,29 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
         // A field of the page's own shape, not a ghost: the band is a row of controls, and the buttons beside it take the same
         // ground.
-        TextInputComponent field = new TextInputComponent().SetPlaceholder(SearchKey).SetShowClearButton(true).SetDebounceMilliseconds(300);
+        _searchField = new TextInputComponent().SetPlaceholder(_searchPlaceholder).SetShowClearButton(true).SetDebounceMilliseconds(300);
 
-        _regions[SearchRegionName] = new DataGridFilterComponent().SetProperty(propertyPath).SetKind(UIDataGridColumnKind.Text).AddChild(field);
+        _regions[SearchRegionName] = new DataGridFilterComponent().SetProperty(propertyPath).SetKind(UIDataGridColumnKind.Text).AddChild(_searchField);
 
         return Self;
     }
 
     /// <summary>
-    /// Draws <paramref name="template"/> under a row the viewer opens, bound relatively to the row. Opens at a detail column's
-    /// chevron (<see cref="AddDetailColumn"/>) or, with <c>ExpandOnClick</c>, anywhere on the row.
+    /// Sets the search box's placeholder, a key or a text, in place of the grid's own word; before or after <see cref="SetSearch"/>.
+    /// </summary>
+    public T SetSearchPlaceholder(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+        _searchPlaceholder = text;
+        _ = _searchField?.SetPlaceholder(text);
+
+        return Self;
+    }
+
+    /// <summary>
+    /// Draws <paramref name="template"/>, bound to the row, under a row opened at its <see cref="AddDetailColumn"/> chevron or,
+    /// with <c>ExpandOnClick</c>, anywhere on it.
     /// </summary>
     public T SetDetailTemplate(IVisualComponent template)
     {
@@ -210,8 +219,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     }
 
     /// <summary>
-    /// Adds the column whose chevron opens a row's detail, narrow; it stands where it is added, so a grid that wants it at the start of
-    /// the row adds it first.
+    /// Adds the narrow column whose chevron opens a row's detail, in the place it is added.
     /// </summary>
     public T AddDetailColumn(UIGridUnit? width = null, bool pinned = false)
     {
@@ -263,8 +271,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     }
 
     /// <summary>
-    /// Installs the column's filter region: a <see cref="DataGridFilterComponent"/> over a text field, a from/to pair, or a select —
-    /// unbound, since the client writes the query.
+    /// Installs the column's filter region, its fields unbound since the client writes the query.
     /// </summary>
     private T SetFilter(UIDataGridColumn column)
     {
@@ -311,8 +318,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     }
 
     /// <summary>
-    /// Installs the column's editor as its edit variant: filled unless the author said otherwise, bound two-way to the row's
-    /// property, with the cell-edit command attached once named.
+    /// Installs the column's editor as its edit variant, with the cell-edit command attached once named.
     /// </summary>
     private T SetEditor<TInput>(UIDataGridColumn column, TInput editor, string? propertyPath)
         where TInput : VisualComponentBase<TInput>, IInputComponent, IUIComponentDefinition
@@ -489,13 +495,13 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     }
 
     /// <summary>
-    /// Registers a command run after the viewer changed the query — sorted by a header, typed a filter — and the value reached the server.
+    /// Registers a command run after the viewer sorted or filtered and the query reached the server.
     /// </summary>
     public T OnQueryChange(string command)
         => On(DataGridEvents.QueryChange, command);
 
     /// <summary>
-    /// Registers a command run after the viewer checked or unchecked a row and the chosen keys reached the server.
+    /// Registers a command run after the viewer changed the chosen rows and the keys reached the server.
     /// </summary>
     public T OnSelectionChange(string command)
         => On(DataGridEvents.SelectionChange, command);
@@ -506,8 +512,6 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 /// </summary>
 public sealed class DataGridComponent(string? id = null) : DataGridComponent<DataGridComponent>(id), IUIComponentDefinition
 {
-    /// <summary>
-    /// Gets the component type key used to identify this component in the compiled graph.
-    /// </summary>
+    /// <inheritdoc/>
     public static string ComponentTypeKey => "datagrid.grid";
 }

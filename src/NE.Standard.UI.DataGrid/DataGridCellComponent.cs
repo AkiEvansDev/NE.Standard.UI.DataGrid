@@ -8,18 +8,15 @@ using NE.Standard.UI.Primitives.Styling;
 namespace NE.Standard.UI.DataGrid;
 
 /// <summary>
-/// A typed column's cell: one row value, formatted by the column's kind in the page's culture — on the server when painted, on
-/// the client when built or patched.
+/// A typed column's cell: one row value, formatted by the column's kind in the page's culture.
 /// </summary>
 public abstract partial class DataGridCellComponent<T> : VisualComponentBase<T>
     where T : DataGridCellComponent<T>, IUIComponentDefinition
 {
-    /// <summary>
-    /// Centers the cell in its row: a single line of text in a two-line-tall row would sit at the top and jump when the editor
-    /// opens in its place.
-    /// </summary>
+    /// <summary>Initializes a cell, centred in its row.</summary>
     protected DataGridCellComponent(string? id = null) : base(id)
     {
+        // A single line at the top of a two-line row would jump when the editor opens in its place.
         VerticalAlignment = UIAlignment.Center;
     }
 
@@ -59,8 +56,6 @@ public abstract partial class DataGridCellComponent<T> : VisualComponentBase<T>
 /// </summary>
 public sealed class DataGridCellComponent(string? id = null) : DataGridCellComponent<DataGridCellComponent>(id), IUIComponentDefinition
 {
-    /// <summary>
-    /// Gets the component type key used to identify this component in the compiled graph.
-    /// </summary>
+    /// <inheritdoc/>
     public static string ComponentTypeKey => "datagrid.cell";
 }

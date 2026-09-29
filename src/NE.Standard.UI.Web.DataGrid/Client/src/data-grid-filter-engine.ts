@@ -1,43 +1,49 @@
-// The filters: what's typed into a filter's field becomes a term of the viewer's query (a text match, a range's two ends, a
-// chosen value), applied client-side or by the server for a window. The fields are unbound framework components, so the engine
-// asks the framework what each holds — and writes a query the controller pushed back into them, so the fields say what filters.
+// The filters: each field becomes a term of the viewer's query. The fields are unbound, so the engine asks the framework what each
+// holds, and writes a pushed query back into them so they say what filters.
 
-import type { Badges, PluginEngineContext, PropertyWriting, ValueReading } from "ne-standard-ui";
+import type { Badges, ComponentStates, DomNames, PluginEngineContext, PropertyWriting, ValueReading } from "ne-standard-ui";
 import { gridOf, ownDescendants, ownFirst, RootSelector } from "./data-grid-dom.ts";
-import { QueryAttribute, readQuery, readQueryText, writeQuery } from "./data-grid-query.ts";
+import { GridAttributes, GridClasses } from "./data-grid-names.ts";
+import { readQuery, readQueryText, writeQuery } from "./data-grid-query.ts";
 import type { FilterTerm } from "./data-grid-query.ts";
 
-const FilterSelector = "[data-ui-grid-filter]";
-const FilterPanelSelector = ".ui-data-grid__filter-panel";
-const FiltersCountSelector = ".ui-data-grid__filters-count";
-const FiltersClearSelector = ".ui-data-grid__filters-clear";
-const FilterPartSelector = ".ui-data-grid__filter-part";
-const FilterAttribute = "data-ui-grid-filter";
-const FilterKindAttribute = "data-ui-grid-filter-kind";
-const FilterBoundAttribute = "data-ui-grid-filter-bound";
+const FilterAttribute = GridAttributes.filter;
+const FilterKindAttribute = GridAttributes.filterKind;
+const FilterBoundAttribute = GridAttributes.filterBound;
+const FilterSelector = `[${FilterAttribute}]`;
+const FilterPanelSelector = `.${GridClasses.filterPanel}`;
+const FiltersCountSelector = `.${GridClasses.filtersCount}`;
+const FiltersClearSelector = `.${GridClasses.filtersClear}`;
+const FilterPartSelector = `.${GridClasses.filterPart}`;
 
 export class DataGridFilterEngine {
     private readonly values: ValueReading;
     private readonly badges: Badges;
     private readonly properties: PropertyWriting;
+    private readonly states: ComponentStates;
+    private readonly names: DomNames;
+    // A part's one field: the framework component standing in it.
+    private readonly fieldSelector: string;
 
-    // The query text this engine last wrote on each grid: a query on the grid that differs from it was written by someone else —
-    // the controller's push — and is written back into the fields.
+    // The query text this engine last wrote on each grid; one that differs is the controller's push, written back into the fields.
     private readonly written = new WeakMap<HTMLElement, string | null>();
 
     public constructor(context: PluginEngineContext) {
         this.values = context.values;
         this.badges = context.badges;
         this.properties = context.properties;
+        this.states = context.states;
+        this.names = context.names;
+        this.fieldSelector = `[${context.names.componentId}]`;
 
         this.fillAll(context.root.querySelectorAll<HTMLElement>(RootSelector));
-        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: [QueryAttribute] }, grids => this.fillAll(grids));
+        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: [context.names.itemsQuery] }, grids => this.fillAll(grids));
 
         context.root.addEventListener("click", domEvent => {
-            const clear = domEvent.target instanceof Element ? domEvent.target.closest<HTMLButtonElement>(FiltersClearSelector) : null;
+            const clear = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(FiltersClearSelector) : null;
             const grid = gridOf(clear);
 
-            if (clear !== null && grid !== null)
+            if (clear !== null && grid !== null && !this.states.isInert(clear))
                 this.clearPanel(grid);
         });
 
@@ -52,11 +58,7 @@ export class DataGridFilterEngine {
         }, true);
     }
 
-    /**
-     * Every filter of the flyout emptied as a push would empty it, and the query written without them: the search box keeps its
-     * text. Not read back from the emptied fields — a select takes its new value onto its field a moment later, so the first
-     * press used to write the old choice again and only a second one cleared it.
-     */
+    /** Empties the panel's filters as a push would; the query drops their terms itself, since a select takes its emptied value a moment later. */
     private clearPanel(grid: HTMLElement): void {
         const cleared = new Set<HTMLElement>();
 
@@ -67,7 +69,7 @@ export class DataGridFilterEngine {
             cleared.add(filter);
 
             for (const part of filter.querySelectorAll<HTMLElement>(`:scope > ${FilterPartSelector}`)) {
-                const field = part.querySelector("[data-ui-id]");
+                const field = part.querySelector(this.fieldSelector);
 
                 if (field !== null)
                     this.properties.set(field, "Value", null);
@@ -80,7 +82,7 @@ export class DataGridFilterEngine {
     /** The query's filters read again from the fields — but for those just emptied, which say nothing — and the count after them. */
     private writeFilters(grid: HTMLElement, cleared: ReadonlySet<HTMLElement> = new Set()): void {
         const filters = ownDescendants(grid, FilterSelector);
-        const query = readQuery(grid);
+        const query = readQuery(grid, this.names);
         const terms: FilterTerm[] = [];
 
         // Every filter's terms, in column order — the search box and the flyout's panel; a filter with nothing in it says nothing.
@@ -89,14 +91,14 @@ export class DataGridFilterEngine {
                 terms.push(...this.readFilterTermsOf(filter));
         }
 
-        writeQuery(grid, { ...query, filters: mergeFilterTerms(query.filters ?? [], filters.flatMap(fieldsOf), terms) });
-        this.written.set(grid, readQueryText(grid));
+        writeQuery(grid, this.names, { ...query, filters: mergeFilterTerms(query.filters ?? [], filters.flatMap(fieldsOf), terms) });
+        this.written.set(grid, readQueryText(grid, this.names));
         this.syncFiltersCount(grid);
     }
 
     private fillAll(grids: Iterable<HTMLElement>): void {
         for (const grid of grids) {
-            const text = readQueryText(grid);
+            const text = readQueryText(grid, this.names);
 
             if (this.written.has(grid) && this.written.get(grid) === text)
                 continue;
@@ -106,19 +108,16 @@ export class DataGridFilterEngine {
         }
     }
 
-    /**
-     * Every filter's fields made to say what the query holds for their property: a term the controller pushed shows in its
-     * field, and a field whose term it took away empties. A field the viewer is typing in is theirs and left alone.
-     */
+    /** Every filter's fields made to say what the query holds for them — the controller's push; the field being typed in is left alone. */
     private fillFields(grid: HTMLElement): void {
-        const terms = readQuery(grid).filters ?? [];
+        const terms = readQuery(grid, this.names).filters ?? [];
 
         for (const filter of ownDescendants(grid, FilterSelector)) {
             const property = filter.getAttribute(FilterAttribute) ?? "";
             const kind = filter.getAttribute(FilterKindAttribute) ?? "text";
 
             for (const part of filter.querySelectorAll<HTMLElement>(`:scope > ${FilterPartSelector}`)) {
-                const field = part.querySelector("[data-ui-id]");
+                const field = part.querySelector(this.fieldSelector);
 
                 if (field === null || field.contains(document.activeElement))
                     continue;
@@ -157,17 +156,14 @@ export class DataGridFilterEngine {
         return text.length === 0 ? null : text;
     }
 
-    /**
-     * The count on the filters button: how many of the flyout's filters the query gives something to show, hidden at none; the clear
-     * button is live beside it. Counted off the query the fields say, not the fields: a select just written reads its old value.
-     */
+    /** The count on the filters button, hidden at none, with Clear filters live beside it — off the query, since a select just written reads its old value. */
     private syncFiltersCount(grid: HTMLElement): void {
         const count = ownFirst(grid, FiltersCountSelector);
 
         if (count === null)
             return;
 
-        const terms = readQuery(grid).filters ?? [];
+        const terms = readQuery(grid, this.names).filters ?? [];
         let inUse = 0;
 
         for (const filter of ownDescendants(grid, FilterSelector)) {
@@ -178,10 +174,10 @@ export class DataGridFilterEngine {
         this.badges.writeCount(count, inUse);
         count.hidden = inUse === 0;
 
-        const clear = ownFirst<HTMLButtonElement>(grid, FiltersClearSelector);
+        const clear = ownFirst(grid, FiltersClearSelector);
 
         if (clear !== null)
-            clear.disabled = inUse === 0;
+            this.states.setDisabled(clear, inUse === 0);
     }
 }
 
@@ -205,22 +201,14 @@ function fieldsOf(filter: HTMLElement): FilterField[] {
     return [...filter.querySelectorAll<HTMLElement>(`:scope > ${FilterPartSelector}`)].map(part => ({ property, kind, bound: part.getAttribute(FilterBoundAttribute) }));
 }
 
-/**
- * The query's terms once the fields have spoken: a term one of the fields could have written is that field's and gives way to
- * what the fields say now; any other — the controller's, on a property no field shows or in a shape no field writes — stays,
- * since the viewer has no way to take it back.
- */
+/** The query's terms after the fields spoke: a term a field could have written gives way to theirs; any other stays, since no field can take it back. */
 export function mergeFilterTerms(current: readonly FilterTerm[], fields: readonly FilterField[], fromFields: readonly FilterTerm[]): FilterTerm[] {
     const kept = current.filter(term => !fields.some(field => field.property === term.itemProperty && fieldValueOf([term], field.property, field.kind, field.bound) !== null));
 
     return [...kept, ...fromFields];
 }
 
-/**
- * What a filter field shows for the query's terms on its property — the reverse of `createTerm`, and only of it: a text match's
- * text, a range end's number or day, a chosen value. Null for a term the field would write back differently, since showing it
- * would change the query under the viewer at their next edit.
- */
+/** What a filter field shows for its property's terms — `createTerm` reversed; null for a term the field would write back differently. */
 export function fieldValueOf(terms: readonly FilterTerm[], property: string, kind: string, bound: string | null): unknown {
     const upper = bound === "to";
 
@@ -298,8 +286,8 @@ export function createTerm(property: string, kind: string, bound: string | null,
             return value === null ? null : { itemProperty: property, operator, value };
         }
         case "date": {
-            // The picker's canonical text; a row's moment travels as the same ISO shape, which orders as text does. The end of a
-            // range is "before the next day": any last moment written out would still miss a row with a fraction or a zone after it.
+            // The picker's text is the ISO shape a row's moment travels in, which orders as text. The end is "before the next day":
+            // any last moment written out would miss a row with a fraction or a zone after it.
             const next = bound === "to" ? shiftDay(text, 1) : null;
 
             return next === null ? { itemProperty: property, operator, value: text } : { itemProperty: property, operator: "Less", value: next };

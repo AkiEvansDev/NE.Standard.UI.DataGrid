@@ -13,8 +13,7 @@ public static class DataGridWebExtensions
     private const string AssemblyName = "NE.Standard.UI.Web.DataGrid";
 
     /// <summary>
-    /// Renders the data grid: its renderer and its cell's, the words its chrome writes, and the script and stylesheet the package
-    /// embeds. Calling it twice registers nothing more.
+    /// Registers the data grid's renderers, words, script and stylesheet; a second call registers nothing more.
     /// </summary>
     public static IServiceCollection AddDataGrid(this IServiceCollection services)
     {

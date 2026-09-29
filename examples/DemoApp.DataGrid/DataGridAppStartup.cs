@@ -8,6 +8,12 @@ public sealed class DataGridAppStartup : UIStartupBase
     {
         ArgumentNullException.ThrowIfNull(application);
 
+        _ = application.AddLocalizationSource(DataGridDemoWords.Build());
+
+        // Only a string starting "grid-demo." is a key: the page's prose and its data are content, so the missing-word report in
+        // Development names only words the demo has not translated.
+        _ = application.ConfigureLocalization(options => options.KeyPrefixes.Add(DataGridDemoWords.KeyPrefix));
+
         _ = application.Route<ColumnsView, ColumnsController>(DataGridDemoView.ColumnsRoute);
         _ = application.Route<FiltersView, FiltersController>(DataGridDemoView.FiltersRoute);
         _ = application.Route<SourceView, SourceController>(DataGridDemoView.SourceRoute);

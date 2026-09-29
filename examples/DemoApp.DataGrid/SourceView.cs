@@ -10,10 +10,10 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
 
     protected override string Route => SourceRoute;
 
-    public override string Title => "A large source";
+    public override string Title => "grid-demo.page.source";
 
     protected override string Description
-        => "The same columns over a windowed source of a hundred thousand subscriptions: the source sorts, narrows and adds up, and hands back the window on show.";
+        => "grid-demo.page.source.description";
 
     protected override IVisualComponent[] CreateSections()
         =>
@@ -28,13 +28,13 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
                         .SetOrientation(UIOrientation.Horizontal)
                         .SetSpacing(8)
                         .AddChild(new ButtonComponent()
-                            .SetTitle("Past due, from €100 a month")
+                            .SetTitle("grid-demo.source.past-due")
                             .SetType(UIButtonType.Outline)
                             .SetSize(UIButtonSize.Small)
                             .OnClick(nameof(SourceController.ShowPastDue))
                         )
                         .AddChild(new ButtonComponent()
-                            .SetTitle("No filters")
+                            .SetTitle("grid-demo.source.no-filters")
                             .SetType(UIButtonType.Outline)
                             .SetSize(UIButtonSize.Small)
                             .OnClick(nameof(SourceController.ClearFilters))

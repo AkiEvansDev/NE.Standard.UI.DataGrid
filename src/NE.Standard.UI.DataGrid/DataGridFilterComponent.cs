@@ -36,8 +36,6 @@ public abstract partial class DataGridFilterComponent<T>(string? id = null) : Co
 /// </summary>
 public sealed class DataGridFilterComponent(string? id = null) : DataGridFilterComponent<DataGridFilterComponent>(id), IUIComponentDefinition
 {
-    /// <summary>
-    /// Gets the component type key used to identify this component in the compiled graph.
-    /// </summary>
+    /// <inheritdoc/>
     public static string ComponentTypeKey => "datagrid.filter";
 }

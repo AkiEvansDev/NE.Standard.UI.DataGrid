@@ -11,8 +11,7 @@ using NE.Standard.UI.Web.Renderers.Foundation;
 namespace NE.Standard.UI.Web.DataGrid;
 
 /// <summary>
-/// Renders one filter: property and kind for the engine, a caption when it stands apart from its column, and each field in its
-/// own part — from and to, when there are two.
+/// Renders one filter: property and kind for the engine, a caption when it stands apart, and each field in its own part.
 /// </summary>
 public sealed class DataGridFilterRenderer : WebComponentRendererBase
 {
@@ -45,7 +44,7 @@ public sealed class DataGridFilterRenderer : WebComponentRendererBase
             _ = root.Element("span", span =>
             {
                 _ = span.Class(CaptionClassName);
-                _ = span.Text(context.Translate(caption));
+                WebWords.WriteText(context, span, null, caption);
             });
         }
 

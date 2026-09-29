@@ -7,7 +7,9 @@ using NE.Standard.UI.Authoring.Components;
 using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Primitives.Constants;
 using NE.Standard.UI.Primitives.Items;
+using NE.Standard.UI.Primitives.Localization;
 using NE.Standard.UI.Primitives.Styling;
+using NE.Standard.UI.Primitives.Text;
 using NE.Standard.UI.Web.Abstractions.Html;
 using NE.Standard.UI.Web.Abstractions.Rendering;
 using NE.Standard.UI.Web.Abstractions.Theming;
@@ -17,8 +19,7 @@ using NE.Standard.UI.Web.Renderers.Items;
 namespace NE.Standard.UI.Web.DataGrid;
 
 /// <summary>
-/// Renders the grid through the table's renderer: the same root, header, host and rows, plus the page's culture packs, a sort
-/// handle on sortable headers, and an editor-template name on editable cells (drawn only when a cell opens).
+/// Renders the grid through the table's renderer, adding sorting, editing, the band, the totals and the pager.
 /// </summary>
 public class DataGridComponentRenderer : TableComponentRenderer
 {
@@ -108,8 +109,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
         RenderFlagAttribute(context, root, DataGridComponent.ExpandOnClickProperty, ExpandOnClickAttribute);
         RenderFlagAttribute(context, root, DataGridComponent.MultipleDetailsProperty, MultipleDetailsAttribute);
 
-        // One property, two marks: the root's for the pager, the host's for the window engine — the host's static mark is written
-        // in ConfigureHost, the live one through the operation's target.
+        // One property, two marks: the root's for the pager, the host's for the window engine (static in ConfigureHost, live here).
         if (IsWindowed(context))
         {
             _ = RenderProperty<bool?>(context, root, DataGridComponent.PagingProperty, static (target, value) =>
@@ -136,10 +136,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
     /// <summary>A grid sorts on the client by what the rows hold, so a static grid publishes its values as a virtualized one does.</summary>
     protected override bool PublishItemValues => true;
 
-    /// <summary>
-    /// The author's columns, with the grid's own selection-checkbox column prepended while rows may be chosen — fixed, absent from
-    /// <c>Columns</c>, and pinned with whatever else is pinned.
-    /// </summary>
+    /// <summary>The author's columns, after the grid's own checkbox column while rows may be chosen.</summary>
     protected override IReadOnlyList<UITableColumn> ResolveColumns(WebRenderContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -155,8 +152,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
     }
 
     /// <summary>
-    /// The band over the table, outside its scrolling frame: the search box, the filters button (a flyout with one filter per
-    /// column), and the columns button.
+    /// The band over the table, outside its scrolling frame: the search box, the filters button and the columns button.
     /// </summary>
     protected override void RenderOverTable(WebRenderContext context, IHtmlElementBuilder root, IReadOnlyList<UITableColumn> columns)
     {
@@ -188,19 +184,19 @@ public class DataGridComponentRenderer : TableComponentRenderer
                             RenderRegion(context, panel, filterable.FilterRegionName);
                     }
 
-                    // Empties every filter of the panel at once; the engine enables it while one holds something.
+                    // Disabled the framework's way rather than natively, so the focused button keeps the focus as it turns off.
                     _ = panel.Element("button", clear =>
                     {
                         _ = clear.Class(FiltersClearClassName);
+                        _ = clear.Class(WebClassNames.Disabled);
                         _ = clear.Attribute("type", "button");
-                        _ = clear.Attribute("disabled");
-                        _ = clear.Text(context.Translate(DataGridStrings.ClearFilters));
+                        _ = clear.Attribute("aria-disabled", "true");
+                        WebWords.Write(context, clear, null, DataGridStrings.ClearFilters);
                     });
                 });
             }
 
-            // The chooser is the framework's menu, a check entry per column the engine keeps checked while it shows; the entries
-            // are chrome, so no command stands behind a click.
+            // The chooser's entries are chrome, so no command stands behind a click.
             if (chooser)
                 RenderBandFlyout(context, band, UIGlyphs.Columns, DataGridStrings.Columns, counted: false, ColumnsPanelClassName, panel => RenderRegion(context, panel, DataGridComponent.ColumnsRegionName));
         });
@@ -218,9 +214,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
     }
 
     /// <summary>
-    /// A flyout the framework's engine reads: an anchor button with an icon and a word, and a content panel the caller fills. Drawn
-    /// through the foundation's flyout markup rather than composed, since a grid can't wrap its own parts in a core component at
-    /// render time.
+    /// A band flyout in the foundation's markup, since a grid cannot compose a core component around its own parts.
     /// </summary>
     private static void RenderBandFlyout(WebRenderContext context, IHtmlElementBuilder band, string icon, string wordKey, bool counted, string panelClassName, Action<IHtmlElementBuilder> renderPanel)
         => FlyoutRenderer.RenderFlyout(band, UIPopupPlacement.BottomEnd, anchor =>
@@ -230,21 +224,11 @@ public class DataGridComponentRenderer : TableComponentRenderer
                 _ = button.Class(BandButtonClassName);
                 _ = button.Attribute("type", "button");
                 IconValueRenderer.RenderIcon(button, icon);
-                _ = button.Element("span", word => _ = word.Text(context.Translate(wordKey)));
+                _ = button.Element("span", word => WebWords.Write(context, word, null, wordKey));
 
-                // The count of the filters in use, which the engine writes and hides at none.
+                // The count of the filters in use, the framework's bare count badge, which the engine writes and hides at none.
                 if (counted)
-                {
-                    // The framework's own count badge, drawn in its classes, so its figure is centred the badge's way.
-                    _ = button.Element("span", count =>
-                    {
-                        _ = count.Class("ui-badge");
-                        _ = count.Class(WebClassNames.BadgeStyle(UIBadgeType.Primary));
-                        _ = count.Class(FiltersCountClassName);
-                        _ = count.Attribute("hidden");
-                        _ = count.Element("span", text => _ = text.Class("ui-badge__text"));
-                    });
-                }
+                    BadgeRenderer.RenderCountBadge(button, UIBadgeType.Primary, configure: count => count.Class(FiltersCountClassName).Attribute("hidden"));
             });
         }, content => content.Element("div", panel =>
         {
@@ -253,8 +237,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
         }));
 
     /// <summary>
-    /// The caption, the sort mark when the column sorts, then the resize handle. A sorting cell is a tab stop the engine answers
-    /// Enter and Space on, labeled by what it sorts.
+    /// The caption, the sort mark when the column sorts, then the resize handle; a sorting cell is a named tab stop.
     /// </summary>
     protected override void RenderHeaderCellContent(WebRenderContext context, IHtmlElementBuilder cell, UITableColumn column, int index)
     {
@@ -262,8 +245,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
         ArgumentNullException.ThrowIfNull(cell);
         ArgumentNullException.ThrowIfNull(column);
 
-        // Over the checkboxes stands the one that takes the rows the grid has drawn — what the filters left of a grid holding all
-        // its rows, the rows on the page of a virtualized or windowed one.
+        // The box over the checkboxes takes the rows the grid has drawn: what the filters left, or the page of a windowed grid.
         if (column.Key == DataGridComponent.SelectionColumnKey)
         {
             _ = cell.Attribute(SelectAllAttribute);
@@ -275,12 +257,13 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
         if (column is UIDataGridColumn { Sortable: true, EffectiveSortPath: { } sortPath })
         {
-            var caption = string.IsNullOrEmpty(column.Caption) ? column.Key : context.Translate(column.Caption);
+            // The author's text, looked up as the caption beside it is; a column with none is named by what it sorts, in words.
+            UIPhrase caption = UIPhrase.Text(string.IsNullOrEmpty(column.Caption) ? UINaming.Humanize(sortPath[(sortPath.LastIndexOf('.') + 1)..]) : column.Caption);
 
             _ = cell.Attribute(SortAttribute, sortPath);
             _ = cell.Attribute("tabindex", "0");
             _ = cell.Attribute("aria-sort", "none");
-            _ = cell.Attribute("aria-label", context.Translate(DataGridStrings.SortBy).Replace("{column}", caption, StringComparison.Ordinal));
+            WebWords.Write(context, cell, "aria-label", DataGridStrings.SortBy, new Dictionary<string, object?>(StringComparer.Ordinal) { ["column"] = caption });
 
             // Two marks, one drawn at a time: the idle two-way mark while unsorted, the framework's arrow once sorted — one mark
             // alone would misread as "up" on an unsorted column.
@@ -301,10 +284,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
             _ = host.Attribute(WebAttributes.WindowPaged);
     }
 
-    /// <summary>
-    /// The rows, then a totals footer when a column asked for one — a cell per column in the header's tracks, the engine writing
-    /// the numbers. The footer scrolls with the columns' tracks; the pager doesn't.
-    /// </summary>
+    /// <summary>The rows, then a footer of totals in the columns' tracks when a column asked for one; the engine writes the numbers.</summary>
     protected override void RenderRows(WebRenderContext context, IHtmlElementBuilder parent, IReadOnlyList<UITableColumn> columns, WebRenderItemsCompositeMetadata composite)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -375,8 +355,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
     }
 
     /// <summary>
-    /// The pager under the table and outside its frame, on a windowed grid: four buttons and the line saying which rows the page
-    /// holds, which the engine writes; drawn while the grid does not page too, since <c>Paging</c> is bindable.
+    /// The pager under a windowed grid, outside its frame; drawn while the grid does not page too, since <c>Paging</c> is bindable.
     /// </summary>
     protected override void RenderUnderTable(WebRenderContext context, IHtmlElementBuilder root, IReadOnlyList<UITableColumn> columns)
     {
@@ -409,19 +388,18 @@ public class DataGridComponentRenderer : TableComponentRenderer
     {
         _ = pager.Element("button", button =>
         {
-            var word = context.Translate(wordKey);
-
             _ = button.Class($"{PageButtonClassName} ui-button ui-button--ghost ui-button--small");
             _ = button.Attribute("type", "button");
             _ = button.Attribute(TextContentRendererBase.IconOnlyButtonAttribute);
             _ = button.Attribute(PageAttribute, page);
-            _ = button.Attribute("aria-label", word);
-            _ = button.Attribute("title", word);
+            WebWords.Write(context, button, "aria-label", wordKey);
+            // The framework's tooltip, not the browser's `title`: the grid's other hints look the same, and a switch rewrites it.
+            WebWords.Write(context, button, WebAttributes.Tooltip, wordKey);
             IconValueRenderer.RenderIcon(button, icon);
         });
     }
 
-    /// <summary>An editable column's cell says so, for the engine that opens it and the pointer that finds it; a detail column's and the checkbox column's the same.</summary>
+    /// <summary>Marks an editable, a detail and a checkbox column's cells, for the engine and the pointer.</summary>
     protected override string CellClass(UITableColumn column)
     {
         ArgumentNullException.ThrowIfNull(column);
@@ -435,7 +413,10 @@ public class DataGridComponentRenderer : TableComponentRenderer
         };
     }
 
-    /// <summary>The table's own attributes (a pinned column's offset), then the column's key on every cell; an editable cell also names its editor's template and claims the double click.</summary>
+    /// <summary>
+    /// The column's key on every cell, and an editable cell's editor variant and its claim on the double click, which the client
+    /// drops while <c>Editable</c> is off.
+    /// </summary>
     protected override IReadOnlyDictionary<string, string>? CellAttributes(IReadOnlyList<UITableColumn> columns, int index)
     {
         ArgumentNullException.ThrowIfNull(columns);

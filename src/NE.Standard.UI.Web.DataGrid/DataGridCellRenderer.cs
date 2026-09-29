@@ -11,8 +11,7 @@ using NE.Standard.UI.Web.Renderers.Foundation;
 namespace NE.Standard.UI.Web.DataGrid;
 
 /// <summary>
-/// Renders a typed cell: kind, format, currency and captions as attributes the client reads back, and the value as text —
-/// formatted here for a painted row, by the client's DOM operation otherwise.
+/// Renders a typed cell: the attributes the client formats by, and the value as text.
 /// </summary>
 public sealed class DataGridCellRenderer : WebComponentRendererBase
 {
@@ -28,8 +27,11 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
     /// <summary>On a money cell: the symbol it writes in place of the page's own.</summary>
     public const string CurrencyAttribute = "data-ui-grid-currency";
 
-    /// <summary>On an enum or boolean cell: its choices' translated captions by value, as JSON.</summary>
+    /// <summary>On an enum or boolean cell: its choices' captions by value, as JSON — as the author wrote them; the client translates them.</summary>
     public const string ChoicesAttribute = "data-ui-grid-choices";
+
+    /// <summary>On an enum or boolean cell holding a value: the value as its choices are keyed, so a language switch writes its caption again.</summary>
+    public const string ChoiceAttribute = "data-ui-grid-choice";
 
     /// <summary>On a number or money cell: the value as an invariant number — a numeric text's too — for a footer's total to add up on the client.</summary>
     public const string RawValueAttribute = "data-ui-grid-raw";
@@ -61,7 +63,7 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
             _ = root.Attribute(CurrencyAttribute, currency);
 
         if (choices is { Count: > 0 })
-            _ = root.Attribute(ChoicesAttribute, JsonSerializer.Serialize(TranslateChoices(context, choices), ChoicesJsonOptions));
+            _ = root.Attribute(ChoicesAttribute, JsonSerializer.Serialize(CaptionsByValue(choices), ChoicesJsonOptions));
 
         // The page's culture, the same one the grid wrote its packs from; a cell painted here and one the client builds agree.
         CultureInfo culture = ResolveCulture(context);
@@ -72,6 +74,9 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
 
             if (kind is UIDataGridColumnKind.Number or UIDataGridColumnKind.Money && DataGridCellFormatter.RawNumber(value) is { } raw)
                 _ = target.Attribute(RawValueAttribute, raw);
+
+            if (DataGridCellFormatter.ChoiceValue(value, kind, culture) is { } choice)
+                _ = target.Attribute(ChoiceAttribute, choice);
         }, [WebDomOperation.Custom(ValueOperationKind)]);
     }
 
@@ -79,12 +84,12 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
     public static string KindName(UIDataGridColumnKind kind)
         => kind.ToString().ToLowerInvariant();
 
-    private static Dictionary<string, string> TranslateChoices(WebRenderContext context, IReadOnlyList<UIChoice> choices)
+    private static Dictionary<string, string> CaptionsByValue(IReadOnlyList<UIChoice> choices)
     {
         Dictionary<string, string> captions = new(choices.Count, StringComparer.Ordinal);
 
         for (var i = 0; i < choices.Count; i++)
-            captions[choices[i].Value] = context.Translate(choices[i].Caption);
+            captions[choices[i].Value] = choices[i].Caption;
 
         return captions;
     }

@@ -4,6 +4,113 @@ One section per release of this slice, headed `## X.Y.Z` and named by the tag �
 workflow cuts the matching section out to become the body of the GitHub release, and a tag with no section
 fails the release before anything is published.
 
+## 1.3.0
+
+- **Needs the framework's plugin contract 2.** The engines read every framework attribute and class name from the plugin
+  surface's `names` rather than spelling them again — the table's parts, the window's attributes, the query's and the menu's
+  entries included — ask its `states` whether a part answers the reader and turn the grid's own controls off through
+  `states.setDisabled`, and write a value back into an editor through `values.write`; against an older framework client the
+  package refuses to start, saying which contract it wants. The footer takes the framework's `@ui-table-ground` and the filters
+  count is the framework's bare count badge (`BadgeRenderer.RenderCountBadge`).
+- **The grid's words switch in place with the page.** Its chrome words are marked (the band's Filters and Columns, Clear
+  filters, a sortable header's name, the pager's buttons and its line), a filter's caption as the author's text, and a flag's or a
+  choice's caption is drawn again from the value its cell keeps (`data-ui-grid-choice`, `DataGridCellRenderer.ChoiceAttribute`).
+  The choices travel to the cell as the author wrote them (`data-ui-grid-choices`) and are translated by the page — **breaking**
+  for a script reading that attribute as the words shown. A sortable header's name is filled through `Translate(key, arguments)`
+  rather than a hand-spliced caption, its caption passed as the author's text (`UIPhrase.Text`) — looked up by the plain rule,
+  so under `KeyPrefixes` a plain caption is no longer reported as a missing word in every language; a column with no caption is
+  named by what it sorts, in words, rather than by its raw key. The pager's hints are the framework's tooltip (`data-ui-tooltip`),
+  written through the words like the rest, rather than the browser's own `title`. `DataGridComponent.SetSearchPlaceholder(text)`
+  names the search box's placeholder in place of `ui.grid.search`, before or after `SetSearch`.
+- **F2 on a focused disabled or loading grid opens no editor** — under the framework's disabled model the grid's root stays
+  focusable and only its children are inert.
+- **A key in the band, a flyout, the header or the pager is that control's own.** F2 in the search box or a filter field opened
+  the editor of the keyboard's row, and Enter there counted as the row's Enter for a detail; the grid's keys now answer only on
+  the grid itself or in a row.
+- **`OnSelectionChange` runs whenever the chosen rows change**, not only at a checkbox: Space on the keyboard's row, or a range
+  taken with Shift and an arrow, changed the chosen keys the server held without the command running, so a status line or a
+  button acting on the choice stayed stale. A grid choosing one row (`SelectionMode.One`) raises it too, where it never ran. A
+  list the controller pushes runs nothing.
+- **A row that cannot be chosen says so on its box.** A row whose item refuses the choice (`CanSelect = false`), or a disabled
+  one, has its box turned off rather than ticking under the press and unticking again; the box over them no longer takes it or
+  counts it, and is itself turned off while no row can be taken. A row whose item's `CanSelect` changes while it is shown turns
+  its box off or on with it.
+- **The grid's own controls turn off the framework's way.** The pager's buttons, Clear filters and the checkboxes wear
+  `ui-disabled` and `aria-disabled="true"` and the framework refuses them, rather than taking the native `disabled` — which
+  dropped the focus to the page when Enter on *Last page* or *Clear filters* turned the button off under it. **Breaking** for a
+  stylesheet keyed on `:disabled` of those parts or a script reading their `disabled`. Clear filters wears the framework's
+  disabled look (faded) rather than a muted ink of its own, and eases into it.
+- **A double click on an editable cell opens its row while the grid does not edit.** The cell claimed the double click for its
+  editor whatever `Editable` said, so a grid with editing off raised no `OnItemOpen` from such a cell; the claim
+  (`data-ui-no-row-open`) now stands only while the grid edits.
+- **An open editor closes, sending nothing, when the grid stops editing** — `Editable` turned off, or the grid turned disabled or
+  loading, itself or through anything around it (a card, a view's section) — as Escape closes it, rather than staying open with
+  Enter still committing into a grid that no longer edits.
+- **With `ExpandOnClick`, a row of a table inside a detail opens nothing of the grid's**, where a click or Enter on it drew the
+  grid's detail into the inner table's row.
+- **With `ExpandOnClick`, a double click leaves the details as they stood before it.** Its two clicks toggled the row's detail
+  open and shut (and, one detail at a time, closed another row's) before the row's `OnItemOpen` ran; the open a double click
+  raises now puts back what its first click found — the same detail elements, so what a reader did inside one stays. The
+  row's `OnItemOpen` reaches the controller after the `OnSelectionChange` its first click raised (the core's commands now
+  leave in the order raised), so the demo's status line ends on "opened".
+- **An editor reopened on a row the server redrew keeps its draft, and one taken back shows the old value.** The draft and a
+  change Escape takes back are written through the field's own binding (`values.write`), so a select's, a search's or a date's
+  visible parts show them too, where a value written into its hidden input was committed unseen.
+- **Under forced colours the grid's own states show**: an open band button, a sortable caption under the pointer and pressed,
+  and Clear filters under the pointer take outlines in the system's colours, where the washes and shadows they are drawn with
+  vanished.
+- **The keyboard's cursor on a chosen row shows in a pinned cell too**, as the row shows it, rather than the chosen ground alone —
+  the framework's table draws it for every pinned cell now (framework 1.3.0), so the grid keeps no rule of its own.
+- **A row's detail fades in** as it opens.
+- **A sortable caption in a grid whose captions also drag shows the hand**, on purpose rather than by the order the stylesheets
+  load in; a caption that only drags keeps the grab.
+- **A cell reads a value the same on the server and in the browser**, now held to one corpus on both sides: a flag written as
+  `TRUE` showed Yes on a painted row and No on a row the browser built; a flag in a text or number column showed `True` on the
+  server and `true` in the browser, and now shows `true` on both; and the server read a date text in any shape .NET parses
+  (`09/11/2026`, `Sep 11 2026`) where the browser reads only the wire's own, so such a text now shows as it is on both.
+- **A sortable caption answers the pointer the framework's way.** Its hover and press are the shared washes, laid over the
+  header's ground rather than replacing it, so a pinned caption no longer turns see-through over the columns scrolled under it;
+  the resize handle at a caption's edge no longer lights the caption, nor the one beside it that it overhangs; and a press
+  shows before the rows move.
+- **The sort arrow turns** from ascending to descending, and **the detail chevron turns** as its row opens, rather than
+  snapping — the chevron's turn was lost under the ghost button's own transition; the glyph turns now, inside a button that
+  keeps its own transitions, its fade on Show and Hide included.
+- **A table in a row's detail keeps its own rows.** The grid's taller rows, its cells' padding, its checkbox column's and its
+  sortable captions' rules and its sticky footer reached a table nested in a detail through descendant selectors; they are the
+  grid's own rows, header and footer now, as the framework's table rules are.
+- **A choice from a cell editor's list keeps the keyboard in the grid.** Choosing a customer in a search editor — Enter on an
+  option or a click — dropped the focus to the page as the list closed under it, and the editor committed and closed; the
+  keyboard goes back to the editor's field now, as a select's list gives it back to its trigger, and the next Enter commits.
+- **Switching to another window with an editor open leaves it open and sends nothing.** Alt+Tab, a click in the address bar or
+  the developer tools committed and closed the editor; the focus the window keeps is still the editor's, and it waits for the
+  reader's return. The `change` a browser raises in the typed field as the window loses the focus is held back before the value
+  binding hears it, and the value goes when the editor commits.
+- **An editor whose column hides under it leaves the keyboard on the grid.** A column hidden at a narrower width took the
+  focused editor with it; the editor commits as a blur commits it, and the grid's root takes the focus rather than the page.
+- **A key right after a choice is the editor's.** Whether the field's list is open is read off its opener (`aria-expanded`), not
+  off the list's box, which a closing list keeps while it fades: an Escape pressed then was the field's, and could commit.
+- **No hand beside a turned-off row box**: the checkbox's root, the box and its gap, takes the pointer's hand back with it.
+- **Under forced colours a caption or Clear filters focused by a press keeps its hover outline**, which only the keyboard's ring
+  replaces now (`@ui-keyboard-focus`).
+- **The band's Filters and Columns buttons show the keyboard and their open flyout** with the field's active edge, as the search
+  box beside them and a select do. **Clear filters** fades its wash in and answers a press.
+- **The demo keeps its words under its own key prefix** (`grid-demo.`, `KeyPrefixes`), so its page prose and its data are
+  content and the missing-word report in Development names only what its table lacks. The column captions, the plans and
+  statuses (the *Plan* column was left English among Chinese captions) and the status lines under the grids are its words; the
+  lines are phrases with plural forms rather than English spliced in the controllers, and the CSV export writes the captions
+  in the page's language. Its Chinese table is whole — every framework, code field and grid word it registers, held so by a
+  test — the page's own buttons and tooltips are words too, and the line an edit leaves names the column by its caption and the
+  value as its cell shows it (a choice or a flag by its words, a date under the column's pattern) rather than the column's key
+  and the wire's value; the pages' names in the sidebar and their title bands are words too. The filters page chooses one row
+  by a click (`SelectionMode.One` with `OnSelectionChange`), opens its detail on the click (`ExpandOnClick`) and says which row
+  a double click opened in a grid that does not edit; its detail holds a table of its own, the plans' prices, to click in. A
+  cancelled subscription refuses the choice (`CanSelect`), so the first page shows a turned-off row box, and the box over them
+  all turned off once only such rows are left.
+- **The demo's captions fit.** The *Subscription* column is 140 px, so its caption no longer ends in an ellipsis beside the
+  sort mark, and the filters page is *Filters and totals* (筛选与合计), a title whole on a phone.
+- **An end-aligned column's editor keeps its caret off the last character**, with the framework's `.ui-field-value-at-end()`:
+  the value as wide as its text plus a caret, at the cell's end; a press in the rest of the editor reaches it.
+
 ## 1.2.0
 
 - **Built on the framework's 1.2.0.** Nothing of this package's own changed; it moves with the framework.

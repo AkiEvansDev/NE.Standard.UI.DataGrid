@@ -8,10 +8,7 @@ export type SortTerm = {
     readonly direction: SortDirection;
 };
 
-/**
- * The sorts after a click on `property`: ascending, then descending, then off. A plain click sorts by this column alone; Shift
- * (`additive`) keeps the others and cycles or adds this one.
- */
+/** The sorts after a click on `property`: ascending, descending, off; `additive` (Shift) keeps the others. */
 export function cycleSort(sorts: readonly SortTerm[], property: string, additive: boolean): SortTerm[] {
     const index = sorts.findIndex(sort => sort.itemProperty === property);
     const current = index < 0 ? null : sorts[index].direction;

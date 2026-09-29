@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using NE.Standard.UI.Components.BuiltIns.Templates;
 
@@ -10,15 +12,16 @@ namespace DemoApp.DataGrid;
 /// </summary>
 internal static class SubscriptionGrid
 {
-    /// <summary>The columns an export writes: the grid's own, from the same factory, so the file and the screen cannot drift apart.</summary>
+    /// <summary>The columns an export writes: the grid's own, from the same factory the view builds it with.</summary>
     internal static IReadOnlyList<UITableColumn> ExportColumns { get; } = Create().Columns;
 
     /// <summary>
     /// The grid: <paramref name="wide"/> gives the columns room enough to run past the page, so the grid scrolls sideways with the
     /// number and the customer pinned at its edge, <paramref name="band"/> draws the search box, the filters and the column chooser
-    /// over the header, and <paramref name="totals"/> puts a footer of totals under the rows.
+    /// over the header, <paramref name="totals"/> puts a footer of totals under the rows, and <paramref name="prices"/> gives a
+    /// row's detail a table of its own, the plans' price list.
     /// </summary>
-    public static DataGridComponent Create(string? id = null, bool wide = false, bool band = false, bool totals = false)
+    public static DataGridComponent Create(string? id = null, bool wide = false, bool band = false, bool totals = false, bool prices = false)
     {
         // A column's width is its floor and its share (TableComponentRenderer), so what makes a grid scroll sideways is the sum of
         // these running past the page — the wide grid asks for the room, the others fill whatever they are given.
@@ -32,10 +35,10 @@ internal static class SubscriptionGrid
         DataGridComponent grid = new DataGridComponent(id)
             // The chevron that opens a row's detail, first in the row and pinned with the columns that are.
             .AddDetailColumn(pinned: wide)
-            .AddTextColumn("Subscription", nameof(Subscription.Number), sortable: true, UIGridUnit.Absolute(130), filterable: band, aggregate: Count(totals), pinned: wide)
+            .AddTextColumn("grid-demo.column.subscription", nameof(Subscription.Number), sortable: true, UIGridUnit.Absolute(140), filterable: band, aggregate: Count(totals), pinned: wide)
             // A template column: two lines of text bound to the row, sorted by the customer's name, edited in a search the author bound —
             // any input is an editor, and a search over the known customers is what a cell like this wants.
-            .AddEditableColumn("Customer", new DefaultTextTemplate()
+            .AddEditableColumn("grid-demo.column.customer", new DefaultTextTemplate()
                 .BindTitle(nameof(Subscription.Customer), UIBindingScope.Relative)
                 .BindDescription(nameof(Subscription.Country), UIBindingScope.Relative),
                 new SearchComponent()
@@ -45,53 +48,31 @@ internal static class SubscriptionGrid
                     .BindValue(nameof(Subscription.Customer), UIBindingScope.Relative),
                 sortPath: nameof(Subscription.Customer), width: customer, pinned: wide
             )
-            .AddTextColumn("Country", nameof(Subscription.Country), sortable: true, country, filterable: band)
+            .AddTextColumn("grid-demo.column.country", nameof(Subscription.Country), sortable: true, country, filterable: band)
             // A typed enum column: the plan by its caption, edited in a select over the same choices, and the price follows it.
-            .AddEnumColumn<SubscriptionPlan>("Plan", nameof(Subscription.Plan), plan, editable: true, filterable: band)
+            .AddEnumColumn("grid-demo.column.plan", nameof(Subscription.Plan), SubscriptionChoices.Plans, plan, editable: true, filterable: band)
             // A badge for the status, its words and its colour the row's own, edited in a select over the enum's choices.
-            .AddEditableColumn("Status", new TextComponent()
+            .AddEditableColumn("grid-demo.column.status", new TextComponent()
                 .BindBadgeText(nameof(Subscription.StatusCaption), UIBindingScope.Relative)
                 .BindBadgeStyle(nameof(Subscription.StatusStyle), UIBindingScope.Relative),
                 new SelectComponent()
-                    .SetOptions(UIChoices.FromEnum<SubscriptionStatus>().Select(static choice => new OptionItem { Id = choice.Value, Title = choice.Caption }).ToList())
+                    .SetOptions(SubscriptionChoices.Statuses.Select(static choice => new OptionItem { Id = choice.Value, Title = choice.Caption }).ToList())
                     .BindValue(nameof(Subscription.Status), UIBindingScope.Relative),
                 sortPath: nameof(Subscription.Status), width: status
             )
             // A template column that is not text at all: a bar, sorted by the number behind it.
-            .AddColumn("Usage", new ProgressComponent()
+            .AddColumn("grid-demo.column.usage", new ProgressComponent()
                 .BindValue(nameof(Subscription.Usage), UIBindingScope.Relative)
                 .SetShowValue(true)
                 .SetValueUnit("%"),
                 nameof(Subscription.Usage), usage
             )
-            .AddNumberColumn("Servers", nameof(Subscription.Seats), "N0", UIGridUnit.Absolute(130), editable: true, filterable: band, aggregate: Sum(totals))
+            .AddNumberColumn("grid-demo.column.servers", nameof(Subscription.Seats), "N0", UIGridUnit.Absolute(130), editable: true, filterable: band, aggregate: Sum(totals))
             // Not editable: what a month costs is the plan's price times the servers, and changes with either.
-            .AddMoneyColumn("Monthly", nameof(Subscription.Monthly), "€", width: UIGridUnit.Absolute(170), filterable: band, aggregate: Sum(totals))
-            .AddDateColumn("Started", nameof(Subscription.Started), "dd MMM yyyy", started, editable: true, filterable: band)
-            .AddBooleanColumn("Paid", nameof(Subscription.Paid), width: UIGridUnit.Absolute(120), editable: true, filterable: band)
-            // What a row holds under itself: the same row, bound relatively, in a shape a cell has no room for.
-            .SetDetailTemplate(new StackPanelComponent()
-                .SetOrientation(UIOrientation.Horizontal)
-                .SetSpacing(32)
-                .AddChild(new DefaultTextTemplate()
-                    .SetTitle("Customer")
-                    .BindDescription(nameof(Subscription.Customer), UIBindingScope.Relative)
-                )
-                .AddChild(new DefaultTextTemplate()
-                    .SetTitle("Country")
-                    .BindDescription(nameof(Subscription.Country), UIBindingScope.Relative)
-                )
-                .AddChild(new DefaultTextTemplate()
-                    .SetTitle("Status")
-                    .BindDescription(nameof(Subscription.StatusCaption), UIBindingScope.Relative)
-                )
-                .AddChild(new ProgressComponent()
-                    .BindValue(nameof(Subscription.Usage), UIBindingScope.Relative)
-                    .SetShowValue(true)
-                    .SetValueUnit("%")
-                    .SetWidth(UILayoutLength.Absolute(240))
-                )
-            )
+            .AddMoneyColumn("grid-demo.column.monthly", nameof(Subscription.Monthly), "€", width: UIGridUnit.Absolute(170), filterable: band, aggregate: Sum(totals))
+            .AddDateColumn("grid-demo.column.started", nameof(Subscription.Started), "dd MMM yyyy", started, editable: true, filterable: band)
+            .AddBooleanColumn("grid-demo.column.paid", nameof(Subscription.Paid), width: UIGridUnit.Absolute(120), editable: true, filterable: band)
+            .SetDetailTemplate(CreateDetail(prices))
             .SetStriped(true)
             .SetRowHoverable(true);
 
@@ -100,7 +81,7 @@ internal static class SubscriptionGrid
             // The search box matches one text the row composes — the number, the customer, the country — since a query's terms are all required.
             _ = grid
                 // A template column filters too: the status by its choices, read through the sort path the column names.
-                .AddFilter(nameof(Subscription.Status), UIDataGridColumnKind.Enum, UIChoices.FromEnum<SubscriptionStatus>())
+                .AddFilter(nameof(Subscription.Status), UIDataGridColumnKind.Enum, SubscriptionChoices.Statuses)
                 .SetSearch(nameof(Subscription.SearchText))
                 // The chooser shows and hides columns; the country and the payment give way on their own below the tiers named here.
                 .SetColumnChooser(true)
@@ -116,4 +97,80 @@ internal static class SubscriptionGrid
 
     private static UIDataGridAggregate Sum(bool totals)
         => totals ? UIDataGridAggregate.Sum : UIDataGridAggregate.None;
+
+    /// <summary>What a row holds under itself: the same row, bound relatively, in a shape a cell has no room for.</summary>
+    private static StackPanelComponent CreateDetail(bool prices)
+    {
+        StackPanelComponent detail = new StackPanelComponent()
+            .SetOrientation(UIOrientation.Horizontal)
+            .SetSpacing(32)
+            .AddChild(new DefaultTextTemplate()
+                .SetTitle("grid-demo.column.customer")
+                .BindDescription(nameof(Subscription.Customer), UIBindingScope.Relative)
+            )
+            .AddChild(new DefaultTextTemplate()
+                .SetTitle("grid-demo.column.country")
+                .BindDescription(nameof(Subscription.Country), UIBindingScope.Relative)
+            )
+            .AddChild(new DefaultTextTemplate()
+                .SetTitle("grid-demo.column.status")
+                .BindDescription(nameof(Subscription.StatusCaption), UIBindingScope.Relative)
+            )
+            .AddChild(new ProgressComponent()
+                .BindValue(nameof(Subscription.Usage), UIBindingScope.Relative)
+                .SetShowValue(true)
+                .SetValueUnit("%")
+                .SetWidth(UILayoutLength.Absolute(240))
+            );
+
+        // A table inside the detail keeps its rows: a click or Enter on one is that table's, and opens nothing of the grid's.
+        if (prices)
+        {
+            _ = detail.AddChild(new TableComponent()
+                .SetItems(PlanPrice.List())
+                .AddTextColumn("grid-demo.column.plan", nameof(PlanPrice.Plan))
+                .AddTextColumn("grid-demo.detail.per-server", nameof(PlanPrice.Price), UIGridUnit.Absolute(160), UITextAlignment.End)
+                .SetWidth(UILayoutLength.Absolute(320))
+            );
+        }
+
+        return detail;
+    }
+
+    /// <summary>
+    /// The line a committed cell leaves: the column by its caption and the value as its cell shows it — a choice or a flag by its
+    /// words, a number or a date under the column's own format in the page's <paramref name="language"/>.
+    /// </summary>
+    public static UIPhrase EditedLine(Subscription subscription, string column, string language)
+    {
+        UIDataGridColumn? shown = ExportColumns.OfType<UIDataGridColumn>().FirstOrDefault(candidate => candidate.Key == column);
+        CultureInfo culture = CultureOf(language);
+        object? value = column switch
+        {
+            nameof(Subscription.Plan) => CaptionOf(SubscriptionChoices.Plans, subscription.Plan.ToString()),
+            nameof(Subscription.Status) => CaptionOf(SubscriptionChoices.Statuses, subscription.Status.ToString()),
+            // The grid's own words for a flag, as its cell writes them.
+            nameof(Subscription.Paid) => new UIPhrase(subscription.Paid ? "ui.grid.yes" : "ui.grid.no"),
+            nameof(Subscription.Seats) => subscription.Seats.ToString(shown?.Format, culture),
+            nameof(Subscription.Started) => subscription.Started.ToString(shown?.Format, culture),
+            _ => Convert.ToString(subscription.ValueOf(column), culture)
+        };
+
+        return UIPhrase.Of("grid-demo.edited", ("number", subscription.Number), ("column", shown?.Caption is { } caption ? new UIPhrase(caption) : UIPhrase.Text(column)), ("value", value));
+    }
+
+    private static CultureInfo CultureOf(string language)
+    {
+        try
+        {
+            return CultureInfo.GetCultureInfo(language);
+        }
+        catch (CultureNotFoundException)
+        {
+            return CultureInfo.InvariantCulture;
+        }
+    }
+
+    private static UIPhrase? CaptionOf(IReadOnlyList<UIChoice> choices, string value)
+        => choices.FirstOrDefault(choice => choice.Value == value) is { } choice ? new UIPhrase(choice.Caption) : null;
 }

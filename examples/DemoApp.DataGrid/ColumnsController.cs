@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +15,7 @@ internal sealed partial class ColumnsController : UIControllerBase
     public RecursiveCollection<Subscription> Subscriptions { get; } = [.. SubscriptionCatalogue.Slice(1_000, 30)];
 
     [RecursiveMember]
-    public partial string EditStatus { get; set; } = "Double-click a cell, or press F2 on the keyboard's row, to edit it.";
+    public partial UIPhrase? EditStatus { get; set; } = new("grid-demo.columns.edit-hint");
 
     /// <summary>The grid's editing switch: off, the same grid only shows.</summary>
     [RecursiveMember]
@@ -31,7 +30,7 @@ internal sealed partial class ColumnsController : UIControllerBase
     public partial UIVisibility DeleteVisibility { get; set; } = UIVisibility.Collapsed;
 
     [RecursiveMember]
-    public partial string SelectionStatus { get; set; } = "Tick a row to choose it; the button appears once something is chosen.";
+    public partial UIPhrase? SelectionStatus { get; set; } = new("grid-demo.columns.selection-hint");
 
     /// <summary>The choice changed and the keys have reached the server: what the choice turns on is the controller's to decide.</summary>
     [UICommand]
@@ -40,9 +39,10 @@ internal sealed partial class ColumnsController : UIControllerBase
         var count = SelectedSubscriptions?.Count ?? 0;
 
         DeleteVisibility = count > 0 ? UIVisibility.Visible : UIVisibility.Collapsed;
+        // A phrase, not a sentence spliced here: the page words it in its own language, the count choosing the plural form.
         SelectionStatus = count == 0
-            ? "Nothing chosen."
-            : string.Create(CultureInfo.InvariantCulture, $"{count} of {Subscriptions.Count} chosen.");
+            ? new UIPhrase("grid-demo.columns.none-chosen")
+            : UIPhrase.Of("grid-demo.columns.chosen", ("count", count), ("total", Subscriptions.Count));
     }
 
     /// <summary>Takes the ticked rows out of the collection, which is the ordinary scenario a choice turns on.</summary>
@@ -63,12 +63,13 @@ internal sealed partial class ColumnsController : UIControllerBase
 
     /// <summary>
     /// Writes the thirty subscriptions the page holds as CSV and hands the file to the download service — the grid has no button of its
-    /// own, and the columns are the ones the view built, so the file says what the screen says.
+    /// own. The file has the grid's columns, in the order they were added, whatever the viewer hid, moved or sorted; its captions in
+    /// the page's language, since they are the demo's keys.
     /// </summary>
     [UICommand]
     public async Task ExportAsync(CancellationToken cancellationToken)
     {
-        var content = UIDataGridCsv.WriteBytes(SubscriptionGrid.ExportColumns, Subscriptions);
+        var content = UIDataGridCsv.WriteBytes(SubscriptionGrid.ExportColumns, Subscriptions, new UIDataGridCsvOptions { Translate = caption => Context.Translate(caption) ?? caption });
 
         _ = await Context.Downloads
             .DownloadAsync(Context.Handle, "subscriptions.csv", "text/csv", content, cancellationToken)
@@ -84,9 +85,8 @@ internal sealed partial class ColumnsController : UIControllerBase
         // The value is on the row already; what the status derives — the badge — is read again here, after the write.
         subscription?.Refresh();
 
-        // The same status line SourceController.CellEdited builds over its own sources; the two controllers share no base.
         EditStatus = subscription is null
-            ? string.Create(CultureInfo.InvariantCulture, $"Row {id} is not on the page.")
-            : string.Create(CultureInfo.InvariantCulture, $"{subscription.Number}: {column} is now {subscription.ValueOf(column)}.");
+            ? UIPhrase.Of("grid-demo.columns.row-gone", ("id", id))
+            : SubscriptionGrid.EditedLine(subscription, column, Context.Handle.Session.Language);
     }
 }

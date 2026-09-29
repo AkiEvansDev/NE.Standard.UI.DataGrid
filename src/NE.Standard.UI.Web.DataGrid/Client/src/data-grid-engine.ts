@@ -1,7 +1,7 @@
 // The package's one engine, composing its eight concern engines; the entry reaches every one of them through this.
 
 import type { PluginEngineContext } from "ne-standard-ui";
-import { applyCellValue } from "./data-grid-cell.ts";
+import { applyCellValue, rewriteChoiceCells } from "./data-grid-cell.ts";
 import type { CellFormatting } from "./data-grid-cell.ts";
 import { DataGridChooserEngine } from "./data-grid-chooser-engine.ts";
 import { DataGridDetailEngine } from "./data-grid-detail-engine.ts";
@@ -26,6 +26,9 @@ export class DataGridEngine {
         new DataGridChooserEngine(context);
         new DataGridDetailEngine(context);
         new DataGridSelectionEngine(context);
+
+        // A flag's or a choice's caption is drawn here, not marked: a language switch writes each such cell again from its value.
+        context.strings.onChange(() => rewriteChoiceCells(context.root, this.formatting));
     }
 
     /** A typed cell's value, on a row the client builds or a value it patches: formatted by the attributes the renderer left on the cell. */

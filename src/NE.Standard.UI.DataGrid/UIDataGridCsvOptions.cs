@@ -9,9 +9,7 @@ namespace NE.Standard.UI.DataGrid;
 public sealed record UIDataGridCsvOptions
 {
     /// <summary>
-    /// Formats a typed cell as the grid shows it — money with its symbol, a date under its pattern; <c>DataGridCellFormatter.AsCsvFormat</c>
-    /// on the web. Null for a cell falls back to its plain value; unset (the default), values write round-trip so a spreadsheet
-    /// reads them typed.
+    /// Formats a typed cell as the grid shows it (<c>DataGridCellFormatter.AsCsvFormat</c> on the web); unset or null, the plain value.
     /// </summary>
     public Func<object, UIDataGridColumn, string?>? Format { get; init; }
 
@@ -19,17 +17,15 @@ public sealed record UIDataGridCsvOptions
     public CultureInfo? Culture { get; init; }
 
     /// <summary>
-    /// What turns a column's caption into the page's words; without it captions are written as the grid was authored. A cell's
-    /// choices are the <see cref="Format"/>'s to translate — <c>DataGridCellFormatter.AsCsvFormat</c> takes its own translator.
+    /// Translates a column's caption; a cell's choices are <see cref="Format"/>'s to translate.
     /// </summary>
     public Func<string, string>? Translate { get; init; }
 
-    /// <summary>What stands between two fields: a comma unless set — a semicolon suits a spreadsheet whose culture writes its decimals with a comma.</summary>
+    /// <summary>The field separator; a semicolon suits a spreadsheet whose culture writes decimals with a comma.</summary>
     public char Separator { get; init; } = ',';
 
     /// <summary>
-    /// Whether text a spreadsheet would run as a formula — opening with <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, a tab or a carriage return —
-    /// is written behind a quote, so it opens as the words it is; on unless turned off. A number, a date or a flag is never touched.
+    /// Whether text a spreadsheet would run as a formula is written behind a quote; a number, a date or a flag is never touched.
     /// </summary>
     public bool EscapeFormulas { get; init; } = true;
 }

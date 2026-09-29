@@ -30,6 +30,50 @@ internal enum SubscriptionStatus
     Cancelled
 }
 
+/// <summary>The plans and statuses as a column, a filter and an editor offer them: each value by its key in the demo's words.</summary>
+internal static class SubscriptionChoices
+{
+    public static IReadOnlyList<UIChoice> Plans { get; } =
+    [
+        new(nameof(SubscriptionPlan.Starter), "grid-demo.plan.starter"),
+        new(nameof(SubscriptionPlan.Standard), "grid-demo.plan.standard"),
+        new(nameof(SubscriptionPlan.Pro), "grid-demo.plan.pro"),
+        new(nameof(SubscriptionPlan.Dedicated), "grid-demo.plan.dedicated")
+    ];
+
+    public static IReadOnlyList<UIChoice> Statuses { get; } =
+    [
+        new(nameof(SubscriptionStatus.Trial), "grid-demo.status.trial"),
+        new(nameof(SubscriptionStatus.Active), "grid-demo.status.active"),
+        new(nameof(SubscriptionStatus.PastDue), "grid-demo.status.past-due"),
+        new(nameof(SubscriptionStatus.Suspended), "grid-demo.status.suspended"),
+        new(nameof(SubscriptionStatus.Cancelled), "grid-demo.status.cancelled")
+    ];
+}
+
+/// <summary>One plan's line in the price list a row's detail shows: the plan by its key in the demo's words, and what a server costs a month.</summary>
+internal sealed partial class PlanPrice : RecursiveObservable, IBindableItem
+{
+    [RecursiveMember(false)]
+    public string Id { get; init; } = string.Empty;
+
+    [RecursiveMember]
+    public partial string Plan { get; set; } = string.Empty;
+
+    /// <summary>The price as the list writes it, the euro sign before the number: the same in every language.</summary>
+    [RecursiveMember]
+    public partial string Price { get; set; } = string.Empty;
+
+    /// <summary>The four plans' lines, built afresh: a line belongs to the one list that shows it.</summary>
+    public static List<PlanPrice> List()
+        => [.. SubscriptionChoices.Plans.Select(static choice => new PlanPrice
+        {
+            Id = choice.Value,
+            Plan = choice.Caption,
+            Price = string.Create(CultureInfo.InvariantCulture, $"€{SubscriptionRecord.PricePerSeat(Enum.Parse<SubscriptionPlan>(choice.Value))}")
+        })];
+}
+
 /// <summary>
 /// One subscription as the catalogue keeps it: plain data, shared by every window that shows it.
 /// </summary>
@@ -116,26 +160,32 @@ internal sealed partial class Subscription(SubscriptionRecord record) : Recursiv
     [RecursiveMember]
     public partial string SearchText { get; set; } = record.SearchText;
 
-    /// <summary>The status as a badge reads it: its caption and its colour, kept in step with <see cref="Status"/> by <see cref="Refresh"/>.</summary>
+    /// <summary>The status as a badge reads it: its caption's key and its colour, kept in step with <see cref="Status"/> by <see cref="Refresh"/>.</summary>
     [RecursiveMember]
     public partial string StatusCaption { get; set; } = CaptionOf(record.Status);
 
     [RecursiveMember]
     public partial UIBadgeType StatusStyle { get; set; } = StyleOf(record.Status);
 
-    private static readonly IReadOnlyList<UIChoice> StatusChoices = UIChoices.FromEnum<SubscriptionStatus>();
+    /// <summary>
+    /// Whether the row may be chosen: a cancelled subscription refuses it, which the table's row template reads by this name
+    /// (<c>IItemAbilitiesModel.CanSelect</c>). Kept in step with <see cref="Status"/> by <see cref="Refresh"/>.
+    /// </summary>
+    [RecursiveMember]
+    public partial bool? CanSelect { get; set; } = CanSelectOf(record.Status);
 
-    /// <summary>What the row derives — the price, the badge's words and colour — read again after a value was written from the page.</summary>
+    /// <summary>What the row derives — the price, the badge's words and colour, the choice — read again after a value was written from the page.</summary>
     public void Refresh()
     {
         Monthly = ToRecord().Monthly;
         StatusCaption = CaptionOf(Status);
         StatusStyle = StyleOf(Status);
+        CanSelect = CanSelectOf(Status);
         SearchText = ToRecord().SearchText;
     }
 
     private static string CaptionOf(SubscriptionStatus status)
-        => StatusChoices.FirstOrDefault(choice => choice.Value == status.ToString())?.Caption ?? status.ToString();
+        => SubscriptionChoices.Statuses.FirstOrDefault(choice => choice.Value == status.ToString())?.Caption ?? status.ToString();
 
     private static UIBadgeType StyleOf(SubscriptionStatus status)
         => status switch
@@ -146,6 +196,9 @@ internal sealed partial class Subscription(SubscriptionRecord record) : Recursiv
             SubscriptionStatus.Suspended => UIBadgeType.Surface,
             _ => UIBadgeType.Danger
         };
+
+    private static bool? CanSelectOf(SubscriptionStatus status)
+        => status == SubscriptionStatus.Cancelled ? false : null;
 
     /// <summary>The row as the catalogue keeps it, after an edit.</summary>
     public SubscriptionRecord ToRecord()

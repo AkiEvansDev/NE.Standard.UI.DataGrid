@@ -54,8 +54,7 @@ public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UI
     public IReadOnlyList<UIChoice>? Choices { get; init; }
 
     /// <summary>
-    /// The property the rows sort by: the sort path when given, else the property the cell reads — set whether or not the column
-    /// sorts, since filters, totals and an export read it too; null for a template column that names no sort path.
+    /// The property the column sorts, filters, totals and exports by; set even on a column that does not sort.
     /// </summary>
     public string? EffectiveSortPath => SortPath ?? PropertyPath;
 

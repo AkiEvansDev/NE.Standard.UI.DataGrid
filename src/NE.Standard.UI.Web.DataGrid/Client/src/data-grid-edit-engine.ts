@@ -1,32 +1,17 @@
-// A cell that edits: double click or F2 opens an editor over the cell (Enter/blur commits, Escape reverts, Tab advances). The
-// editor renders on demand from the cell's named variant, so only one exists at a time; values travel the framework's ordinary
-// two-way `change` path.
+// A cell that edits: double click or F2 opens an editor over it (Enter/blur commits, Escape reverts, Tab advances). The editor
+// renders on demand from the cell's variant, so only one exists at a time.
 
-import type { ItemRows, PluginEngineContext, TableColumns, ValueReading } from "ne-standard-ui";
-import { componentIdOf, gridOf, ownFirst, RootSelector, RowSelector } from "./data-grid-dom.ts";
+import type { ComponentStates, DomNames, ItemRows, PluginEngineContext, TableColumns, ValueReading } from "ne-standard-ui";
+import { componentIdOf, gridOf, isRowKeyTarget, ownDescendants, ownFirst, RootSelector, rowSelector } from "./data-grid-dom.ts";
+import { ClientNames, GridAttributes, GridClasses, GridEvents } from "./data-grid-names.ts";
 
-const EditableCellSelector = ".ui-data-grid__cell--editable";
-const EditableCellClass = "ui-data-grid__cell--editable";
-const EditorClass = "ui-data-grid__editor";
-const OpenClass = "ui-data-grid__editor--open";
-const HiddenCellClass = "ui-data-grid__cell--editing";
-const EditorTemplateAttribute = "data-ui-grid-editor";
-const ReadOnlyAttribute = "data-ui-grid-readonly";
+const EditableCellSelector = `.${GridClasses.editableCell}`;
+const EditorTemplateAttribute = GridAttributes.editor;
 // What the display cell's own mark says it holds; the editor wears it too, so the stylesheet gives a number's field the cell's digits.
-const KindAttribute = "data-ui-grid-kind";
-const RowFocusAttribute = "data-ui-row-focus";
-const RowKeyAttribute = "data-ui-key";
-const ColumnAttribute = "data-ui-grid-column";
-const ValueBindingAttribute = "data-ui-bind-value";
-// Where a composed field keeps its value, when the first bound element in its markup holds something else (a search's typed text).
-const ValueHolderAttribute = "data-ui-value-holder";
+const KindAttribute = GridAttributes.kind;
+const ColumnAttribute = GridAttributes.column;
+const ReadOnlyAttribute = GridAttributes.readOnly;
 const FocusableSelector = "input, textarea, select, button, [tabindex]";
-// The part of a select or a search that opens its list on a press.
-const SelectTriggerSelector = ".ui-select__trigger";
-// The popups a field opens — a select's list, a picker — own the keys and the focus until they close (own-control.ts in the core).
-const PopupRoleSelector = "[role='listbox'], [role='menu'], [role='dialog']";
-
-export const CellEditEventName = "cell-edit";
 
 /** What an open editor remembers: the field's value as it stood, to put back on Escape, and whether a change already went out. */
 type OpenEditor = {
@@ -49,8 +34,13 @@ export class DataGridEditEngine {
     private readonly rows: ItemRows;
     private readonly values: ValueReading;
     private readonly tables: TableColumns;
-    // One editor at a time in a grid, by the grid.
-    private readonly open = new WeakMap<HTMLElement, OpenEditor>();
+    private readonly states: ComponentStates;
+    private readonly names: DomNames;
+    private readonly rowSelector: string;
+    // One editor per grid, in a map that can be walked, since a state change above the grids is checked against every open editor.
+    private readonly open = new Map<HTMLElement, OpenEditor>();
+    // The grids whose editable cells gave their double click back to the row while editing was off.
+    private readonly unclaimed = new WeakSet<HTMLElement>();
 
     public constructor(context: PluginEngineContext) {
         const root = context.root;
@@ -58,6 +48,12 @@ export class DataGridEditEngine {
         this.rows = context.rows;
         this.values = context.values;
         this.tables = context.tables;
+        this.states = context.states;
+        this.names = context.names;
+        this.rowSelector = rowSelector(context.names);
+
+        for (const grid of root.querySelectorAll<HTMLElement>(RootSelector))
+            this.syncClaims(grid);
 
         root.addEventListener("dblclick", domEvent => {
             const cell = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(EditableCellSelector) : null;
@@ -69,8 +65,7 @@ export class DataGridEditEngine {
             this.openEditor(cell);
         }, true);
 
-        // A change inside the editor is noted, since a select or checkbox commits as it's chosen; Escape afterward must still take
-        // it back.
+        // Noted, since a select or checkbox commits as it's chosen and Escape must still take it back.
         root.addEventListener("change", domEvent => {
             const grid = gridOf(domEvent.target);
             const state = grid === null ? undefined : this.open.get(grid);
@@ -79,19 +74,38 @@ export class DataGridEditEngine {
                 state.changed = true;
         }, true);
 
+        // On the window, ahead of the value binding: it listens on the root and starts before any package, so there it has already sent.
+        window.addEventListener("change", domEvent => this.holdWindowChange(domEvent), true);
+
         root.addEventListener("keydown", domEvent => this.handleKeyDown(domEvent), true);
 
-        // A row the server redraws under an open editor removes the editor's elements with it, so it reopens on the same cell of
-        // the new row with what was typed put back — the edit is neither lost nor left on unreachable elements while the row is
-        // still there.
+        // An editor whose row was redrawn reopens on the new row's cell with the draft put back, rather than losing the edit; a row
+        // drawn while editing is off gives its double click back too.
         context.observeComponents(root, RootSelector, { childList: true }, grids => {
-            for (const grid of grids)
+            for (const grid of grids) {
                 this.followRow(grid);
+                this.syncClaims(grid);
+            }
         });
 
-        // A press on part of the editor with no focus of its own must not move focus to the grid's root (the nearest focusable
-        // ancestor), or the editor would commit and close under the pointer; the press still reaches the field's engine. The
-        // focusable is searched inside the editor only, since climbing past it would always find the grid's own tab stop.
+        // Editing off, or the grid or anything holding it disabled, loading or inert: the open editor closes as Escape closes it. A
+        // change above a grid counts only while an editor is open.
+        context.observeComponents(root, RootSelector, {
+            attributeFilter: [ReadOnlyAttribute, "class", "inert"],
+            relevant: mutation => mutation.target instanceof Element && (mutation.target.matches(RootSelector) || this.editsUnder(mutation.target))
+        }, grids => {
+            for (const grid of grids)
+                this.followState(grid);
+
+            for (const [grid, state] of [...this.open]) {
+                if (!this.canEdit(grid))
+                    this.closeEditor(grid, state, false);
+            }
+        });
+
+        // A press on a part with no focus of its own would focus the grid's root and commit the editor under the pointer; only its
+        // default is prevented, since the press still reaches the field's engine. The focusable is searched inside the editor only,
+        // since climbing past it would always find the grid's own tab stop.
         root.addEventListener("mousedown", domEvent => {
             const grid = gridOf(domEvent.target);
             const state = grid === null ? undefined : this.open.get(grid);
@@ -105,7 +119,7 @@ export class DataGridEditEngine {
                 domEvent.preventDefault();
         }, true);
 
-        // The focus left the editor for somewhere outside it: what was typed is committed, as a field's blur does.
+        // Focus leaving the editor commits what was typed, as a field's blur does, unless the grid stops editing by then.
         root.addEventListener("focusout", domEvent => {
             if (!(domEvent instanceof FocusEvent) || !(domEvent.target instanceof Element))
                 return;
@@ -121,14 +135,103 @@ export class DataGridEditEngine {
             if (next instanceof Node && state.editor.contains(next))
                 return;
 
+            // A part that hid under the focus drops it to nothing rather than where the reader went: Chromium blurs an element as it
+            // loses its box or turns invisible; Firefox keeps the focus on it and raises nothing, which needs no guard.
+            const hid = next === null && domEvent.target.isConnected && !isShown(domEvent.target);
+
             // After the blur's own change has been dispatched, which the browser does before the focus moves on.
-            window.setTimeout(() => this.closeEditor(grid, state, true), 0);
+            window.setTimeout(() => this.followFocusOut(grid, state, hid), 0);
         }, true);
+    }
+
+    /** An editable cell claims its double click for the editor only while the grid edits; otherwise it opens the row. */
+    private syncClaims(grid: HTMLElement): void {
+        const claims = !grid.hasAttribute(ReadOnlyAttribute);
+
+        if (claims && !this.unclaimed.has(grid))
+            return;
+
+        for (const cell of ownDescendants(grid, EditableCellSelector))
+            cell.toggleAttribute(this.names.noRowOpen, claims);
+
+        if (claims)
+            this.unclaimed.delete(grid);
+        else
+            this.unclaimed.add(grid);
+    }
+
+    /** Whether an element stands around a grid whose editor is open: a state it takes on reaches that grid. */
+    private editsUnder(element: Element): boolean {
+        for (const grid of this.open.keys()) {
+            if (grid !== element && element.contains(grid))
+                return true;
+        }
+
+        return false;
+    }
+
+    private followState(grid: HTMLElement): void {
+        this.syncClaims(grid);
+
+        const state = this.open.get(grid);
+
+        if (state !== undefined && !this.canEdit(grid))
+            this.closeEditor(grid, state, false);
+    }
+
+    private canEdit(grid: HTMLElement): boolean {
+        return !grid.hasAttribute(ReadOnlyAttribute) && !this.states.isInert(grid);
+    }
+
+    /**
+     * Where the focus went decides it: still inside, the window lost it and the editor waits; dropped to nothing by a part that
+     * hid, it goes back to the field — or, the whole editor hidden (its column dropped at a narrower width), the editor closes and
+     * the grid takes it rather than the page's body; anywhere else, the editor closes.
+     */
+    private followFocusOut(grid: HTMLElement, state: OpenEditor, hid: boolean): void {
+        const active = document.activeElement;
+
+        if (this.open.get(grid) !== state || state.editor.contains(active))
+            return;
+
+        const dropped = hid && (active === null || active === document.body);
+
+        if (dropped && this.canEdit(grid)) {
+            state.editor.querySelector<HTMLElement>(FocusableSelector)?.focus({ preventScroll: true });
+
+            // A field that hid with the editor takes no focus.
+            if (state.editor.contains(document.activeElement))
+                return;
+        }
+
+        this.closeEditor(grid, state, this.canEdit(grid));
+
+        if (dropped)
+            grid.focus({ preventScroll: true });
+    }
+
+    /**
+     * A `change` the browser raises as the window loses the focus, in the open editor's caret field that keeps it, is not the
+     * reader's: stopped before the binding sends it, and the value goes when the editor commits.
+     */
+    private holdWindowChange(domEvent: Event): void {
+        const field = domEvent.target;
+
+        // Trusted only: the editor's own change on a commit or an Escape is raised from script, whatever the window.
+        if (!domEvent.isTrusted || document.hasFocus() || !(field instanceof Element) || field !== document.activeElement || !isCaretField(field))
+            return;
+
+        const grid = gridOf(field);
+        const state = grid === null ? undefined : this.open.get(grid);
+
+        // A number field's edit text, which its engine puts back after a change, comes back with the focus on the reader's return.
+        if (state !== undefined && state.editor.contains(field))
+            domEvent.stopPropagation();
     }
 
     private openEditor(cell: HTMLElement): void {
         const grid = gridOf(cell);
-        const row = cell.closest<HTMLElement>(RowSelector);
+        const row = cell.closest<HTMLElement>(this.rowSelector);
 
         // A grid whose editing is off keeps its cells as they are, whatever its columns say.
         if (grid === null || row === null || grid.hasAttribute(ReadOnlyAttribute))
@@ -149,7 +252,8 @@ export class DataGridEditEngine {
         if (editor === null)
             return;
 
-        const field = editor.querySelector<HTMLElement>(`[${ValueHolderAttribute}][${ValueBindingAttribute}]`) ?? editor.querySelector<HTMLElement>(`[${ValueBindingAttribute}]`);
+        // Where a composed field keeps its value, when the first bound element in its markup holds something else (a search's typed text).
+        const field = editor.querySelector<HTMLElement>(`[${this.names.valueHolder}][${this.names.bindValue}]`) ?? editor.querySelector<HTMLElement>(`[${this.names.bindValue}]`);
 
         this.open.set(grid, { editor, cell, field, original: this.fieldValue(field), changed: false });
 
@@ -159,8 +263,8 @@ export class DataGridEditEngine {
             this.values.hold(field);
         // The editor stands as tall as the cell it replaces, so a row of two lines does not shrink around a one-line field.
         editor.style.minHeight = `${cell.getBoundingClientRect().height}px`;
-        cell.classList.add(HiddenCellClass);
-        editor.classList.add(OpenClass);
+        cell.classList.add(ClientNames.editingCellClass);
+        editor.classList.add(ClientNames.editorOpenClass);
         cell.after(editor);
 
         const focusable = editor.querySelector<HTMLElement>(FocusableSelector);
@@ -170,21 +274,18 @@ export class DataGridEditEngine {
         if (focusable instanceof HTMLInputElement && isCaretInput(focusable))
             focusable.select();
 
-        // A choice cell opens its list with the editor, since a second press to see the choices would say nothing the first didn't;
-        // the framework's own trigger is pressed so the list opens and closes the framework's way.
-        const trigger = editor.querySelector<HTMLElement>(SelectTriggerSelector);
+        // A choice cell opens its list with the editor, since a second press would say nothing new; through the framework's trigger,
+        // so the list opens and closes its way.
+        const trigger = editor.querySelector<HTMLElement>(this.names.listTriggerSelector);
 
         if (trigger !== null && trigger.getAttribute("aria-expanded") !== "true")
             trigger.click();
     }
 
-    /**
-     * The editor's cell, drawn when the viewer opens it: the framework renders the column's editor variant against the row's item,
-     * wrapped in the display cell's own shape (alignment, pinned modifiers, offset, column and row key) so it stands in the same track.
-     */
+    /** The column's editor variant drawn against the row's item, in the display cell's own shape so it stands in the same track. */
     private createEditor(grid: HTMLElement, row: HTMLElement, cell: HTMLElement): HTMLElement | null {
         const variantKey = cell.getAttribute(EditorTemplateAttribute);
-        const componentId = componentIdOf(grid);
+        const componentId = componentIdOf(grid, this.names);
 
         if (variantKey === null || componentId === null)
             return null;
@@ -199,8 +300,8 @@ export class DataGridEditEngine {
         for (const attribute of cell.attributes)
             editor.setAttribute(attribute.name, attribute.value);
 
-        editor.classList.remove(EditableCellClass, HiddenCellClass);
-        editor.classList.add(EditorClass);
+        editor.classList.remove(GridClasses.editableCell, ClientNames.editingCellClass);
+        editor.classList.add(ClientNames.editorClass);
         editor.removeAttribute(EditorTemplateAttribute);
         editor.appendChild(content);
 
@@ -229,23 +330,21 @@ export class DataGridEditEngine {
                 state.field.dispatchEvent(new Event("change", { bubbles: true }));
 
             if (state.changed || this.fieldValue(state.field) !== state.original)
-                (state.field ?? state.editor).dispatchEvent(new Event(CellEditEventName, { bubbles: true }));
+                (state.field ?? state.editor).dispatchEvent(new Event(GridEvents.cellEdit, { bubbles: true }));
         }
-        else if (state.field !== null) {
-            writeFieldValue(state.field, state.original);
-
-            // A change that already went out is taken back the same way.
-            if (state.changed)
-                state.field.dispatchEvent(new Event("change", { bubbles: true }));
+        else if (state.field !== null && state.changed) {
+            // A change that already went out is taken back the same way: the server holds it, so letting the field go would keep it.
+            this.values.write(state.field, state.original);
+            state.field.dispatchEvent(new Event("change", { bubbles: true }));
         }
 
-        // Held only while the editor stood: a commit that changed nothing sent nothing, so nothing let the field go.
+        // Released on every close: a commit that sent nothing let nothing go, and after an Escape the framework restores the value.
         if (state.field !== null)
             this.values.release(state.field);
 
         const focused = state.editor.contains(document.activeElement);
 
-        state.cell.classList.remove(HiddenCellClass);
+        state.cell.classList.remove(ClientNames.editingCellClass);
         state.editor.remove();
 
         // The keyboard stays on the row: the grid's root holds the focus and the cursor names the row.
@@ -261,20 +360,19 @@ export class DataGridEditEngine {
             return;
 
         const place: EditorPlace = {
-            key: state.cell.closest<HTMLElement>(RowSelector)?.getAttribute(RowKeyAttribute) ?? "",
+            key: state.cell.closest<HTMLElement>(this.rowSelector)?.getAttribute(this.names.key) ?? "",
             column: state.cell.getAttribute(ColumnAttribute) ?? "",
             draft: this.fieldValue(state.field),
             changed: state.changed
         };
 
-        // Dropped, not closed: the elements are gone, and a commit or a restore on them would reach nobody. The hold is let go
-        // either way, since a held field is kept by the framework and would keep the whole old row with it.
+        // Dropped, not closed: a commit or restore on gone elements reaches nobody. Released, or the held field keeps the old row.
         this.open.delete(grid);
 
         if (state.field !== null)
             this.values.release(state.field);
 
-        const row = place.key.length === 0 ? null : ownFirst(grid, `${RowSelector}[${RowKeyAttribute}="${CSS.escape(place.key)}"]`);
+        const row = place.key.length === 0 ? null : ownFirst(grid, `${this.rowSelector}[${this.names.key}="${CSS.escape(place.key)}"]`);
         const cell = row?.querySelector<HTMLElement>(`:scope > ${EditableCellSelector}[${ColumnAttribute}="${CSS.escape(place.column)}"]`) ?? null;
 
         if (cell === null)
@@ -287,7 +385,8 @@ export class DataGridEditEngine {
         if (reopened === undefined || reopened.field === null || place.draft === reopened.original)
             return;
 
-        writeFieldValue(reopened.field, place.draft);
+        // Through the field's own binding, so a composed field (a select, a date) shows the draft its hidden input holds.
+        this.values.write(reopened.field, place.draft);
         reopened.changed = place.changed;
     }
 
@@ -297,17 +396,18 @@ export class DataGridEditEngine {
 
         const grid = gridOf(domEvent.target);
 
-        if (grid === null)
+        // A disabled or loading grid keeps its root focusable while every row in it is inert: its keys open nothing.
+        if (grid === null || this.states.isInert(grid))
             return;
 
         const state = this.open.get(grid);
 
-        // F2 on the keyboard's row opens its first cell that edits, as the row stands on screen.
+        // F2 on the keyboard's row opens its first editable cell on screen; in the band, a flyout or the header it is that field's.
         if (state === undefined) {
-            if (domEvent.key !== "F2")
+            if (domEvent.key !== "F2" || !isRowKeyTarget(this.rows, domEvent.target))
                 return;
 
-            const row = ownFirst(grid, `${RowSelector}[${RowFocusAttribute}]`);
+            const row = ownFirst(grid, `${this.rowSelector}[${this.names.rowFocus}]`);
             const cell = row === null ? null : this.editableCells(grid, row)[0] ?? null;
 
             if (cell !== null) {
@@ -321,12 +421,11 @@ export class DataGridEditEngine {
         if (!state.editor.contains(domEvent.target))
             return;
 
-        // A popup the field opened owns Enter and Escape until it closes, whether the key lands in the popup or in the field that
-        // opened it.
-        const popup = domEvent.target.closest(PopupRoleSelector);
-        const openList = state.editor.querySelector("[role='listbox']");
+        // A popup the field opened owns Enter and Escape until it closes (own-control.ts in the core), open by its opener's word,
+        // not its box, which a closing list keeps as it fades.
+        const popup = domEvent.target.closest(this.names.popupSelector);
 
-        if ((popup !== null && state.editor.contains(popup)) || (openList !== null && openList.getClientRects().length > 0))
+        if ((popup !== null && state.editor.contains(popup)) || state.editor.querySelector("[aria-expanded='true']") !== null)
             return;
 
         switch (domEvent.key) {
@@ -354,11 +453,9 @@ export class DataGridEditEngine {
         }
     }
 
-    /**
-     * The row's cells that edit, in the order the viewer sees the columns and without the ones hidden: the cells stand in the DOM in
-     * the author's order, and a hidden column's cell is invisible and cannot take the focus.
-     */
+    /** The row's shown editable cells, in the viewer's column order. */
     private editableCells(grid: HTMLElement, row: HTMLElement): HTMLElement[] {
+        // The cells stand in the author's order, and a hidden column's cell cannot take the focus.
         const order = this.tables.columnOrder(grid);
         const cells = [...row.querySelectorAll<HTMLElement>(`:scope > ${EditableCellSelector}`)]
             .filter(cell => !this.tables.isColumnHidden(grid, cell.getAttribute(ColumnAttribute) ?? ""));
@@ -371,17 +468,14 @@ export class DataGridEditEngine {
 
     /** The editable cell `step` places along the row from the given one, or null at the row's end. */
     private siblingCell(grid: HTMLElement, cell: HTMLElement, step: number): HTMLElement | null {
-        const row = cell.closest<HTMLElement>(RowSelector);
+        const row = cell.closest<HTMLElement>(this.rowSelector);
         const cells = row === null ? [] : this.editableCells(grid, row);
         const index = cells.indexOf(cell);
 
         return index < 0 ? null : cells[index + step] ?? null;
     }
 
-    /**
-     * Commits by the keyboard: blurs the field first, since a composed control only writes what was typed on its own input's blur —
-     * reading the value before that would still be the row's original.
-     */
+    /** Commits by the keyboard, blurring the field first: a composed control writes what was typed only on its own input's blur. */
     private commitEditor(grid: HTMLElement, state: OpenEditor): void {
         const held = document.activeElement instanceof HTMLElement && state.editor.contains(document.activeElement);
 
@@ -400,16 +494,12 @@ function isCaretInput(field: HTMLInputElement): boolean {
     return field.type === "text" || field.type === "number" || field.type === "search" || field.type === "email" || field.type === "url" || field.type === "tel" || field.type === "password";
 }
 
-/**
- * Escape's other half: an editor's value is not a property the grid's renderer exposes to `properties.set`, so the value goes back
- * the field's own way.
- */
-function writeFieldValue(field: HTMLElement, value: unknown): void {
-    if (field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio")) {
-        field.checked = value === true;
-        return;
-    }
+/** A field the reader types in, whose `change` the browser raises on a blur. */
+function isCaretField(element: Element): boolean {
+    return element instanceof HTMLTextAreaElement || (element instanceof HTMLInputElement && isCaretInput(element));
+}
 
-    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)
-        field.value = value === null || value === undefined || typeof value === "boolean" ? "" : String(value);
+/** Whether an element can still be seen: laid out, and not `visibility: hidden`, as a column hidden at a narrower width is. */
+function isShown(element: Element): boolean {
+    return element.getClientRects().length > 0 && getComputedStyle(element).visibility === "visible";
 }

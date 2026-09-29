@@ -1,22 +1,11 @@
-// A typed cell's value as text, by the attributes the renderer left on the cell: the client half of DataGridCellFormatter, over
-// the same formatters the framework hands a package, so a row built here reads like one painted on the server.
+// A typed cell's value as text: the client half of DataGridCellFormatter, over the framework's formatters, so a row built here
+// reads like one painted on the server.
 
 import type { ClientStrings, NumberCulturePack, NumberFormatting, TemporalCulturePack, TemporalFormatting } from "ne-standard-ui";
-
-export const CellOperationKind = "data-grid-cell";
-
-const KindAttribute = "data-ui-grid-kind";
-const FormatAttribute = "data-ui-grid-format";
-const CurrencyAttribute = "data-ui-grid-currency";
-const ChoicesAttribute = "data-ui-grid-choices";
-/** On a number or money cell: the value as a number — a numeric text's too — for a footer to add up. */
-export const RawValueAttribute = "data-ui-grid-raw";
+import { GridAttributes, GridWords } from "./data-grid-names.ts";
 
 // What double.TryParse reads under NumberStyles.Float, the invariant culture, on the server's side.
 const DecimalText = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\s*$/;
-
-const YesKey = "ui.grid.yes";
-const NoKey = "ui.grid.no";
 
 export type CellFormatting = {
     readonly numbers: NumberFormatting;
@@ -34,10 +23,10 @@ export type CellShape = {
 
 export function readCellShape(cell: Element): CellShape {
     return {
-        kind: cell.getAttribute(KindAttribute) ?? "text",
-        format: cell.getAttribute(FormatAttribute),
-        currency: cell.getAttribute(CurrencyAttribute),
-        choices: parseChoices(cell.getAttribute(ChoicesAttribute))
+        kind: cell.getAttribute(GridAttributes.kind) ?? "text",
+        format: cell.getAttribute(GridAttributes.format),
+        currency: cell.getAttribute(GridAttributes.currency),
+        choices: parseChoices(cell.getAttribute(GridAttributes.choices))
     };
 }
 
@@ -63,10 +52,41 @@ export function applyCellValue(cell: Element, value: unknown, formatting: CellFo
 
     const number = shape.kind === "number" || shape.kind === "money" ? toNumber(value) : null;
 
+    // On a number or money cell: the value as a number, a numeric text's too, for a footer to add up.
     if (number !== null)
-        cell.setAttribute(RawValueAttribute, String(number));
-    else if (cell.hasAttribute(RawValueAttribute))
-        cell.removeAttribute(RawValueAttribute);
+        cell.setAttribute(GridAttributes.raw, String(number));
+    else if (cell.hasAttribute(GridAttributes.raw))
+        cell.removeAttribute(GridAttributes.raw);
+
+    const choice = choiceValue(value, shape.kind);
+
+    // On a flag or a choice cell: the value its caption is keyed by, so a language switch writes the caption again.
+    if (choice !== null)
+        cell.setAttribute(GridAttributes.choice, choice);
+    else if (cell.hasAttribute(GridAttributes.choice))
+        cell.removeAttribute(GridAttributes.choice);
+}
+
+/** Writes every flag and choice cell under `root` again in the page's words, from the value each keeps. */
+export function rewriteChoiceCells(root: ParentNode, formatting: CellFormatting): void {
+    for (const cell of root.querySelectorAll(`[${GridAttributes.choice}]`))
+        applyCellValue(cell, cell.getAttribute(GridAttributes.choice), formatting);
+}
+
+/** A flag's or a choice's value as its choices are keyed — `true`/`false`, or the value's text; null for any other kind. */
+function choiceValue(value: unknown, kind: string): string | null {
+    if (value === null || value === undefined)
+        return null;
+
+    if (kind === "boolean")
+        return isTrue(value) ? "true" : "false";
+
+    return kind === "enum" ? String(value) : null;
+}
+
+/** A text says true in any case, as the server reads it; anything else is false. */
+function isTrue(value: unknown): boolean {
+    return value === true || (typeof value === "string" && value.toLowerCase() === "true");
 }
 
 /** The value as the cell's kind writes it: a number under its format, a date under its pattern, a flag or a choice by its caption. */
@@ -92,25 +112,24 @@ export function formatCellValue(value: unknown, shape: CellShape, numbers: Numbe
             return moment === null ? String(value) : formatting.temporal.format(moment, shape.format, dates);
         }
         case "boolean": {
-            const flag = value === true || value === "true" || value === "True";
-            const key = flag ? "true" : "false";
+            // The captions are keyed by the two words; they come as the author wrote them, and are the page's words once looked up.
+            const flag = isTrue(value);
+            const caption = shape.choices?.[flag ? "true" : "false"];
 
-            return shape.choices?.[key] ?? formatting.strings.text(flag ? YesKey : NoKey);
+            return caption === undefined ? formatting.strings.text(flag ? GridWords.yes : GridWords.no) : formatting.strings.resolveText(caption);
         }
         case "enum": {
             const text = String(value);
+            const caption = shape.choices?.[text];
 
-            return shape.choices?.[text] ?? text;
+            return caption === undefined ? text : formatting.strings.resolveText(caption);
         }
         default:
             return String(value);
     }
 }
 
-/**
- * A number, or a text that reads as one the way the server's cell reads it — decimal digits with a point and an exponent, no
- * grouping and no `0x`; null for anything else, and for a number no finite value holds.
- */
+/** A number, or a text the server's cell reads as one; null for anything else or a value no finite number holds. */
 export function toNumber(value: unknown): number | null {
     if (typeof value === "number")
         return Number.isFinite(value) ? value : null;
@@ -124,7 +143,7 @@ export function toNumber(value: unknown): number | null {
 }
 
 /** A moment off the wire, read as the framework reads one: by the clock it is written with, never by `new Date(text)` and the reader's zone. */
-export function toDate(value: unknown, temporal: TemporalFormatting): Date | null {
+function toDate(value: unknown, temporal: TemporalFormatting): Date | null {
     if (value instanceof Date)
         return value;
 
