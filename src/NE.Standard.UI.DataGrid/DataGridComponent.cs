@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NE.Standard.UI.Abstractions.Binding.Properties;
 using NE.Standard.UI.Abstractions.Interaction;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.Abstractions.Styling;
@@ -144,7 +145,8 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
         {
             UITableColumn column = Columns[i];
 
-            entries.Add(new MenuItem { Id = column.Key, Title = ChooserTitleOf(column), Icon = column.Icon, IconColor = column.IconColor, Kind = UIMenuItemKind.Check, Checked = !column.Hidden });
+            // A content caption is shown as written here too; the grid's own word or a key standing in for none is not a caption.
+            entries.Add(new MenuItem { Id = column.Key, Title = ChooserTitleOf(column), Icon = column.Icon, IconColor = column.IconColor, Kind = UIMenuItemKind.Check, Checked = !column.Hidden, IsContent = !string.IsNullOrEmpty(column.Caption) && IsContentCaption(column) });
         }
 
         _regions[ColumnsRegionName] = new MenuComponent().SetOrientation(UIOrientation.Vertical).SetItems(entries);
@@ -158,6 +160,10 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
         return column is UIDataGridColumn { DetailToggle: true } ? DetailsKey : column.Key;
     }
+
+    /// <summary>Whether a column's caption is shown as written: the column says so, or the grid said it of all its columns.</summary>
+    private bool IsContentCaption(UITableColumn column)
+        => column.IsContent || IsContent(ColumnsProperty);
 
     /// <summary>Every column, whatever verb added it: the grid's own key is refused, and the chooser keeps its entries level with them.</summary>
     protected override T AddColumn(UITableColumn column, IVisualComponent template)
@@ -182,6 +188,29 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
         if (ColumnChooser)
             RefreshChooser();
+    }
+
+    /// <summary>
+    /// Marks translatable properties content; the columns' reaches every place the grid names a column — the chooser's entries and
+    /// the filters' captions — whether the chooser and the filters came before or after.
+    /// </summary>
+    public override T AsContent(params UIProperty[] properties)
+    {
+        T self = base.AsContent(properties);
+
+        if (!IsContent(ColumnsProperty))
+            return self;
+
+        if (ColumnChooser)
+            RefreshChooser();
+
+        for (var i = 0; i < Columns.Count; i++)
+        {
+            if (Columns[i] is UIDataGridColumn { Filterable: true } column && _regions.TryGetValue(column.FilterRegionName, out IVisualComponent? region) && region is DataGridFilterComponent filter)
+                _ = filter.AsContent(DataGridFilterComponent.CaptionProperty);
+        }
+
+        return self;
     }
 
     /// <summary>
@@ -241,16 +270,16 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     /// <summary>
     /// Adds a column showing the row's text at <paramref name="propertyPath"/>, sortable by it.
     /// </summary>
-    public override T AddTextColumn(string caption, string propertyPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false)
-        => AddTextColumn(caption, propertyPath, sortable: true, width, alignment, key, pinned: pinned, icon: icon, hidden: hidden);
+    public override T AddTextColumn(string caption, string propertyPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+        => AddTextColumn(caption, propertyPath, sortable: true, width, alignment, key, pinned: pinned, icon: icon, hidden: hidden, content: content);
 
     /// <summary>
     /// Adds a column showing the row's text at <paramref name="propertyPath"/>, sortable by it unless told otherwise, edited in a text field when
     /// <paramref name="editable"/>.
     /// </summary>
-    public T AddTextColumn(string caption, string propertyPath, bool sortable, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false)
+    public T AddTextColumn(string caption, string propertyPath, bool sortable, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
     {
-        UIDataGridColumn column = CreateColumn(caption, propertyPath, UIDataGridColumnKind.Text, sortable, editable, filterable, width, alignment, key, pinned, aggregate, icon, hidden);
+        UIDataGridColumn column = CreateColumn(caption, propertyPath, UIDataGridColumnKind.Text, sortable, editable, filterable, width, alignment, key, pinned, aggregate, icon, hidden, content);
 
         _ = AddColumn(column, CreateTextCell(propertyPath, alignment));
 
@@ -260,11 +289,11 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
         return editable ? SetEditor(column, new TextInputComponent(), propertyPath) : Self;
     }
 
-    private UIDataGridColumn CreateColumn(string caption, string propertyPath, UIDataGridColumnKind kind, bool sortable, bool editable, bool filterable, UIGridUnit? width, UITextAlignment? alignment, string? key, bool pinned, UIDataGridAggregate aggregate, string? icon, bool hidden)
+    private UIDataGridColumn CreateColumn(string caption, string propertyPath, UIDataGridColumnKind kind, bool sortable, bool editable, bool filterable, UIGridUnit? width, UITextAlignment? alignment, string? key, bool pinned, UIDataGridAggregate aggregate, string? icon, bool hidden, bool content)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(propertyPath);
 
-        return new UIDataGridColumn(key ?? PropertyColumnKey(propertyPath), caption, width ?? UIGridUnit.Auto(), alignment) { Kind = kind, PropertyPath = propertyPath, Sortable = sortable, Editable = editable, Filterable = filterable, FilterKind = kind, Pinned = pinned, Aggregate = aggregate, Icon = icon, Hidden = hidden };
+        return new UIDataGridColumn(key ?? PropertyColumnKey(propertyPath), caption, width ?? UIGridUnit.Auto(), alignment) { Kind = kind, PropertyPath = propertyPath, Sortable = sortable, Editable = editable, Filterable = filterable, FilterKind = kind, Pinned = pinned, Aggregate = aggregate, Icon = icon, Hidden = hidden, IsContent = content };
     }
 
     /// <summary>A property column is keyed by its property, a template column by its sort path — the key a cell-edit command names — unless a column has that key already.</summary>
@@ -288,6 +317,9 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
             .SetProperty(column.EffectiveSortPath ?? column.Key)
             .SetKind(column.FilterKind)
             .SetCaption(column.Caption);
+
+        if (IsContentCaption(column))
+            _ = filter.AsContent(DataGridFilterComponent.CaptionProperty);
 
         _ = column.FilterKind switch
         {
@@ -357,12 +389,12 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     /// Adds a column showing the number at <paramref name="propertyPath"/>, formatted as <c>N2</c> unless given, end-aligned and
     /// sorted numerically; edited in a number field when <paramref name="editable"/>.
     /// </summary>
-    public T AddNumberColumn(string caption, string propertyPath, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false)
-        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Number, format ?? "N2", null, null, sortable, editable, filterable, width, alignment ?? UITextAlignment.End, key, aggregate, pinned, icon, hidden);
+    public T AddNumberColumn(string caption, string propertyPath, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Number, format ?? "N2", null, null, sortable, editable, filterable, width, alignment ?? UITextAlignment.End, key, aggregate, pinned, icon, hidden, content);
 
-    private T AddTypedColumn(string caption, string propertyPath, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, bool sortable, bool editable, bool filterable, UIGridUnit? width, UITextAlignment? alignment, string? key, UIDataGridAggregate aggregate, bool pinned, string? icon, bool hidden)
+    private T AddTypedColumn(string caption, string propertyPath, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, bool sortable, bool editable, bool filterable, UIGridUnit? width, UITextAlignment? alignment, string? key, UIDataGridAggregate aggregate, bool pinned, string? icon, bool hidden, bool content)
     {
-        UIDataGridColumn column = CreateColumn(caption, propertyPath, kind, sortable, editable, filterable, width, alignment, key, pinned, aggregate, icon, hidden) with { Format = format, Currency = currency, Choices = choices };
+        UIDataGridColumn column = CreateColumn(caption, propertyPath, kind, sortable, editable, filterable, width, alignment, key, pinned, aggregate, icon, hidden, content) with { Format = format, Currency = currency, Choices = choices };
 
         DataGridCellComponent cell = new DataGridCellComponent()
             .SetKind(kind)
@@ -398,68 +430,68 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     /// Adds a column showing the amount at <paramref name="propertyPath"/> as money, in the page's currency format or
     /// <paramref name="currency"/>; edited in a number field when <paramref name="editable"/>.
     /// </summary>
-    public T AddMoneyColumn(string caption, string propertyPath, string? currency = null, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false)
-        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Money, format ?? "C", currency, null, sortable, editable, filterable, width, alignment ?? UITextAlignment.End, key, aggregate, pinned, icon, hidden);
+    public T AddMoneyColumn(string caption, string propertyPath, string? currency = null, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Money, format ?? "C", currency, null, sortable, editable, filterable, width, alignment ?? UITextAlignment.End, key, aggregate, pinned, icon, hidden, content);
 
     /// <summary>
     /// Adds a column showing the date at <paramref name="propertyPath"/>, patterned as <c>yyyy-MM-dd</c> unless given; edited in a
     /// date or date-and-time picker when <paramref name="editable"/>.
     /// </summary>
-    public T AddDateColumn(string caption, string propertyPath, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false)
-        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Date, format ?? "yyyy-MM-dd", null, null, sortable, editable, filterable, width, alignment, key, UIDataGridAggregate.None, pinned, icon, hidden);
+    public T AddDateColumn(string caption, string propertyPath, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Date, format ?? "yyyy-MM-dd", null, null, sortable, editable, filterable, width, alignment, key, UIDataGridAggregate.None, pinned, icon, hidden, content);
 
     /// <summary>
     /// Adds a column showing the flag at <paramref name="propertyPath"/> as a word: the two given, or the page's own yes and no; edited as a
     /// checkbox when <paramref name="editable"/>.
     /// </summary>
-    public T AddBooleanColumn(string caption, string propertyPath, string? trueCaption = null, string? falseCaption = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false)
+    public T AddBooleanColumn(string caption, string propertyPath, string? trueCaption = null, string? falseCaption = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
     {
         IReadOnlyList<UIChoice>? choices = trueCaption is null && falseCaption is null
             ? null
             : UIChoices.Boolean(trueCaption ?? YesKey, falseCaption ?? NoKey);
 
-        return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Boolean, null, null, choices, sortable, editable, filterable, width, alignment ?? UITextAlignment.Center, key, UIDataGridAggregate.None, pinned, icon, hidden);
+        return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Boolean, null, null, choices, sortable, editable, filterable, width, alignment ?? UITextAlignment.Center, key, UIDataGridAggregate.None, pinned, icon, hidden, content);
     }
 
     /// <summary>
     /// Adds a column showing the value at <paramref name="propertyPath"/> by the caption of the choice it matches; edited in a select over the
     /// same choices when <paramref name="editable"/>.
     /// </summary>
-    public T AddEnumColumn(string caption, string propertyPath, IReadOnlyList<UIChoice> choices, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false)
+    public T AddEnumColumn(string caption, string propertyPath, IReadOnlyList<UIChoice> choices, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
     {
         ArgumentNullException.ThrowIfNull(choices);
 
-        return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Enum, null, null, choices, sortable, editable, filterable, width, alignment, key, UIDataGridAggregate.None, pinned, icon, hidden);
+        return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Enum, null, null, choices, sortable, editable, filterable, width, alignment, key, UIDataGridAggregate.None, pinned, icon, hidden, content);
     }
 
     /// <summary>
     /// Adds a column showing the <typeparamref name="TEnum"/> at <paramref name="propertyPath"/>: each member by its
     /// <see cref="System.ComponentModel.DescriptionAttribute"/>, or its name with the words separated.
     /// </summary>
-    public T AddEnumColumn<TEnum>(string caption, string propertyPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false)
+    public T AddEnumColumn<TEnum>(string caption, string propertyPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
         where TEnum : struct, Enum
-        => AddEnumColumn(caption, propertyPath, UIChoices.FromEnum<TEnum>(), width, alignment, key, sortable, editable, filterable, pinned, icon, hidden);
+        => AddEnumColumn(caption, propertyPath, UIChoices.FromEnum<TEnum>(), width, alignment, key, sortable, editable, filterable, pinned, icon, hidden, content);
 
     /// <summary>
     /// Adds a column whose cells render <paramref name="template"/> against the row, sortable by <paramref name="sortPath"/>.
     /// </summary>
-    public T AddColumn(string caption, IVisualComponent template, string sortPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false)
+    public T AddColumn(string caption, IVisualComponent template, string sortPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sortPath);
 
-        return AddColumn(new UIDataGridColumn(key ?? PropertyColumnKey(sortPath), caption, width ?? UIGridUnit.Auto(), alignment) { SortPath = sortPath, Sortable = true, Pinned = pinned, Icon = icon, Hidden = hidden }, template);
+        return AddColumn(new UIDataGridColumn(key ?? PropertyColumnKey(sortPath), caption, width ?? UIGridUnit.Auto(), alignment) { SortPath = sortPath, Sortable = true, Pinned = pinned, Icon = icon, Hidden = hidden, IsContent = content }, template);
     }
 
     /// <summary>
     /// Adds a column rendering <paramref name="template"/>, opening <paramref name="editor"/> on a double click or F2. Sortable by
     /// <paramref name="sortPath"/> when named.
     /// </summary>
-    public T AddEditableColumn<TInput>(string caption, IVisualComponent template, TInput editor, string? sortPath = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false)
+    public T AddEditableColumn<TInput>(string caption, IVisualComponent template, TInput editor, string? sortPath = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
         where TInput : VisualComponentBase<TInput>, IInputComponent, IUIComponentDefinition
     {
         ArgumentNullException.ThrowIfNull(editor);
 
-        UIDataGridColumn column = new(key ?? (sortPath is null ? NextColumnKey() : PropertyColumnKey(sortPath)), caption, width ?? UIGridUnit.Auto(), alignment) { SortPath = sortPath, Sortable = sortPath is not null, Editable = true, Pinned = pinned, Icon = icon, Hidden = hidden };
+        UIDataGridColumn column = new(key ?? (sortPath is null ? NextColumnKey() : PropertyColumnKey(sortPath)), caption, width ?? UIGridUnit.Auto(), alignment) { SortPath = sortPath, Sortable = sortPath is not null, Editable = true, Pinned = pinned, Icon = icon, Hidden = hidden, IsContent = content };
 
         _ = AddColumn(column, template);
 

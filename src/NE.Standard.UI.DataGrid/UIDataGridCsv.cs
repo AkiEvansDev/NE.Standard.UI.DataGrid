@@ -89,7 +89,7 @@ public static class UIDataGridCsv
     {
         var caption = string.IsNullOrEmpty(column.Caption) ? column.Key : column.Caption;
 
-        return settings.Translate is null ? caption : settings.Translate(caption);
+        return settings.Translate is null || column.IsContent ? caption : settings.Translate(caption);
     }
 
     /// <summary>

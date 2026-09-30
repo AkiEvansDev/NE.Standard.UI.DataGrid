@@ -17,7 +17,7 @@ public sealed record UIDataGridCsvOptions
     public CultureInfo? Culture { get; init; }
 
     /// <summary>
-    /// Translates a column's caption; a cell's choices are <see cref="Format"/>'s to translate.
+    /// Translates a column's caption, unless the column says it is content; a cell's choices are <see cref="Format"/>'s to translate.
     /// </summary>
     public Func<string, string>? Translate { get; init; }
 

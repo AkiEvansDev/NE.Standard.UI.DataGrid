@@ -35,7 +35,8 @@ internal static class SubscriptionGrid
         DataGridComponent grid = new DataGridComponent(id)
             // The chevron that opens a row's detail, first in the row and pinned with the columns that are.
             .AddDetailColumn(pinned: wide)
-            .AddTextColumn("grid-demo.column.subscription", nameof(Subscription.Number), sortable: true, UIGridUnit.Absolute(140), filterable: band, aggregate: Count(totals), pinned: wide)
+            // A code-like caption, the same in every language: content, shown as written in the header, the chooser, the filter and a CSV.
+            .AddTextColumn("ID", nameof(Subscription.Number), sortable: true, UIGridUnit.Absolute(140), filterable: band, aggregate: Count(totals), pinned: wide, content: true)
             // A template column: two lines of text bound to the row, sorted by the customer's name, edited in a search the author bound —
             // any input is an editor, and a search over the known customers is what a cell like this wants.
             .AddEditableColumn("grid-demo.column.customer", new DefaultTextTemplate()

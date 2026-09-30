@@ -4,6 +4,20 @@ One section per release of this slice, headed `## X.Y.Z` and named by the tag �
 workflow cuts the matching section out to become the body of the GitHub release, and a tag with no section
 fails the release before anything is published.
 
+## 1.4.0-rc.2
+
+- **A column's caption is judged once, at the column, and can be content.** The Development unkeyed report named a caption from
+  the column chooser and from a filter, but never from the header, so a grid with neither reported nothing; it now judges the
+  caption at the grid's columns and names the grid and the column's key, and the chooser's entry and the filter's caption, which
+  draw the same text again, are not reported a second time. Every `Add…Column` helper takes `content:` (`UITableColumn.IsContent`),
+  and `AsContent(DataGridComponent.ColumnsProperty)` says it of every column, before or after the chooser and the filters are
+  built: a content caption is shown as written in the header, the sort name a screen reader hears, the chooser's entry and the
+  filter's caption, and is never reported. `UIDataGridCsv` writes a column's `IsContent` caption untranslated; it is handed the
+  columns, not the grid, so a grid-wide `AsContent` does not reach a CSV's header row. **Breaking:** the helpers and the
+  table's virtual `AddColumn`/`AddTextColumn` take the new optional parameter, so a grid overriding them follows.
+- **Built on the framework's 1.4.0-rc.2.** Its copy of the plugin contract carries the framework's new `Moment` type:
+  `strings.format` takes a moment among its values and writes it in the reader's time zone.
+
 ## 1.4.0-rc.1
 
 - **A filter's caption follows a language switch.** The Filters flyout's captions (Subscription, Country, Plan…) stayed in the

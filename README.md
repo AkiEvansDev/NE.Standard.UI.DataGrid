@@ -80,6 +80,13 @@ short one (`AP`, `SPD`) still says what the icon shows:
 .SetColumnIcon(nameof(Card.Ap), GameIcons.Ap, UIThemeColor.FromStyle(UIColorStyle.Danger))
 ```
 
+A caption is a word, looked up like any other and judged by the Development unkeyed report once, at its column — the chooser's
+entry and the filter's caption repeat it and are not reported again. A caption that is a name in every language (`AP`, `SPD`) is
+content: `content: true` on its helper (`UITableColumn.IsContent`), or `AsContent(DataGridComponent.ColumnsProperty)` on the grid
+for all of them. It is then shown as written in the header, the sort name, the chooser and its filter, and never reported; the
+cells' templates are still inspected, as `AsContentTree()` would not leave them. A CSV's header row keeps a column's own
+`IsContent` caption as written; the writer is handed the columns, not the grid, so the grid-wide mark does not reach it.
+
 ### Template columns
 
 A column is any component bound to the row, exactly as in the table: two lines of text, a badge, a bar, a button.
@@ -195,7 +202,7 @@ written behind a quote, so a spreadsheet opens it as the words it is rather than
 flag and a number column's numeric text are never touched, and `EscapeFormulas = false` turns it off. `new UIDataGridCsvOptions
 { Format = DataGridCellFormatter.AsCsvFormat(culture, translate), Translate = … }` writes what the cells show instead, through
 the same formatter they use — the writer is the component package's, so a controller can call it, and the formatter is the web
-package's. `Translate` turns the captions into the page's words and the formatter's own translator the choices; without one, a
+package's. `Translate` turns the captions into the page's words (a content column's stays as written) and the formatter's own translator the choices; without one, a
 boolean that would write one of the grid's keys writes `true` or `false`. `Separator` is a comma unless set — a semicolon suits
 a culture that writes its decimals with a comma. `WriteBytes` puts a byte-order mark
 in front, which is what a spreadsheet needs to read the file as UTF-8.
