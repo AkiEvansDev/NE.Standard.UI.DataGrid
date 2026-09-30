@@ -147,13 +147,14 @@ internal static class SubscriptionGrid
     {
         UIDataGridColumn? shown = ExportColumns.OfType<UIDataGridColumn>().FirstOrDefault(candidate => candidate.Key == column);
         CultureInfo culture = CultureOf(language);
-        object? value = column switch
+        var value = column switch
         {
             nameof(Subscription.Plan) => CaptionOf(SubscriptionChoices.Plans, subscription.Plan.ToString()),
             nameof(Subscription.Status) => CaptionOf(SubscriptionChoices.Statuses, subscription.Status.ToString()),
             // The grid's own words for a flag, as its cell writes them.
             nameof(Subscription.Paid) => new UIPhrase(subscription.Paid ? "ui.grid.yes" : "ui.grid.no"),
-            nameof(Subscription.Seats) => subscription.Seats.ToString(shown?.Format, culture),
+            // Object, or the texts below would be taken for phrases: a plain string argument is a literal.
+            nameof(Subscription.Seats) => (object)subscription.Seats.ToString(shown?.Format, culture),
             nameof(Subscription.Started) => subscription.Started.ToString(shown?.Format, culture),
             _ => Convert.ToString(subscription.ValueOf(column), culture)
         };

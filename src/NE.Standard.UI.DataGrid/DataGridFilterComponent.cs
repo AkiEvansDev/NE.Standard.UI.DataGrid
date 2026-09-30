@@ -1,6 +1,7 @@
 using NE.Standard.UI.Authoring.Components;
 using NE.Standard.UI.Components.Foundation;
 using NE.Standard.UI.Primitives.Annotations;
+using NE.Standard.UI.Primitives.Localization;
 
 namespace NE.Standard.UI.DataGrid;
 
@@ -28,7 +29,7 @@ public abstract partial class DataGridFilterComponent<T>(string? id = null) : Co
     /// </summary>
     [Translatable]
     [UIComponentProperty(DefaultValue = null, IsBindable = false)]
-    public string? Caption { get; set; }
+    public UIPhrase? Caption { get; set; }
 }
 
 /// <summary>

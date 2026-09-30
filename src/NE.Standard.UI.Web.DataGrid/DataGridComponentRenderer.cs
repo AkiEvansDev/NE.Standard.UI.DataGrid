@@ -261,9 +261,9 @@ public class DataGridComponentRenderer : TableComponentRenderer
         {
             // The author's text, looked up as the caption beside it is — or, content, set in as it stands; a column with none is
             // named by what it sorts, in words.
-            object caption = string.IsNullOrEmpty(column.Caption)
+            var caption = string.IsNullOrEmpty(column.Caption)
                 ? UIPhrase.Text(UINaming.Humanize(sortPath[(sortPath.LastIndexOf('.') + 1)..]))
-                : IsContentCaption(context, column) ? column.Caption : UIPhrase.Text(column.Caption);
+                : IsContentCaption(context, column) ? (object)column.Caption : UIPhrase.Text(column.Caption);
 
             _ = cell.Attribute(SortAttribute, sortPath);
             _ = cell.Attribute("tabindex", "0");

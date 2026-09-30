@@ -4,6 +4,18 @@ One section per release of this slice, headed `## X.Y.Z` and named by the tag â€
 workflow cuts the matching section out to become the body of the GitHub release, and a tag with no section
 fails the release before anything is published.
 
+## 1.4.0-rc.3
+
+- **A filter's caption takes a phrase**, as every text of the framework's now does. **Breaking:** `DataGridFilterComponent.Caption`
+  is a `UIPhrase?`; a string still assigns, and code reading it as a string reads `.Key` or `.ToString()`.
+- **`UIDataGridCsv` writes a cell read off a phrase as its key, unless `Format` writes it.** An author's text is the plain text it
+  stands for and is written as written; a translated phrase has no one text on the server, so a CSV that wants the reader's
+  words hands them through `UIDataGridCsvOptions.Format`.
+- **Built on the framework's 1.4.0-rc.3.** Its copy of the plugin
+  stylesheet carries the framework's field actions: `.ui-field-actions()` compacts a split button and a flyout's button as
+  it does a plain one (`.ui-field-action-button()`), and the eight file-kind glyphs' variables (`@ui-glyph-draft`,
+  `@ui-glyph-picture-as-pdf`, â€¦).
+
 ## 1.4.0-rc.2
 
 - **A column's caption is judged once, at the column, and can be content.** The Development unkeyed report named a caption from
