@@ -36,6 +36,9 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
     /// <summary>On a number or money cell: the value as an invariant number — a numeric text's too — for a footer's total to add up on the client.</summary>
     public const string RawValueAttribute = "data-ui-grid-raw";
 
+    /// <summary>On a date cell: the moment as the wire writes it, so a language switch writes the date again in the page's new names.</summary>
+    public const string MomentAttribute = "data-ui-grid-moment";
+
     private static readonly JsonSerializerOptions ChoicesJsonOptions = WebWireJson.CreateOptions();
 
     public override string ComponentTypeKey => DataGridCellComponent.ComponentTypeKey;
@@ -74,6 +77,9 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
 
             if (kind is UIDataGridColumnKind.Number or UIDataGridColumnKind.Money && DataGridCellFormatter.RawNumber(value) is { } raw)
                 _ = target.Attribute(RawValueAttribute, raw);
+
+            if (kind == UIDataGridColumnKind.Date && DataGridCellFormatter.WrittenMoment(value) is { } moment)
+                _ = target.Attribute(MomentAttribute, moment);
 
             if (DataGridCellFormatter.ChoiceValue(value, kind, culture) is { } choice)
                 _ = target.Attribute(ChoiceAttribute, choice);

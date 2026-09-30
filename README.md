@@ -10,8 +10,9 @@ a source, its selection, its resizable columns and its chrome are the table's ow
 table's renderer. What the grid adds:
 
 - **Sorting by header**, **typed, formatted columns**, **editing in place**, **filters and a search box**, **paging**,
-  **a footer of totals**, **wide grids with pinned columns**, **a column chooser and responsive columns**, **a detail row**,
-  **CSV export**.
+  **a footer of totals**, **wide grids with pinned columns**, **a column chooser, columns that start hidden and responsive
+  columns**, **an icon on a caption**, **a detail row**, **CSV export**; and from the table, **rows the viewer drags into
+  another order**.
 
 What it deliberately does not do: no spreadsheet — no cell selection rectangles, no fill-down, no formulas; no batching of edits, since every commit is
 one event and a form over a grid is the application's own.
@@ -63,7 +64,21 @@ for a window over a `UIItemSourceBase<T>`, `Virtualized()`, `FilterBy`/`SortBy` 
 
 A typed cell is formatted **in the page's culture** — the session's language — on the server when the row is
 painted there, and on the client when a row is built or a value patched there, through the same formatters, so
-the two read the same. The row keeps its typed property; nobody formats by hand.
+the two read the same. A language switch draws every such cell, a footer's total and the pager's figures again in the new
+language's culture at once. The row keeps its typed property; nobody formats by hand.
+
+The grid's own words — the pager, the band, the chooser, yes and no — ship in Russian and Simplified Chinese as well as English
+(`DataGridStrings.Translations`), turned on with `application.AddFrameworkWords("ru", "zh-Hans")` and outranked by any word of the
+application's own.
+
+Every helper takes `icon:` — a glyph or a picture drawn before the caption, beside the sort mark and on the column's entry in
+the chooser; `SetColumnIcon(key, icon, color)` gives it a colour. The caption stays the column's name for a screen reader, so a
+short one (`AP`, `SPD`) still says what the icon shows:
+
+```csharp
+.AddNumberColumn("AP", nameof(Card.Ap), "N0", icon: GameIcons.Ap)
+.SetColumnIcon(nameof(Card.Ap), GameIcons.Ap, UIThemeColor.FromStyle(UIColorStyle.Danger))
+```
 
 ### Template columns
 
@@ -78,6 +93,9 @@ Name the property it sorts by and the caption sorts:
 )
 .AddColumn("Fulfilment", new ProgressComponent().BindValue(nameof(Order.Fulfilment), UIBindingScope.Relative), sortPath: nameof(Order.Fulfilment))
 ```
+
+A cell may hold a list of its own — an items view bound relative to a collection on the row, its chips drawn per row — as a row
+of an items view does; a change to one row's collection reaches that row's cell.
 
 ### Sorting by header
 
@@ -213,19 +231,42 @@ and says whether its detail is out.
 
 `SetColumnChooser()` puts a button in the band that opens a menu of the columns, each a check entry — the last column still
 showing cannot be unchecked; the viewer's choices are kept in the browser under the grid's id, beside the widths a resizable grid keeps, and painted before the first frame
-with them. A column may also give way on its own below a viewport tier:
+with them. A column may start hidden at every width — `hidden: true` on its helper, or `HideColumn(key)` — and the chooser lists
+it unchecked for the viewer to bring back; or it may give way on its own below a viewport tier:
 
 ```csharp
 new DataGridComponent("orders")
     .SetColumnChooser()
+    .AddNumberColumn("Discount", nameof(Order.Discount), "P0", hidden: true)
     .HideColumnBelow(nameof(Order.Country), UIResponsiveTier.Xl)
     .HideColumnBelow(nameof(Order.Paid), UIResponsiveTier.Md)
 ```
 
 A hidden column keeps its place: its track goes to zero and comes back with its width, so resizing and pinning read as
 before, and the width it gave up goes to the columns that are left rather than off the grid's edge. The viewer's word wins
-over the tier; a word that only repeats the tier is not kept. `selection` is the key of the grid's own column of checkboxes and
-is refused for an author's column.
+over the author's — a column hidden from the start or below a tier; a word that only repeats the author's is not kept.
+`selection` is the key of the grid's own column of checkboxes and is refused for an author's column.
+
+### Rows the viewer moves
+
+The grid's rows move as a table's do. With `SetDraggable(true)` a row whose item does not refuse it (`CanDrag = false`) is dragged
+between two others — a line marks where it would land — or moved one place by Alt+Up and Alt+Down, and the command named by
+`OnRowMoveWithItemKey` gets the row's key and the index it now takes, which is where `RecursiveCollection.Move` puts it. Nothing
+moves on the client: the controller moves the item, and the collection's move reaches the page.
+
+```csharp
+new DataGridComponent("steps")
+    .BindItems(nameof(StepsController.Steps))
+    .SetDraggable(true)
+    .OnRowMoveWithItemKey(nameof(StepsController.MoveStep))
+
+[UICommand]
+public void MoveStep(string id, int index)
+    => Steps.Move(Steps.IndexOf(Steps.First(step => step.Id == id)), index);
+```
+
+A windowed grid hands over the row's place in the source's whole query — the window's offset added — for the source to move.
+While a sort orders the rows no row moves, since the sort would put it back. An open detail is not the row to lift.
 
 ### Columns the viewer moves
 

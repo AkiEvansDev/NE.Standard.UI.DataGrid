@@ -36,6 +36,9 @@ export class DataGridTotalsEngine {
         // Rows come and go, a filter hides one (its class), an edit changes a cell's value (its raw attribute), a window brings its
         // answer (the host's attribute).
         context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, context.names.windowAggregates] }, grids => this.queue(grids));
+
+        // A language switch wrote the grid's packs again: a total is a number or a date in them too.
+        context.strings.onChange(() => this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector)));
     }
 
     private syncAll(grids: Iterable<HTMLElement>): void {

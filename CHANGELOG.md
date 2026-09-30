@@ -4,6 +4,43 @@ One section per release of this slice, headed `## X.Y.Z` and named by the tag �
 workflow cuts the matching section out to become the body of the GitHub release, and a tag with no section
 fails the release before anything is published.
 
+## 1.4.0-rc.1
+
+- **A filter's caption follows a language switch.** The Filters flyout's captions (Subscription, Country, Plan…) stayed in the
+  language the page was drawn in while the column chooser's entries switched: a filter marked its caption with the words it had
+  already been translated to, not the author's key, so a switch had nothing to look up. It is marked with the key now, as the
+  column's header is.
+- **A number filter reads every field as the number it holds.** A change in one field read every other number field's shown
+  text as though it were invariant, so under a culture that writes its decimals with a comma a "from" showing `10,50` filtered
+  from 1050, and `1.000` from 1. The framework's `values.read` now answers a number field's invariant text, what its binding
+  sends, so the grid reads each field through it and keeps no culture parse of its own; an editor's unsaved number is kept and
+  written back in that form too. A text the field could not read as a number, handed back as it was typed, makes no term: the
+  grid dropped its commas, and read a German `1,5` as 15.
+- **A column carries an icon, and may start hidden.** `UITableColumn.Icon` and `IconColor` draw a mark before the caption — in the
+  header, beside the sort mark, and on the column's entry in the chooser; the column's name for a screen reader stays its caption.
+  `UITableColumn.Hidden`, `HideColumn(key)` or `hidden: true` starts a column hidden at every width: the chooser lists it unchecked,
+  and a viewer's own choice kept in the browser wins over it, as it already wins over `HideColumnBelow`. Every `Add…Column` helper
+  takes `icon:` and `hidden:`; `SetColumnIcon(key, icon, color)` gives the colour. **Breaking:** the helpers and the table's virtual
+  `AddColumn`/`AddTextColumn` take the two new optional parameters, so a grid overriding them follows.
+- **Rows move by a drag, as a table's do.** The grid inherits the table's `Draggable` and `OnRowMove`/`OnRowMoveWithItemKey`: a row
+  whose item does not refuse it is dropped between two others, or moved a place by Alt+Up and Alt+Down, and the command gets the
+  row's key and the index it takes; in a windowed grid, its place in the source's whole query. An open detail is not the row to
+  lift — a press in it drags nothing.
+- **A list in a template column shows its row's items.** An items view in a cell, bound to a collection on the row, drew its empty
+  state in every row: the runtime sent a table's column slots no nested collection, taking them for template variants a row
+  wears only by name. A table's columns are now slots every row wears.
+- **A date cell in a year under a hundred reads the same on both sides.** The browser's reader took the years 1 to 99 for 1901 to
+  1999 and left the cell as its raw text where the server had formatted it; the framework's reader is fixed, and
+  `DataGridCellFormatter` reads a text moment through the framework's `UIWrittenMoment` rather than a copy of its own.
+- **The grid's words ship in Russian and Simplified Chinese.** `DataGridStrings.Translations` carries `ru` and `zh-Hans`, and an
+  application turns them on with the framework's `application.AddFrameworkWords("ru", "zh-Hans")`: a registered grid brings its
+  table along, ranked below the application's own words, so any of them can still be overridden by its key. The Russian is new;
+  the Chinese is the demo's. The demo keeps only its own `grid-demo.*` words.
+- **A number, a date and a total follow a language switch at once.** A number or a date cell, a footer's total and the pager's
+  figures kept the culture the page was rendered in until the next render, where a temporal field and a timestamp are drawn
+  again at once. The framework now writes the grid's culture packs again at a switch (`data-ui-page-culture`), and the grid
+  draws every cell that keeps its value again from it — a date cell keeps its moment in `data-ui-grid-moment` for that.
+
 ## 1.3.0
 
 - **Needs the framework's plugin contract 2.** The engines read every framework attribute and class name from the plugin

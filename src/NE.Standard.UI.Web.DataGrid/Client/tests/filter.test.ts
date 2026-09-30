@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createTerm, fieldValueOf, mergeFilterTerms, parseNumber } from "../src/data-grid-filter-engine.ts";
+import type { PluginEngineContext } from "ne-standard-ui";
+import { createTerm, DataGridFilterEngine, fieldValueOf, mergeFilterTerms, parseNumber } from "../src/data-grid-filter-engine.ts";
 import type { FilterField } from "../src/data-grid-filter-engine.ts";
+import { GridAttributes, GridClasses } from "../src/data-grid-names.ts";
+import type { FilterTerm } from "../src/data-grid-query.ts";
+import { FakeElement, FakeEvent, FakeInput, fakeDocument, fakeWindow, installFakeDom, real } from "./fake-dom.ts";
+
+installFakeDom();
 
 const customer: FilterField = { property: "Customer", kind: "text", bound: null };
 const region: FilterField = { property: "Region", kind: "enum", bound: null };
@@ -10,10 +16,15 @@ const monthlyFrom: FilterField = { property: "Monthly", kind: "money", bound: "f
 const monthlyTo: FilterField = { property: "Monthly", kind: "money", bound: "to" };
 
 test("a number reads as the framework's field holds it, and a text that is no number makes no term", () => {
-    assert.equal(parseNumber("1,234.5"), 1234.5);
     assert.equal(parseNumber("1234.5"), 1234.5);
-    assert.equal(parseNumber("12"), 12);
+    assert.equal(parseNumber(" 12 "), 12);
+    assert.equal(parseNumber("-0.25"), -0.25);
     assert.equal(parseNumber("abc"), null);
+    assert.equal(parseNumber(""), null);
+    // A text the field could not read is no number: German "1,5" is not 15, nor a grouped "1,234.5" 1234.5.
+    assert.equal(parseNumber("1,5"), null);
+    assert.equal(parseNumber("1,234.5"), null);
+    assert.equal(createTerm("Total", "money", "from", "1,5"), null);
     assert.equal(createTerm("Total", "money", "to", "x"), null);
 });
 
@@ -99,4 +110,88 @@ test("a range end the controller wrote as a moment at midnight shows as its day"
     assert.equal(fieldValueOf([{ itemProperty: "Ordered", operator: "GreaterOrEqual", value: "2025-01-01T00:00:00" }], "Ordered", "date", "from"), "2025-01-01");
     assert.equal(fieldValueOf([{ itemProperty: "Ordered", operator: "Less", value: "2025-03-01T00:00:00" }], "Ordered", "date", "to"), "2025-02-28");
     assert.equal(fieldValueOf([{ itemProperty: "Monthly", operator: "GreaterOrEqual", value: "100" }], "Monthly", "money", "from"), 100);
+});
+
+/** A number field showing a German text and holding the invariant value the framework's `values.read` answers for it. */
+type NumberField = FakeInput & { invariant: string };
+
+function numberField(shown: string, invariant: string): NumberField {
+    return Object.assign(new FakeInput(), { value: shown, invariant });
+}
+
+/** A grid with a money filter from and to, its fields showing their values in German, and the terms a change there wrote. */
+function createFilteredGrid(from: NumberField, to: NumberField, query: readonly FilterTerm[] = []): { terms: () => readonly FilterTerm[]; sets: unknown[] } {
+    const root = new FakeElement();
+    const grid = FakeElement.of(GridClasses.root);
+    const queryElement = FakeElement.of("", { "data-ui-value-kind": "items-query" });
+    const filter = FakeElement.of("", { [GridAttributes.filter]: "Total", [GridAttributes.filterKind]: "money" });
+    const sets: unknown[] = [];
+
+    from.attributes.set("data-ui-id", "3");
+    to.attributes.set("data-ui-id", "4");
+
+    if (query.length > 0)
+        queryElement.attributes.set("data-ui-items-query", JSON.stringify({ filters: query, sorts: [] }));
+
+    fakeDocument.body.replaceChildren(root);
+    fakeDocument.activeElement = fakeDocument.body;
+    root.append(grid.append(
+        queryElement,
+        filter.append(
+            FakeElement.of(GridClasses.filterPart, { [GridAttributes.filterBound]: "from" }).append(from),
+            FakeElement.of(GridClasses.filterPart, { [GridAttributes.filterBound]: "to" }).append(to)
+        )
+    ));
+
+    const context = {
+        root,
+        values: { read: (element: FakeElement) => (element.querySelector("input") as NumberField | null)?.invariant ?? null },
+        properties: {
+            set: (_element: FakeElement, _name: string, value: unknown) => {
+                sets.push(value);
+
+                return true;
+            }
+        },
+        badges: { writeCount: () => undefined },
+        states: { isInert: () => false, setDisabled: () => undefined },
+        names: { componentId: "data-ui-id", itemsQuery: "data-ui-items-query", valueKind: "data-ui-value-kind", itemsQueryKind: "items-query" },
+        observeComponents: () => null
+    };
+
+    new DataGridFilterEngine(real<PluginEngineContext>(context));
+
+    const terms = (): readonly FilterTerm[] => (JSON.parse(queryElement.getAttribute("data-ui-items-query") ?? "{}") as { filters?: FilterTerm[] }).filters ?? [];
+
+    return { terms, sets };
+}
+
+test("a change in one end reads the other end's value as the framework holds it, not the text it shows in its culture", () => {
+    // "10,50" is the from field at rest in German: ten and a half, which a reading of the shown text took for a thousand and fifty.
+    const from = numberField("10,50", "10.5");
+    const to = numberField("", "");
+    const grid = createFilteredGrid(from, to);
+
+    to.invariant = "1234.5";
+    fakeWindow.dispatch(to, new FakeEvent("change"));
+
+    assert.deepEqual(grid.terms(), [
+        { itemProperty: "Total", operator: "GreaterOrEqual", value: 10.5 },
+        { itemProperty: "Total", operator: "LessOrEqual", value: 1234.5 }
+    ]);
+
+    to.value = "1.234,5";
+    from.invariant = "1000";
+    fakeWindow.dispatch(from, new FakeEvent("change"));
+
+    assert.deepEqual(grid.terms(), [
+        { itemProperty: "Total", operator: "GreaterOrEqual", value: 1000 },
+        { itemProperty: "Total", operator: "LessOrEqual", value: 1234.5 }
+    ]);
+});
+
+test("a pushed query a field already shows in its culture is not written into it again", () => {
+    const grid = createFilteredGrid(numberField("1.000,50", "1000.50"), numberField("", ""), [{ itemProperty: "Total", operator: "GreaterOrEqual", value: 1000.5 }]);
+
+    assert.deepEqual(grid.sets, []);
 });

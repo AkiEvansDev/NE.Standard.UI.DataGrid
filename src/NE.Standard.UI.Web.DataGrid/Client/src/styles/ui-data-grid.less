@@ -110,6 +110,12 @@
         justify-self: start;
     }
 
+    // A column's icon stays against its caption, in the track the mark's balance leaves on the other side.
+    .ui-table__header-cell--center[data-ui-grid-sort] > .ui-table__caption-icon {
+        grid-area: 1 / 1;
+        justify-self: end;
+    }
+
 // The band and the pager stand outside the table's framed, scrolling box; the totals footer stays inside and scrolls with the tracks.
 .ui-data-grid__band {
     display: flex;

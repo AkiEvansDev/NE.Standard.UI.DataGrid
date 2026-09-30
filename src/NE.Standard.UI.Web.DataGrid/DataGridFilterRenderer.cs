@@ -44,7 +44,8 @@ public sealed class DataGridFilterRenderer : WebComponentRendererBase
             _ = root.Element("span", span =>
             {
                 _ = span.Class(CaptionClassName);
-                WebWords.WriteText(context, span, null, caption);
+                // Marked with the author's key, not the words the render already translated it to, so a language switch finds it.
+                _ = WriteRenderWord(context, span, null, DataGridFilterComponent.CaptionProperty);
             });
         }
 

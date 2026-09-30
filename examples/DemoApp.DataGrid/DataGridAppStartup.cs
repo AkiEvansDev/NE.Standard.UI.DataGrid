@@ -10,6 +10,9 @@ public sealed class DataGridAppStartup : UIStartupBase
 
         _ = application.AddLocalizationSource(DataGridDemoWords.Build());
 
+        // The framework's and its packages' own words in the demo's other languages, as they ship.
+        _ = application.AddFrameworkWords("zh-Hans");
+
         // Only a string starting "grid-demo." is a key: the page's prose and its data are content, so the missing-word report in
         // Development names only words the demo has not translated.
         _ = application.ConfigureLocalization(options => options.KeyPrefixes.Add(DataGridDemoWords.KeyPrefix));

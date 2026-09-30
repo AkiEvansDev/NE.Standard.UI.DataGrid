@@ -22,6 +22,7 @@ const names = {
     componentId: "data-ui-id",
     itemsHost: "data-ui-items-host",
     noRowOpen: "data-ui-no-row-open",
+    noRowDrag: "data-ui-no-row-drag",
     tableRowClass: "ui-table__row",
     tableScrollClass: "ui-table__scroll"
 };
@@ -89,6 +90,14 @@ test("a double click puts the details back as they stood before its first click,
     assert.notEqual(shown, null);
     assert.equal(detailOf(first), shown);
     assert.equal(detailOf(second), null);
+});
+
+test("an open detail is marked as no part of the row to lift, so a press in it never drags the row", () => {
+    const { first } = createGrid();
+
+    click(first, 1);
+
+    assert.equal(detailOf(first)?.hasAttribute(names.noRowDrag), true);
 });
 
 test("a double click on an open row keeps the detail it had, not one drawn again", () => {

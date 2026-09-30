@@ -92,7 +92,9 @@ public abstract class DataGridDemoView : UIViewBase
         if (description is not null)
             _ = heading.AddChild(UIText.Note(description));
 
+        // A section's title, note and sample are the author's prose and data, shown as written: content for the unkeyed report.
         return UILayout.Stack(16)
+            .AsContentTree()
             .AddChild(new ContainerComponent()
                 .SetRow(1, UIGridUnit.Auto())
                 .SetColumn(24, UIGridUnit.Auto())

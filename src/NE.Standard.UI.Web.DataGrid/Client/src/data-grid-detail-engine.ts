@@ -131,6 +131,8 @@ export class DataGridDetailEngine {
         const detail = document.createElement("div");
 
         detail.className = DetailClass;
+        // Inside the row, yet not the row to lift: a press there never drags it where the grid's rows are Draggable.
+        detail.setAttribute(this.names.noRowDrag, "");
         detail.appendChild(content);
         row.appendChild(detail);
         row.setAttribute(ExpandedAttribute, "");

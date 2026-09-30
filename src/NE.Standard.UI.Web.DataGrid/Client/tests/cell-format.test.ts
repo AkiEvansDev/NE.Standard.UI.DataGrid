@@ -8,8 +8,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { NumberCulturePack, NumberFormatting, TemporalCulturePack, TemporalFormatting } from "ne-standard-ui";
-import { formatCellValue } from "../src/data-grid-cell.ts";
+import { applyCellValue, formatCellValue, rewriteKeptCells } from "../src/data-grid-cell.ts";
 import type { CellFormatting } from "../src/data-grid-cell.ts";
+import { FakeElement, real } from "./fake-dom.ts";
 
 type CellCase = {
     readonly name: string;
@@ -63,4 +64,28 @@ test("a flag's or a choice's caption comes as the author wrote it and shows in t
     assert.equal(formatCellValue("Paid", choice, corpus.numberCulture, corpus.temporalCulture, translated), "已付");
     assert.equal(formatCellValue("Open", choice, corpus.numberCulture, corpus.temporalCulture, translated), "Open");
     assert.equal(formatCellValue("Closed", choice, corpus.numberCulture, corpus.temporalCulture, translated), "Closed");
+});
+
+test("a language switch draws a number and a date cell again in the packs written on the grid, from the value each keeps", () => {
+    const english = { ...corpus.numberCulture, decimalSeparator: ".", groupSeparator: "," };
+    const german = { ...corpus.numberCulture, decimalSeparator: ",", groupSeparator: "." };
+    const russian = { ...corpus.temporalCulture, monthNames: corpus.temporalCulture.monthNames.map((_, index) => index === 8 ? "сентябрь" : "") };
+    const amount = FakeElement.of("", { "data-ui-grid-kind": "number", "data-ui-grid-format": "N1" });
+    const due = FakeElement.of("", { "data-ui-grid-kind": "date", "data-ui-grid-format": "MMMM yyyy" });
+    const grid = FakeElement.of("ui-data-grid", { "data-ui-number-culture": JSON.stringify(english), "data-ui-temporal-culture": JSON.stringify(corpus.temporalCulture) }).append(amount, due);
+
+    applyCellValue(real(amount), 1234.5, formatting);
+    applyCellValue(real(due), "2026-09-30T00:00:00", formatting);
+
+    assert.equal(amount.textContent, "1,234.5");
+    assert.equal(due.textContent, "September 2026");
+    assert.equal(due.getAttribute("data-ui-grid-moment"), "2026-09-30T00:00:00");
+
+    // What the framework does at a switch: the grid's packs in the new language, then the grid's own redraw.
+    grid.setAttribute("data-ui-number-culture", JSON.stringify(german));
+    grid.setAttribute("data-ui-temporal-culture", JSON.stringify(russian));
+    rewriteKeptCells(real(grid), formatting);
+
+    assert.equal(amount.textContent, "1.234,5");
+    assert.equal(due.textContent, "сентябрь 2026");
 });

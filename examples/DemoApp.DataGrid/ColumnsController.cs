@@ -82,7 +82,8 @@ internal sealed partial class ColumnsController : UIControllerBase
     {
         Subscription? subscription = Subscriptions.FirstOrDefault(candidate => candidate.Id == id);
 
-        // The value is on the row already; what the status derives — the badge — is read again here, after the write.
+        // The value is on the row already; what the status derives — the badge — is read again here, after the write, and a
+        // seat count outside the canon's range is put back.
         subscription?.Refresh();
 
         EditStatus = subscription is null

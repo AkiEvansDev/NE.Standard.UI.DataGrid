@@ -8,7 +8,7 @@ namespace NE.Standard.UI.Web.DataGrid;
 /// <summary>
 /// The words the grid's chrome writes, translated by an application as the framework's <see cref="UIStrings"/> are.
 /// </summary>
-public sealed class DataGridStrings : IUIStringsSource
+public sealed partial class DataGridStrings : IUIStringsSource
 {
     /// <summary>A boolean cell's word for true, where the column names none.</summary>
     public const string Yes = "ui.grid.yes";

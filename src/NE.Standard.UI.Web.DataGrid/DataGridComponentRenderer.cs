@@ -100,6 +100,8 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
         NumberCultureRenderer.RenderNumberCulture(root, culture);
         TemporalCultureRenderer.RenderTemporalCulture(root, culture);
+        // So a language switch writes both packs again, and the cells draw again from the values they keep.
+        _ = root.Attribute(WebAttributes.PageCulture);
         RenderFlagAttribute(context, root, DataGridComponent.EditableProperty, ReadOnlyAttribute, WebValueCondition.IsFalse);
 
         // While the checkboxes are there they are the only way to choose: a click on a row is the detail's and the editor's.

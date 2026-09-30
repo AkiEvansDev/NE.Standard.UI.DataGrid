@@ -52,11 +52,19 @@ export function applyCellValue(cell: Element, value: unknown, formatting: CellFo
 
     const number = shape.kind === "number" || shape.kind === "money" ? toNumber(value) : null;
 
-    // On a number or money cell: the value as a number, a numeric text's too, for a footer to add up.
+    // On a number or money cell: the value as a number, a numeric text's too, for a footer to add up and a language switch to redraw.
     if (number !== null)
         cell.setAttribute(GridAttributes.raw, String(number));
     else if (cell.hasAttribute(GridAttributes.raw))
         cell.removeAttribute(GridAttributes.raw);
+
+    const moment = shape.kind === "date" ? writtenMoment(value, formatting.temporal) : null;
+
+    // On a date cell: the moment as the wire wrote it, so a language switch writes the date again in the new names.
+    if (moment !== null)
+        cell.setAttribute(GridAttributes.moment, moment);
+    else if (cell.hasAttribute(GridAttributes.moment))
+        cell.removeAttribute(GridAttributes.moment);
 
     const choice = choiceValue(value, shape.kind);
 
@@ -67,10 +75,16 @@ export function applyCellValue(cell: Element, value: unknown, formatting: CellFo
         cell.removeAttribute(GridAttributes.choice);
 }
 
-/** Writes every flag and choice cell under `root` again in the page's words, from the value each keeps. */
-export function rewriteChoiceCells(root: ParentNode, formatting: CellFormatting): void {
-    for (const cell of root.querySelectorAll(`[${GridAttributes.choice}]`))
-        applyCellValue(cell, cell.getAttribute(GridAttributes.choice), formatting);
+// A cell that keeps its value: a flag's or a choice's by its key, a number's invariant, a date's moment.
+const KeptValueSelector = `[${GridAttributes.choice}], [${GridAttributes.raw}], [${GridAttributes.moment}]`;
+
+/**
+ * Writes every cell under `root` that keeps its value again, from that value: a flag's or a choice's caption in the page's words,
+ * a number and a date in the packs a language switch wrote on the grid.
+ */
+export function rewriteKeptCells(root: ParentNode, formatting: CellFormatting): void {
+    for (const cell of root.querySelectorAll(KeptValueSelector))
+        applyCellValue(cell, cell.getAttribute(GridAttributes.choice) ?? cell.getAttribute(GridAttributes.raw) ?? cell.getAttribute(GridAttributes.moment), formatting);
 }
 
 /** A flag's or a choice's value as its choices are keyed — `true`/`false`, or the value's text; null for any other kind. */
@@ -127,6 +141,11 @@ export function formatCellValue(value: unknown, shape: CellShape, numbers: Numbe
         default:
             return String(value);
     }
+}
+
+/** A date's value as the wire writes it, kept to be drawn again; null for a value that is no written moment. */
+function writtenMoment(value: unknown, temporal: TemporalFormatting): string | null {
+    return typeof value === "string" && temporal.parse(value) !== null ? value : null;
 }
 
 /** A number, or a text the server's cell reads as one; null for anything else or a value no finite number holds. */

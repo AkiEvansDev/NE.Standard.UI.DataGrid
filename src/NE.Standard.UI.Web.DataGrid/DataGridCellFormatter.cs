@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text.RegularExpressions;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.DataGrid;
+using NE.Standard.UI.Primitives.Text;
 using NE.Standard.UI.Web.Abstractions.Theming;
 
 namespace NE.Standard.UI.Web.DataGrid;
@@ -12,7 +12,7 @@ namespace NE.Standard.UI.Web.DataGrid;
 /// A cell's value as text by the column's kind — the server half of <c>data-grid-cell.ts</c>, both held to
 /// <c>datagrid-cell-corpus.json</c>.
 /// </summary>
-public static partial class DataGridCellFormatter
+public static class DataGridCellFormatter
 {
     // Just under decimal.MaxValue: a double at it may round past it and overflow the conversion.
     private const double LargestDecimal = 7.9e28;
@@ -125,46 +125,12 @@ public static partial class DataGridCellFormatter
             // An offset after the clock is ignored, as the client's cell does: converted to the server's zone, a moment near
             // midnight would show another day.
             case string text:
-                return TryReadWritten(text, out moment);
+                return UIWrittenMoment.TryRead(text, out moment);
             default:
                 moment = default;
                 return false;
         }
     }
-
-    /// <summary>The wall clock a text in the wire's shapes names, as <c>temporal.parse</c> reads it; false for any other.</summary>
-    private static bool TryReadWritten(string text, out DateTime moment)
-    {
-        Match written = WrittenMomentRegex().Match(text.Trim());
-
-        moment = default;
-
-        if (!written.Success)
-            return false;
-
-        var year = ReadField(written, 1);
-        var month = ReadField(written, 2);
-        var day = ReadField(written, 3);
-        var hour = ReadField(written, 4);
-        var minute = ReadField(written, 5);
-        var second = ReadField(written, 6);
-
-        if (year < 1 || month is < 1 or > 12 || day < 1 || day > DateTime.DaysInMonth(year, month) || hour > 23 || minute > 59 || second > 59)
-            return false;
-
-        // The fraction's first three digits are the milliseconds; the rest is finer than a moment carries.
-        var fraction = written.Groups[7].Success ? written.Groups[7].Value.PadRight(3, '0')[..3] : "0";
-
-        moment = new DateTime(year, month, day, hour, minute, second, int.Parse(fraction, CultureInfo.InvariantCulture), DateTimeKind.Unspecified);
-        return true;
-    }
-
-    private static int ReadField(Match written, int group)
-        => written.Groups[group].Success ? int.Parse(written.Groups[group].ValueSpan, CultureInfo.InvariantCulture) : 0;
-
-    // temporal-format.ts's WrittenMomentPattern, with ASCII digits as JavaScript's \d reads them.
-    [GeneratedRegex("^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})(?:[T ]([0-9]{1,2}):([0-9]{1,2})(?::([0-9]{1,2})(?:\\.([0-9]+))?)?)?(?:Z|[+-][0-9]{2}(?::?[0-9]{2})?)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex WrittenMomentRegex();
 
     /// <summary>A flag by its caption: a text says true in any case, anything else is false, and the captions are keyed by the two words.</summary>
     private static string FormatBoolean(object value, IReadOnlyList<UIChoice>? choices, CultureInfo culture, Func<string, string> translate)
@@ -213,4 +179,8 @@ public static partial class DataGridCellFormatter
     /// <summary>A number cell's value as the invariant number a footer adds up — a numeric text's too, as the cell shows it; null for any other.</summary>
     internal static string? RawNumber(object? value)
         => value is not null && TryToDecimal(value, out var number) ? number.ToString(CultureInfo.InvariantCulture) : null;
+
+    /// <summary>A date cell's value as the wire writes a moment — the wall clock the cell shows, to the millisecond; null for any other.</summary>
+    internal static string? WrittenMoment(object? value)
+        => value is not null && TryToDateTime(value, out DateTime moment) ? moment.ToString("yyyy-MM-dd'T'HH:mm:ss.fff", CultureInfo.InvariantCulture) : null;
 }

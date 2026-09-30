@@ -23,7 +23,8 @@ export const GridAttributes = {
     currency: "data-ui-grid-currency",
     choices: "data-ui-grid-choices",
     choice: "data-ui-grid-choice",
-    raw: "data-ui-grid-raw"
+    raw: "data-ui-grid-raw",
+    moment: "data-ui-grid-moment"
 } as const;
 
 /** The classes the grid's renderers write and its engines read. */

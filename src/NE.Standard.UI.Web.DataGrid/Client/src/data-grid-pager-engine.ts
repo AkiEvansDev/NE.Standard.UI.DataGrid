@@ -44,6 +44,9 @@ export class DataGridPagerEngine {
             attributeFilter: [PagingAttribute, context.names.windowOffset, context.names.windowTotal, context.names.windowMoreAfter]
         }, grids => this.syncAll(grids));
 
+        // A language switch wrote the grid's number pack again: the line's figures are drawn in it, not only its words.
+        context.strings.onChange(() => this.syncAll(root.querySelectorAll<HTMLElement>(RootSelector)));
+
         root.addEventListener("click", domEvent => {
             const button = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(`[${PageAttribute}]`) : null;
             const host = gridOf(button)?.querySelector<HTMLElement>(this.hostSelector) ?? null;

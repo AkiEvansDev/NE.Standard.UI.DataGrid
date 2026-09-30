@@ -19,7 +19,7 @@ internal static class SubscriptionGrid
     /// The grid: <paramref name="wide"/> gives the columns room enough to run past the page, so the grid scrolls sideways with the
     /// number and the customer pinned at its edge, <paramref name="band"/> draws the search box, the filters and the column chooser
     /// over the header, <paramref name="totals"/> puts a footer of totals under the rows, and <paramref name="prices"/> gives a
-    /// row's detail a table of its own, the plans' price list.
+    /// row's detail a table of its own, the plans' price list. With the band, the start date starts hidden, for the chooser to show.
     /// </summary>
     public static DataGridComponent Create(string? id = null, bool wide = false, bool band = false, bool totals = false, bool prices = false)
     {
@@ -42,11 +42,11 @@ internal static class SubscriptionGrid
                 .BindTitle(nameof(Subscription.Customer), UIBindingScope.Relative)
                 .BindDescription(nameof(Subscription.Country), UIBindingScope.Relative),
                 new SearchComponent()
-                    .SetOptions(SubscriptionCatalogue.Customers.Select(static name => new OptionItem { Id = name, Title = name }).ToList())
+                    .SetOptions(SubscriptionCatalogue.Customers.Select(static name => new OptionItem { Id = name, Title = name, IsContent = true }).ToList())
                     // A cell shows what the row holds, not what was last typed: the editor opens on the customer the row already names.
                     .SetSelectionDisplayMode(UISearchSelectionDisplayMode.ReplaceWithSelectedItem)
                     .BindValue(nameof(Subscription.Customer), UIBindingScope.Relative),
-                sortPath: nameof(Subscription.Customer), width: customer, pinned: wide
+                sortPath: nameof(Subscription.Customer), width: customer, pinned: wide, icon: UIGlyphs.Person
             )
             .AddTextColumn("grid-demo.column.country", nameof(Subscription.Country), sortable: true, country, filterable: band)
             // A typed enum column: the plan by its caption, edited in a select over the same choices, and the price follows it.
@@ -67,10 +67,11 @@ internal static class SubscriptionGrid
                 .SetValueUnit("%"),
                 nameof(Subscription.Usage), usage
             )
-            .AddNumberColumn("grid-demo.column.servers", nameof(Subscription.Seats), "N0", UIGridUnit.Absolute(130), editable: true, filterable: band, aggregate: Sum(totals))
+            .AddNumberColumn("grid-demo.column.servers", nameof(Subscription.Seats), "N0", UIGridUnit.Absolute(130), editable: true, filterable: band, aggregate: Sum(totals), icon: UIGlyphs.Storage)
             // Not editable: what a month costs is the plan's price times the servers, and changes with either.
             .AddMoneyColumn("grid-demo.column.monthly", nameof(Subscription.Monthly), "€", width: UIGridUnit.Absolute(170), filterable: band, aggregate: Sum(totals))
-            .AddDateColumn("grid-demo.column.started", nameof(Subscription.Started), "dd MMM yyyy", started, editable: true, filterable: band)
+            // Hidden where a chooser can show it again: the viewer's own choice, kept in the browser, wins over the author's.
+            .AddDateColumn("grid-demo.column.started", nameof(Subscription.Started), "dd MMM yyyy", started, editable: true, filterable: band, icon: UIGlyphs.Calendar, hidden: band)
             .AddBooleanColumn("grid-demo.column.paid", nameof(Subscription.Paid), width: UIGridUnit.Absolute(120), editable: true, filterable: band)
             .SetDetailTemplate(CreateDetail(prices))
             .SetStriped(true)

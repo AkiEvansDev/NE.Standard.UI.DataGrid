@@ -79,6 +79,16 @@ internal sealed partial class PlanPrice : RecursiveObservable, IBindableItem
 /// </summary>
 internal sealed record SubscriptionRecord(string Id, string Number, string Customer, string Country, SubscriptionPlan Plan, SubscriptionStatus Status, int Seats, DateTime Started, bool Paid, int Usage)
 {
+    /// <summary>The fewest seats a subscription holds, as the canon and the checkout have it.</summary>
+    public const int MinSeats = 1;
+
+    /// <summary>The most seats a subscription holds, as the canon and the checkout have it.</summary>
+    public const int MaxSeats = 40;
+
+    /// <summary>Whether a subscription may hold that many seats: the canon's range, which the source refuses a count outside.</summary>
+    public static bool AllowsSeats(int seats)
+        => seats is >= MinSeats and <= MaxSeats;
+
     /// <summary>What the subscription costs a month: the plan's price per seat, times the seats.</summary>
     public decimal Monthly => Seats * PricePerSeat(Plan);
 
@@ -121,6 +131,9 @@ internal sealed record SubscriptionRecord(string Id, string Number, string Custo
 /// </summary>
 internal sealed partial class Subscription(SubscriptionRecord record) : RecursiveObservable, IBindableItem
 {
+    // The seats the row last took, put back by Refresh when a bound collection took a count outside the canon's range.
+    private int _seats = record.Seats;
+
     [RecursiveMember(false)]
     public string Id { get; } = record.Id;
 
@@ -174,9 +187,17 @@ internal sealed partial class Subscription(SubscriptionRecord record) : Recursiv
     [RecursiveMember]
     public partial bool? CanSelect { get; set; } = CanSelectOf(record.Status);
 
-    /// <summary>What the row derives — the price, the badge's words and colour, the choice — read again after a value was written from the page.</summary>
+    /// <summary>
+    /// What the row derives — the price, the badge's words and colour, the choice — read again after a value was written from the
+    /// page; a seat count outside the canon's range is put back first, as the source refuses it.
+    /// </summary>
     public void Refresh()
     {
+        // A bound collection has taken the write before the page hears of it, so the refusal is the old value written back.
+        if (!SubscriptionRecord.AllowsSeats(Seats))
+            Seats = _seats;
+
+        _seats = Seats;
         Monthly = ToRecord().Monthly;
         StatusCaption = CaptionOf(Status);
         StatusStyle = StyleOf(Status);
@@ -228,7 +249,7 @@ internal sealed partial class Subscription(SubscriptionRecord record) : Recursiv
             case nameof(Status) when RecursiveValueCoercion.TryCoerce(value, out SubscriptionStatus status):
                 Status = status;
                 return true;
-            case nameof(Seats) when RecursiveValueCoercion.TryCoerce(value, out int seats):
+            case nameof(Seats) when RecursiveValueCoercion.TryCoerce(value, out int seats) && SubscriptionRecord.AllowsSeats(seats):
                 Seats = seats;
                 return true;
             case nameof(Started) when RecursiveValueCoercion.TryCoerce(value, out DateTime started):
@@ -284,7 +305,7 @@ internal static class SubscriptionCatalogue
             < 9 => SubscriptionPlan.Pro,
             _ => SubscriptionPlan.Dedicated
         };
-        var seats = plan == SubscriptionPlan.Dedicated ? 1 + (int)(mixed % 4) : 1 + (int)(mixed % 40);
+        var seats = plan == SubscriptionPlan.Dedicated ? 1 + (int)(mixed % 4) : 1 + (int)(mixed % SubscriptionRecord.MaxSeats);
         var usage = status switch
         {
             SubscriptionStatus.Trial => 5 + (int)((mixed >> 13) % 55),

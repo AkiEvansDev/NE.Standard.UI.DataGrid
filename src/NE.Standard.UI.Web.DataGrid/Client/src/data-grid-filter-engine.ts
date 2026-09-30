@@ -124,7 +124,7 @@ export class DataGridFilterEngine {
 
                 const value = fieldValueOf(terms, property, kind, part.getAttribute(FilterBoundAttribute));
 
-                if ((value === null ? null : String(value)) !== this.partValue(part))
+                if ((value === null ? null : String(value)) !== this.partValue(part, kind))
                     this.properties.set(field, "Value", value);
             }
         }
@@ -138,7 +138,7 @@ export class DataGridFilterEngine {
         const terms: FilterTerm[] = [];
 
         for (const part of filter.querySelectorAll<HTMLElement>(`:scope > ${FilterPartSelector}`)) {
-            const text = this.partValue(part);
+            const text = this.partValue(part, kind);
             const term = text === null ? null : createTerm(property, kind, part.getAttribute(FilterBoundAttribute), text);
 
             if (term !== null)
@@ -148,12 +148,24 @@ export class DataGridFilterEngine {
         return terms;
     }
 
-    /** What the part's one field holds, as text, or null for an empty one: the framework finds the value wherever the field keeps it. */
-    private partValue(part: HTMLElement): string | null {
+    /**
+     * What the part's one field holds, as text, or null for an empty one: the framework finds the value wherever the field keeps it, a
+     * number field's as the invariant text its binding sends, which reads back as the number a term compares by.
+     */
+    private partValue(part: HTMLElement, kind: string): string | null {
         const value = this.values.read(part);
         const text = value === null || value === undefined || typeof value === "boolean" ? "" : String(value).trim();
 
-        return text.length === 0 ? null : text;
+        if (text.length === 0)
+            return null;
+
+        if (kind !== "number" && kind !== "money")
+            return text;
+
+        // Its number's own text, for a push of the same number ("1000.50" and 1000.5) to compare equal and write nothing.
+        const number = parseNumber(text);
+
+        return number === null ? null : String(number);
     }
 
     /** The count on the filters button, hidden at none, with Clear filters live beside it — off the query, since a select just written reads its old value. */
@@ -300,10 +312,9 @@ export function createTerm(property: string, kind: string, bound: string | null,
     }
 }
 
-/** A number as the framework's field holds it, whatever the page's culture: a point for the decimal, commas grouping an unfocused one. */
+/** A number in the invariant text a term's value travels in; null for any other text — a culture's "1,5" is no number, not 15. */
 export function parseNumber(text: string): number | null {
-    const plain = text.replace(/[,\s]/g, "");
-    const value = Number(plain);
+    const value = Number(text);
 
-    return plain.length === 0 || !Number.isFinite(value) ? null : value;
+    return text.trim().length === 0 || !Number.isFinite(value) ? null : value;
 }
