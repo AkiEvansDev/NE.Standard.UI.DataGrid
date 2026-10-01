@@ -24,8 +24,10 @@
     transition: box-shadow @ui-motion-fast @ui-motion-ease;
 }
 
-    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} {
-        box-shadow: inset 0 0 0 100vmax var(--ui-wash-hover);
+    @media @ui-can-hover {
+        .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} {
+            box-shadow: inset 0 0 0 100vmax var(--ui-wash-hover);
+        }
     }
 
     .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:active {
@@ -65,8 +67,10 @@
         display: none;
     }
 
-    .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} > .ui-data-grid__sort-idle {
-        opacity: 0.7;
+    @media @ui-can-hover {
+        .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} > .ui-data-grid__sort-idle {
+            opacity: 0.7;
+        }
     }
 
     // The arrow turns rather than flips, so a second press reads as the same column the other way.
@@ -202,7 +206,7 @@
     min-height: @ui-list-row-height;
     padding: 0 @ui-space-2;
     border: none;
-    border-radius: 4px;
+    border-radius: @ui-list-entry-radius;
     background: transparent;
     color: var(--ui-color-primary-ink);
     font: inherit;
@@ -285,9 +289,14 @@
     display: none;
 }
 
-    // The field's text follows the column's edge, as the cell's did.
+    // The field's text follows the column's edge, as the cell's did; the caret's pixel past the text goes into the padding, or the
+    // number would step a pixel aside as the editor opens.
     .ui-data-grid__editor.ui-table__cell--end input.ui-field {
         .ui-field-value-at-end();
+
+        @supports (field-sizing: content) and (width: calc-size(auto, size)) {
+            margin-inline-end: -1px;
+        }
     }
 
     .ui-data-grid__editor.ui-table__cell--center input {
@@ -299,9 +308,11 @@
     }
 
     // The field's text lands where the cell's stood: a ghost field insets its own by half a step and a border.
+    // No field's own cap at the track's width, which would leave the box short by both insets and push an end field's past the edge.
     .ui-data-grid__editor > [data-ui-id] {
         flex: 1 1 auto;
         min-width: 0;
+        max-width: none;
         margin-inline: calc(-1 * (@ui-space-2 + var(--ui-border-width, 1px)));
     }
 
@@ -407,10 +418,12 @@
         outline-offset: -2px;
     }
 
-    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:not(@{ui-keyboard-focus}),
-    .ui-data-grid__filters-clear@{ui-button-live}:hover:not(@{ui-keyboard-focus}) {
-        outline: 1px dashed CanvasText;
-        outline-offset: -2px;
+    @media @ui-can-hover {
+        .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:not(@{ui-keyboard-focus}),
+        .ui-data-grid__filters-clear@{ui-button-live}:hover:not(@{ui-keyboard-focus}) {
+            outline: 1px dashed CanvasText;
+            outline-offset: -2px;
+        }
     }
 
     .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:active:not(@{ui-keyboard-focus}),

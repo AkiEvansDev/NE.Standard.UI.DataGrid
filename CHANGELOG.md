@@ -4,6 +4,17 @@ One section per release of this slice, headed `## X.Y.Z` and named by the tag �
 workflow cuts the matching section out to become the body of the GitHub release, and a tag with no section
 fails the release before anything is published.
 
+## 1.4.0-rc.4
+
+- **The filters' Clear takes a list entry's corner** (`@ui-list-entry-radius`), as the date picker's Clear does, where it was 4 px.
+- **A number cell opens for edit without a twitch.** The value stood a pixel to the left in the editor — the caret's room past an
+  end-aligned field's text — and now ends where the cell's did; every editor's field box spans the cell, where the field's own
+  `max-width: 100%` left it short by both its insets and pushed an end column's past the edge.
+- **Built on the framework's 1.4.0-rc.4.** Its copy of the plugin contract carries the
+  framework's action bar — `names.actionBar` and `names.actionBarKey`, and the `actionBar` flag of `ui-context-menu-opening` raised before a bar shows a
+  menu's entries — and its stylesheet's `.ui-popup-scroll()` caps a list at the dynamic viewport's height (`100dvh`), `@ui-popup-radius`
+  and `@ui-list-entry-radius` round a popup and its entries, and `.ui-dialog-look()` is the framework dialog's panel.
+
 ## 1.4.0-rc.3
 
 - **A filter's caption takes a phrase**, as every text of the framework's now does. **Breaking:** `DataGridFilterComponent.Caption`
