@@ -31,19 +31,6 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     /// <summary>The argument a cell-edit command receives the column's key under.</summary>
     private const string ColumnArgumentName = "column";
 
-    // DataGridStrings keys, spelled here because the words are the web package's and the component cannot reach
-    // them; internal rather than private so DataGridStringsSyncTests can pin them to DataGridStrings.
-    internal const string FilterKey = "ui.grid.filter";
-    internal const string FromKey = "ui.grid.from";
-    internal const string ToKey = "ui.grid.to";
-    internal const string AnyKey = "ui.grid.any";
-    internal const string YesKey = "ui.grid.yes";
-    internal const string NoKey = "ui.grid.no";
-    internal const string SearchKey = "ui.grid.search";
-    internal const string DetailsKey = "ui.grid.details";
-    internal const string SelectRowKey = "ui.grid.select-row";
-    internal const string SelectAllKey = "ui.grid.select-all";
-
     /// <summary>The region the search box stands in, over the rows.</summary>
     public const string SearchRegionName = "search";
 
@@ -70,15 +57,15 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     private string? _cellEditCommand;
 
     // The search box's placeholder, kept apart from the box so it may be named before or after SetSearch draws one.
-    private string _searchPlaceholder = SearchKey;
+    private string _searchPlaceholder = UIDataGridWords.Search;
     private TextInputComponent? _searchField;
 
     /// <summary>Initializes the grid.</summary>
     protected DataGridComponent(string? id = null) : base(id)
     {
         // Alone in their cells with no words of their own, so each is named for a screen reader.
-        _ = SetTemplateVariantCore($"{UITableColumn.TemplatePrefix}:{SelectionColumnKey}", new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(SelectRowKey));
-        _regions[SelectAllRegionName] = new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(SelectAllKey);
+        _ = SetTemplateVariantCore($"{UITableColumn.TemplatePrefix}:{SelectionColumnKey}", new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(UIDataGridWords.SelectRow));
+        _regions[SelectAllRegionName] = new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(UIDataGridWords.SelectAll);
     }
 
     /// <inheritdoc/>
@@ -158,7 +145,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
         if (!string.IsNullOrEmpty(column.Caption))
             return column.Caption;
 
-        return column is UIDataGridColumn { DetailToggle: true } ? DetailsKey : column.Key;
+        return column is UIDataGridColumn { DetailToggle: true } ? UIDataGridWords.Details : column.Key;
     }
 
     /// <summary>Whether a column's caption is shown as written: the column says so, or the grid said it of all its columns.</summary>
@@ -264,7 +251,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
         UIDataGridColumn column = new(DetailTemplateKey, null, width ?? UIGridUnit.Absolute(40), UITextAlignment.Center) { DetailToggle = true, Pinned = pinned };
 
         // The tooltip is what names an icon-only button for a reader who cannot see the chevron.
-        return AddColumn(column, new ButtonComponent().SetIcon(UIGlyphs.ChevronRight).SetType(UIButtonType.Ghost).SetSize(UIButtonSize.Small).SetTooltip(DetailsKey));
+        return AddColumn(column, new ButtonComponent().SetIcon(UIGlyphs.ChevronRight).SetType(UIButtonType.Ghost).SetSize(UIButtonSize.Small).SetTooltip(UIDataGridWords.Details));
     }
 
     /// <summary>
@@ -324,20 +311,20 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
         _ = column.FilterKind switch
         {
             UIDataGridColumnKind.Number or UIDataGridColumnKind.Money => filter
-                .AddChild(new NumberInputComponent().SetPlaceholder(FromKey))
-                .AddChild(new NumberInputComponent().SetPlaceholder(ToKey)),
+                .AddChild(new NumberInputComponent().SetPlaceholder(UIDataGridWords.From))
+                .AddChild(new NumberInputComponent().SetPlaceholder(UIDataGridWords.To)),
             UIDataGridColumnKind.Date => filter.AddChild(new DateInputComponent()).AddChild(new DateInputComponent()),
             UIDataGridColumnKind.Boolean => filter.AddChild(new SelectComponent()
-                .SetOptions(CreateOptions(column.Choices ?? UIChoices.Boolean(YesKey, NoKey)))
-                .SetPlaceholder(AnyKey)
+                .SetOptions(CreateOptions(column.Choices ?? UIChoices.Boolean(UIDataGridWords.Yes, UIDataGridWords.No)))
+                .SetPlaceholder(UIDataGridWords.Any)
                 .SetShowClearButton(true)
             ),
             UIDataGridColumnKind.Enum => filter.AddChild(new SelectComponent()
                 .SetOptions(CreateOptions(column.Choices))
-                .SetPlaceholder(AnyKey)
+                .SetPlaceholder(UIDataGridWords.Any)
                 .SetShowClearButton(true)
             ),
-            _ => filter.AddChild(new TextInputComponent().SetPlaceholder(FilterKey).SetShowClearButton(true).SetDebounceMilliseconds(300))
+            _ => filter.AddChild(new TextInputComponent().SetPlaceholder(UIDataGridWords.Filter).SetShowClearButton(true).SetDebounceMilliseconds(300))
         };
 
         _regions[column.FilterRegionName] = filter;
@@ -448,7 +435,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     {
         IReadOnlyList<UIChoice>? choices = trueCaption is null && falseCaption is null
             ? null
-            : UIChoices.Boolean(trueCaption ?? YesKey, falseCaption ?? NoKey);
+            : UIChoices.Boolean(trueCaption ?? UIDataGridWords.Yes, falseCaption ?? UIDataGridWords.No);
 
         return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Boolean, null, null, choices, sortable, editable, filterable, width, alignment ?? UITextAlignment.Center, key, UIDataGridAggregate.None, pinned, icon, hidden, content);
     }

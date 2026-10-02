@@ -4,6 +4,32 @@ One section per release of this slice, headed `## X.Y.Z` and named by the tag â€
 workflow cuts the matching section out to become the body of the GitHub release, and a tag with no section
 fails the release before anything is published.
 
+## 1.4.0
+
+- **Escape takes a cell's edit back, whatever opened the editor.** Chromium raises a `change` from a field that held the focus
+  with an edit as its editor leaves the page; after a real double click that change sent the very value Escape was taking back
+  (a number cell, after an Enter commit on it). The grid stops that change: the close has already said what the edit becomes.
+- **Tab moves on from a select's or a search's open list** to the next editable cell, committing what the field holds, as from
+  a closed field; it left the grid. Tab inside a popup that is not a list (a date picker's) stays the popup's.
+- **An untouched select cell commits nothing.** Its value was read before the select's engine had filled it from its markup, so
+  Enter or Tab on a select nobody changed sent its value again and raised `OnCellEdit` ("Status is now Trial").
+- **An editor opened past the grid's edge scrolls into the box.** A grid wider than its box scrolls sideways (the framework's
+  table now does by default); the editor Tab or F2 opens off screen is brought in, clear of the pinned columns, where the focus
+  alone scrolled nothing. The demo's comment on column floors says the grids scroll, not clip.
+- **The filters' flyout fits a phone.** Its panel is capped at the window less the popup's margins, padding and edge; a range's
+  two fields side by side ran it flush to the window's right edge.
+- **New:** `UIDataGridWords`, the keys of the words the grid's own controls carry â€” public, as Graph's `UIGraphWords` and
+  CodeInput's `UICodeInputStrings`; `DataGridStrings` takes its keys from it.
+- **A search as a cell's editor is the framework's new search:** the cell's field shows the row's value as a select does, the
+  editor opens with the list and the keyboard in the search field pinned at its top, and a pick puts the keyboard back on the
+  field, where Enter commits, Escape takes the edit back and Tab moves to the next cell, as on a select's cell. The demo's
+  customer column drops `SetSelectionDisplayMode`, which the framework no longer has.
+- **A sortable caption's press shows on a touch screen.** Its pressed wash, and its forced-colours mark, asked for a hovering
+  pointer too; they answer the press alone, still not a press on the column's resize edge.
+- **The cell editor's field is the framework's first focusable** (`focus.first`), so a disabled control or one taken out of the
+  tab order is passed over as the framework's dialogs pass it.
+- **Built on the framework's 1.4.0:** its copy of the plugin contract carries `focus.first(container)` and the new tokens and mixins (`@ui-tinted-fill`, `@ui-part-radius`, the `@ui-z-*` ladder, `.ui-picture-glass()`, `.ui-user-select()`).
+
 ## 1.4.0-rc.4
 
 - **The filters' Clear takes a list entry's corner** (`@ui-list-entry-radius`), as the date picker's Clear does, where it was 4 px.

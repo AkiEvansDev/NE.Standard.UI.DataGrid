@@ -16,15 +16,15 @@ internal static class SubscriptionGrid
     internal static IReadOnlyList<UITableColumn> ExportColumns { get; } = Create().Columns;
 
     /// <summary>
-    /// The grid: <paramref name="wide"/> gives the columns room enough to run past the page, so the grid scrolls sideways with the
-    /// number and the customer pinned at its edge, <paramref name="band"/> draws the search box, the filters and the column chooser
+    /// The grid: <paramref name="wide"/> gives the columns room enough to run past the page, with the number and the customer pinned
+    /// at its start edge as it scrolls sideways, <paramref name="band"/> draws the search box, the filters and the column chooser
     /// over the header, <paramref name="totals"/> puts a footer of totals under the rows, and <paramref name="prices"/> gives a
     /// row's detail a table of its own, the plans' price list. With the band, the start date starts hidden, for the chooser to show.
     /// </summary>
     public static DataGridComponent Create(string? id = null, bool wide = false, bool band = false, bool totals = false, bool prices = false)
     {
-        // A column's width is its floor and its share (TableComponentRenderer), so what makes a grid scroll sideways is the sum of
-        // these running past the page — the wide grid asks for the room, the others fill whatever they are given.
+        // A column's width is its floor and its share (TableComponentRenderer): the floors add up to the width a grid needs, the wide
+        // grid's past the page and the others' past a phone or a half-width column. A box narrower than that sum scrolls sideways.
         UIGridUnit customer = UIGridUnit.Absolute(wide ? 320 : 240);
         UIGridUnit country = UIGridUnit.Absolute(wide ? 240 : 180);
         UIGridUnit plan = UIGridUnit.Absolute(wide ? 200 : 140);
@@ -44,8 +44,6 @@ internal static class SubscriptionGrid
                 .BindDescription(nameof(Subscription.Country), UIBindingScope.Relative),
                 new SearchComponent()
                     .SetOptions(SubscriptionCatalogue.Customers.Select(static name => new OptionItem { Id = name, Title = name, IsContent = true }).ToList())
-                    // A cell shows what the row holds, not what was last typed: the editor opens on the customer the row already names.
-                    .SetSelectionDisplayMode(UISearchSelectionDisplayMode.ReplaceWithSelectedItem)
                     .BindValue(nameof(Subscription.Customer), UIBindingScope.Relative),
                 sortPath: nameof(Subscription.Customer), width: customer, pinned: wide, icon: UIGlyphs.Person
             )

@@ -69,7 +69,8 @@ language's culture at once. The row keeps its typed property; nobody formats by 
 
 The grid's own words — the pager, the band, the chooser, yes and no — ship in Russian and Simplified Chinese as well as English
 (`DataGridStrings.Translations`), turned on with `application.AddFrameworkWords("ru", "zh-Hans")` and outranked by any word of the
-application's own.
+application's own. The keys of the words the grid's own controls carry are `UIDataGridWords`, in the component's package, for
+an application that translates them itself.
 
 Every helper takes `icon:` — a glyph or a picture drawn before the caption, beside the sort mark and on the column's entry in
 the chooser; `SetColumnIcon(key, icon, color)` gives it a colour. The caption stays the column's name for a screen reader, so a
@@ -286,8 +287,9 @@ not sort. What the server writes — a CSV export — is in the order the column
 
 ### Wide grids and pinned columns
 
-A grid wider than its box scrolls sideways as a whole once its horizontal scroll is on — the header moves with the rows,
-the band and the pager keep their place at the start edge, the footer of totals stays over the pager — and a column that
+A grid wider than its box scrolls sideways as a whole, as the framework's table does by default — the header moves with the
+rows, the band and the pager keep their place at the start edge, the footer of totals stays over the pager, and an editor Tab
+or F2 opens past either edge is scrolled into the box, clear of the pinned columns — and a column that
 says `pinned: true` stays in place while the rest slide under it. Pinned columns lead the grid; one after an unpinned
 column is refused.
 
@@ -297,7 +299,6 @@ fills its box, and one whose widths add up past the box is the one that scrolls 
 
 ```csharp
 new DataGridComponent("orders")
-    .SetHorizontalScroll(UIScrollMode.Auto)
     .AddTextColumn("Order", nameof(Order.Number), sortable: true, UIGridUnit.Absolute(120), pinned: true)
     .AddEditableColumn("Customer", template, editor, sortPath: nameof(Order.Customer), width: UIGridUnit.Absolute(240), pinned: true)
     .AddTextColumn("Country", nameof(Order.Country), width: UIGridUnit.Absolute(180))
@@ -341,7 +342,8 @@ column takes the editor the author bound:
 A double click on the cell, or F2 on the keyboard's row, opens the editor in the cell's own track. The editor is drawn at that
 moment and taken away again when it closes, so a grid of a hundred rows carries one editor rather than one per editable cell.
 Enter or a click elsewhere commits, Escape puts the value back, Tab and Shift+Tab move along the row's editable cells — in the
-order the viewer sees the columns, skipping a hidden one, as F2 opens the first of them. A choice from the editor's list — a
+order the viewer sees the columns, skipping a hidden one, as F2 opens the first of them; Tab moves on from a select's or a
+search's open list too, committing what the field holds. A choice from the editor's list — a
 select's or a search's, by Enter or a click — keeps the keyboard in the editor, and the next Enter commits; leaving the window
 for another (Alt+Tab, the address bar) leaves the editor open and sends nothing, the change a browser raises on the way out
 included. An editor whose column hides under it (a narrower window) commits and leaves the keyboard on the grid. The value
@@ -360,9 +362,8 @@ new DataGridComponent("orders")
     .BindEditable(nameof(OrdersController.IsEditing))
 ```
 
-The editor is any input: a search over the known values reads as naturally as a select. Give such a search
-`SetSelectionDisplayMode(UISearchSelectionDisplayMode.ReplaceWithSelectedItem)` — a search box keeps what was typed by
-default, and a cell's editor should open on the value the row already holds.
+The editor is any input: a search over the known values reads as naturally as a select. It opens on the value the row
+holds, with its list and the keyboard in its search field; a pick puts the keyboard back on the field, where Enter commits.
 
 ### Choosing rows
 

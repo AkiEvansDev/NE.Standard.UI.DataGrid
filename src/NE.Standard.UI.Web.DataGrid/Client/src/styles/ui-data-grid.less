@@ -5,6 +5,8 @@
 // A sortable caption under the pointer but not over the resize handle, which overhangs the next caption: its wash would answer a
 // press that resizes.
 @ui-data-grid-sort-hover: ~":hover:not(:has(> .ui-table__resizer:is(:hover, [data-ui-splitting])))";
+// Its press, for every pointer: a press on the handle is the caption's too, but the handle's own.
+@ui-data-grid-sort-press: ~":active:not(:has(> .ui-table__resizer:is(:active, [data-ui-splitting])))";
 
 // A row a step taller than the table's, with more air in its cells: a grid is a screen's main surface, read row by row. The grid's
 // own rows only, as every row and header rule here: a table in a row's detail keeps its own.
@@ -30,7 +32,7 @@
         }
     }
 
-    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:active {
+    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-press} {
         box-shadow: inset 0 0 0 100vmax var(--ui-wash-active);
     }
 
@@ -187,6 +189,7 @@
     flex-direction: column;
     gap: @ui-space-3;
     grid-column: 1 / -1;
+    // No cap of its own: the flyout is held inside the window by the core (`.ui-popup-surface()`), and a range's two fields wrap in it.
     min-width: 18rem;
 }
 
@@ -426,7 +429,7 @@
         }
     }
 
-    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:active:not(@{ui-keyboard-focus}),
+    .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-press}:not(@{ui-keyboard-focus}),
     .ui-data-grid__filters-clear@{ui-button-live}:active:not(@{ui-keyboard-focus}) {
         outline: 2px solid Highlight;
     }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
+using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Shell.Localization;
 
 namespace NE.Standard.UI.Web.DataGrid;
@@ -11,28 +12,28 @@ namespace NE.Standard.UI.Web.DataGrid;
 public sealed partial class DataGridStrings : IUIStringsSource
 {
     /// <summary>A boolean cell's word for true, where the column names none.</summary>
-    public const string Yes = "ui.grid.yes";
+    public const string Yes = UIDataGridWords.Yes;
 
     /// <summary>A boolean cell's word for false, where the column names none.</summary>
-    public const string No = "ui.grid.no";
+    public const string No = UIDataGridWords.No;
 
     /// <summary>A sortable header's name for a screen reader; <c>{column}</c> is its caption.</summary>
     public const string SortBy = "ui.grid.sort-by";
 
     /// <summary>A text filter's placeholder.</summary>
-    public const string Filter = "ui.grid.filter";
+    public const string Filter = UIDataGridWords.Filter;
 
     /// <summary>A range filter's placeholder for its start.</summary>
-    public const string From = "ui.grid.from";
+    public const string From = UIDataGridWords.From;
 
     /// <summary>A range filter's placeholder for its end.</summary>
-    public const string To = "ui.grid.to";
+    public const string To = UIDataGridWords.To;
 
     /// <summary>A choice filter's placeholder while it chooses nothing.</summary>
-    public const string Any = "ui.grid.any";
+    public const string Any = UIDataGridWords.Any;
 
     /// <summary>The search box's placeholder.</summary>
-    public const string Search = "ui.grid.search";
+    public const string Search = UIDataGridWords.Search;
 
     /// <summary>The word on the band's filters button.</summary>
     public const string Filters = "ui.grid.filters";
@@ -44,7 +45,7 @@ public sealed partial class DataGridStrings : IUIStringsSource
     public const string Columns = "ui.grid.columns";
 
     /// <summary>The detail column's name, in the chooser and on its chevron's tooltip.</summary>
-    public const string Details = "ui.grid.details";
+    public const string Details = UIDataGridWords.Details;
 
     /// <summary>The pager's line when the source counts its rows; <c>{from}</c>, <c>{to}</c> and <c>{total}</c> are row numbers.</summary>
     public const string PageOf = "ui.grid.page-of";
@@ -65,10 +66,10 @@ public sealed partial class DataGridStrings : IUIStringsSource
     public const string LastPage = "ui.grid.last-page";
 
     /// <summary>A row's checkbox name for a screen reader.</summary>
-    public const string SelectRow = "ui.grid.select-row";
+    public const string SelectRow = UIDataGridWords.SelectRow;
 
     /// <summary>The name of the checkbox over the rows, for a screen reader.</summary>
-    public const string SelectAll = "ui.grid.select-all";
+    public const string SelectAll = UIDataGridWords.SelectAll;
 
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, string> English { get; } = new Dictionary<string, string>(StringComparer.Ordinal)

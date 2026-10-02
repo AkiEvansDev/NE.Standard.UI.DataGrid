@@ -2,7 +2,8 @@
 // events bubbling up a tree: enough selectors for the framework's own lists (classes, attributes, roles, `:not()`, `:is()`,
 // `:disabled`, `:scope`, the child and descendant combinators), and nothing laid out but what a test says.
 // The framework client's tests/fake-dom.ts, copied as a package reaches none of the framework's sources; it adds the window (its
-// timers and capturing listeners), a stopped propagation, a trusted event, `after` and `document.hasFocus`, and drops the label.
+// timers and capturing listeners), a stopped propagation, a trusted event, `after`, `document.hasFocus` and the `change` Chromium
+// raises from a focused field taken off the page, and drops the label.
 
 type Listener = (domEvent: FakeEvent) => void;
 
@@ -257,6 +258,12 @@ export class FakeElement {
         if (this.parent === null)
             return;
 
+        const active = fakeDocument.activeElement;
+
+        // Chromium: a field that held the focus, edited since it took it, says `change` as it goes, while still on the page.
+        if (active instanceof FakeInput && this.contains(active) && active.value !== active.valueAtFocus)
+            fakeWindow.dispatch(active, Object.assign(new FakeEvent("change"), { isTrusted: true }));
+
         this.parent.children.splice(this.parent.children.indexOf(this), 1);
 
         if (fakeDocument.activeElement !== null && this.contains(fakeDocument.activeElement))
@@ -328,10 +335,17 @@ export class FakeInput extends FakeElement {
     public type: string;
     public value = "";
     public readOnly = false;
+    /** What it held as it took the focus. */
+    public valueAtFocus = "";
 
     public constructor(type = "text") {
         super("input");
         this.type = type;
+    }
+
+    public override focus(): void {
+        this.valueAtFocus = this.value;
+        super.focus();
     }
 
     public select(): void {

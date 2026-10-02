@@ -1,4 +1,5 @@
-// Read back from the compiled stylesheet: an editor stands in its cell's box and an end column's number does not move as it opens.
+// Read back from the compiled stylesheet: an editor stands in its cell's box and an end column's number does not move as it opens; the
+// filters' panel fits a phone.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -30,4 +31,11 @@ test("an end column's field gives the caret's pixel to the padding, so its text 
 
     assert.match(rules, /width: calc-size\(auto, size \+ 1px\);/);
     assert.match(rules, /margin-inline-end: -1px;/);
+});
+
+test("the filters' panel keeps no cap of its own: the core holds the flyout inside the window, and a filter's fields wrap in it", () => {
+    const panel = declarations(".ui-data-grid__filter-panel") ?? "";
+
+    assert.doesNotMatch(panel, /max-width/);
+    assert.match(declarations(".ui-data-grid__filter-panel > .ui-data-grid__filter") ?? "", /flex-wrap: wrap;/);
 });
