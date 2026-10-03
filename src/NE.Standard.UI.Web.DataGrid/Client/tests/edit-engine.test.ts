@@ -22,6 +22,9 @@ const names = {
     tableScrollClass: "ui-table__scroll"
 };
 
+// What the editor's field refuses, as the framework's validation judges it (`validation.refuses`): nothing unless a test says.
+let refused: (value: string) => boolean = () => false;
+
 /**
  * One editable grid on the page, a row of a servers cell and a plan cell, each editor drawn by `draw` for the cell's variant, and
  * what the page heard: the binding's sends and the cell edits.
@@ -38,6 +41,7 @@ function createGrid(draw: (variant: string) => FakeElement): { grid: FakeElement
     fakeDocument.focused = true;
     fakeWindow.listeners.clear();
     fakeWindow.timers.length = 0;
+    refused = () => false;
     root.append(grid.append(FakeElement.of(names.tableScrollClass).append(FakeElement.of("", { [names.itemsHost]: "" }).append(FakeElement.of(names.tableRowClass, { [names.key]: "r1" }).append(cell, next)))));
 
     // The value binding listens on the root and starts before any package's engine.
@@ -63,6 +67,7 @@ function createGrid(draw: (variant: string) => FakeElement): { grid: FakeElement
         // The core's first stop of a container, as far as an editor's field goes.
         focus: { first: (container: FakeElement) => container.querySelector("input, textarea, select, button") },
         names,
+        validation: { refuses: (field: FakeElement) => field instanceof FakeInput && refused(field.value) },
         observeComponents: () => null
     };
 
@@ -302,5 +307,100 @@ test("a commit with nothing changed sends nothing, where the field fills its val
 
     assert.ok(!isOpen(cell));
     assert.equal(heard.sent, 0);
+    assert.equal(heard.edits, 0);
+});
+
+test("Enter on a value the field refuses keeps the editor open, the focus in its field, and sends nothing", () => {
+    const { cell, heard } = createGrid(() => new FakeElement().append(numberField()));
+    const field = open(cell);
+
+    refused = value => value === "0";
+    field.value = "0";
+    fakeWindow.dispatch(field, new FakeKeyboardEvent("Enter"));
+    fakeWindow.dispatch(field, Object.assign(new FakeEvent("change"), { isTrusted: true }));
+    fakeWindow.runTimers();
+
+    assert.ok(isOpen(cell));
+    assert.equal(fakeDocument.activeElement, field);
+    assert.equal(heard.sent, 0);
+    assert.equal(heard.edits, 0);
+});
+
+test("Tab from a refused value stays on its cell", () => {
+    const { cell, next } = createGrid(variant => variant === "edit-seats" ? new FakeElement().append(numberField()) : selectEditor());
+    const field = open(cell);
+
+    refused = value => value === "0";
+    field.value = "0";
+    fakeWindow.dispatch(field, new FakeKeyboardEvent("Tab"));
+
+    assert.ok(isOpen(cell));
+    assert.ok(!isOpen(next));
+    assert.equal(fakeDocument.activeElement, field);
+});
+
+test("a focus that went elsewhere from a refused value comes back to the field, as a form's submit takes it back", () => {
+    const { cell, heard } = createGrid(() => new FakeElement().append(numberField()));
+    const field = open(cell);
+
+    refused = value => value === "0";
+    field.value = "0";
+    blur(field);
+
+    assert.ok(isOpen(cell));
+    assert.equal(fakeDocument.activeElement, field);
+    assert.equal(heard.edits, 0);
+});
+
+test("a double click on another cell leaves a refused editor where it is", () => {
+    const { cell, next } = createGrid(variant => variant === "edit-seats" ? new FakeElement().append(numberField()) : selectEditor());
+    const field = open(cell);
+
+    refused = value => value === "0";
+    field.value = "0";
+    fakeWindow.dispatch(next, new FakeEvent("dblclick"));
+
+    assert.ok(isOpen(cell));
+    assert.ok(!isOpen(next));
+});
+
+test("Escape takes a refused value back and closes, sending nothing", () => {
+    const { grid, cell, heard } = createGrid(() => new FakeElement().append(numberField()));
+    const field = open(cell);
+
+    refused = value => value === "0";
+    field.value = "0";
+    fakeWindow.dispatch(field, new FakeKeyboardEvent("Enter"));
+    fakeWindow.dispatch(field, new FakeKeyboardEvent("Escape"));
+
+    assert.ok(!isOpen(cell));
+    assert.equal(heard.sent, 0);
+    assert.equal(heard.edits, 0);
+    assert.equal(fakeDocument.activeElement, grid);
+});
+
+test("an editor hidden whole over a refused value closes without it", () => {
+    const { grid, cell, heard } = createGrid(() => new FakeElement().append(numberField()));
+    const field = open(cell);
+
+    refused = value => value === "0";
+    field.value = "0";
+    field.visible = false;
+    blur(field);
+
+    assert.ok(!isOpen(cell));
+    assert.equal(heard.sent, 0);
+    assert.equal(heard.edits, 0);
+    assert.equal(fakeDocument.activeElement, grid);
+});
+
+test("a value the row already held closes the editor though the rules fail it: nothing was given to refuse", () => {
+    const { cell, heard } = createGrid(() => new FakeElement().append(numberField()));
+    const field = open(cell);
+
+    refused = () => true;
+    fakeWindow.dispatch(field, new FakeKeyboardEvent("Enter"));
+
+    assert.ok(!isOpen(cell));
     assert.equal(heard.edits, 0);
 });

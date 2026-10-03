@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { PluginEngineContext } from "ne-standard-ui";
 import { DataGridDetailEngine } from "../src/data-grid-detail-engine.ts";
-import { ClientNames, GridAttributes } from "../src/data-grid-names.ts";
+import { ClientNames, GridAttributes, GridClasses } from "../src/data-grid-names.ts";
 import { FakeElement, FakeEvent, FakeKeyboardEvent, fakeDocument, fakeWindow, installFakeDom, real } from "./fake-dom.ts";
 
 /** A click as the browser counts it: the first of a double click is 1, the second 2. */
@@ -23,23 +23,26 @@ const names = {
     itemsHost: "data-ui-items-host",
     noRowOpen: "data-ui-no-row-open",
     noRowDrag: "data-ui-no-row-drag",
+    rowFocus: "data-ui-row-focus",
     tableRowClass: "ui-table__row",
     tableScrollClass: "ui-table__scroll"
 };
 
-/** A grid whose rows open their detail on a click, one at a time, and the rows' cells to press. */
-function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeElement[] } {
+/** A grid whose rows open their detail on a click, one at a time, and the rows' cells to press; the first row has a chevron. */
+function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeElement[]; grid: FakeElement; chevron: FakeElement } {
     const root = new FakeElement();
-    const first = FakeElement.of(names.tableRowClass).append(FakeElement.of("cell"));
+    const chevron = new FakeElement("button");
+    const first = FakeElement.of(names.tableRowClass).append(FakeElement.of("cell"), FakeElement.of(GridClasses.detailCell).append(chevron));
     const second = FakeElement.of(names.tableRowClass).append(FakeElement.of("cell"));
     const drawn: FakeElement[] = [];
 
     fakeDocument.body.replaceChildren(root);
     fakeWindow.listeners.clear();
     fakeWindow.timers.length = 0;
-    root.append(FakeElement.of("ui-data-grid", { [names.componentId]: "7", [GridAttributes.expandOnClick]: "" })
-        .append(FakeElement.of(names.tableScrollClass).append(FakeElement.of("", { [names.itemsHost]: "" }).append(first, second)))
-    );
+    const grid = FakeElement.of("ui-data-grid", { [names.componentId]: "7", [GridAttributes.expandOnClick]: "" })
+        .append(FakeElement.of(names.tableScrollClass).append(FakeElement.of("", { [names.itemsHost]: "" }).append(first, second)));
+
+    root.append(grid);
 
     const context = {
         root,
@@ -54,12 +57,13 @@ function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeEle
             isKeyTarget: () => true
         },
         names,
+        states: { isInert: () => false },
         observeComponents: () => null
     };
 
     new DataGridDetailEngine(real<PluginEngineContext>(context));
 
-    return { first, second, drawn };
+    return { first, second, drawn, grid, chevron };
 }
 
 function click(row: FakeElement, detail: number): void {
@@ -143,4 +147,48 @@ test("Enter on the row still opens and closes its detail", () => {
     fakeWindow.runTimers();
 
     assert.equal(detailOf(first), null);
+});
+
+test("Enter on the row toggles its detail once, though the framework raises the row's click for it too", () => {
+    const { first } = createGrid();
+
+    // The core's keyboard press of a row (`ui-row-press`): the row's click command, never a click this engine counts.
+    fakeWindow.dispatch(first, new FakeKeyboardEvent("Enter"));
+    fakeWindow.dispatch(first, new FakeEvent("ui-row-press"));
+    fakeWindow.dispatch(first, new FakeEvent("open"));
+    fakeWindow.runTimers();
+
+    assert.notEqual(detailOf(first), null);
+});
+
+test("Right opens the keyboard's row's detail and Left closes it, as its chevron does by a click", () => {
+    const { first, grid, chevron } = createGrid();
+
+    first.setAttribute(names.rowFocus, "");
+
+    const right = new FakeKeyboardEvent("ArrowRight");
+
+    fakeWindow.dispatch(grid, right);
+    assert.equal(right.defaultPrevented, true);
+    assert.notEqual(detailOf(first), null);
+    assert.equal(chevron.getAttribute("aria-expanded"), "true");
+
+    // Again Right leaves it open; Left closes it.
+    fakeWindow.dispatch(grid, new FakeKeyboardEvent("ArrowRight"));
+    assert.notEqual(detailOf(first), null);
+
+    fakeWindow.dispatch(grid, new FakeKeyboardEvent("ArrowLeft"));
+    assert.equal(detailOf(first), null);
+});
+
+test("Right on a row with no chevron leaves the key alone", () => {
+    const { second, grid } = createGrid();
+
+    second.setAttribute(names.rowFocus, "");
+
+    const right = new FakeKeyboardEvent("ArrowRight");
+
+    fakeWindow.dispatch(grid, right);
+    assert.equal(right.defaultPrevented, false);
+    assert.equal(detailOf(second), null);
 });

@@ -18,6 +18,10 @@ internal sealed partial class FiltersController : UIControllerBase
     [RecursiveMember]
     public partial UIPhrase? RowStatus { get; set; } = new("grid-demo.filters.hint");
 
+    /// <summary>What the keyboard's grid last opened: a click on a row, or Enter or Space on the keyboard's row.</summary>
+    [RecursiveMember]
+    public partial UIPhrase? PressStatus { get; set; } = new("grid-demo.filters.keys-hint");
+
     /// <summary>The choice changed and the key has reached the server.</summary>
     [UICommand]
     public void SelectionChanged()
@@ -27,6 +31,11 @@ internal sealed partial class FiltersController : UIControllerBase
     [UICommand]
     public void RowOpened(string id)
         => RowStatus = UIPhrase.Of("grid-demo.filters.opened", ("number", NumberOf(id)));
+
+    /// <summary>A row of the keyboard's grid was pressed — clicked, or Enter or Space on the keyboard's row.</summary>
+    [UICommand]
+    public void RowPressed(string id)
+        => PressStatus = UIPhrase.Of("grid-demo.filters.pressed", ("number", NumberOf(id)));
 
     private string NumberOf(string id)
         => Subscriptions.FirstOrDefault(candidate => candidate.Id == id)?.Number ?? id;

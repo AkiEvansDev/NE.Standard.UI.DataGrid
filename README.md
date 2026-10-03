@@ -67,7 +67,7 @@ painted there, and on the client when a row is built or a value patched there, t
 the two read the same. A language switch draws every such cell, a footer's total and the pager's figures again in the new
 language's culture at once. The row keeps its typed property; nobody formats by hand.
 
-The grid's own words — the pager, the band, the chooser, yes and no — ship in Russian and Simplified Chinese as well as English
+The grid's own words — the band, the chooser, yes and no — ship in Russian and Simplified Chinese as well as English
 (`DataGridStrings.Translations`), turned on with `application.AddFrameworkWords("ru", "zh-Hans")` and outranked by any word of the
 application's own. The keys of the words the grid's own controls carry are `UIDataGridWords`, in the component's package, for
 an application that translates them itself.
@@ -108,9 +108,9 @@ of an items view does; a change to one row's collection reaches that row's cell.
 ### Sorting by header
 
 A click on a caption sorts by that column, a second click reverses, a third clears; Shift+click adds a column to
-a multi-column sort, and the marks say the direction and the place. A sortable caption is a tab stop named *Sort by …*
-(`ui.grid.sort-by`, its caption looked up as the caption beside it is; a column with no caption is named by what it sorts, in
-words), and Enter or Space presses it as a click does, Shift with them included. A property column sorts unless
+a multi-column sort, and the marks say the direction and the place. A sortable caption is a stop of the header's keyboard
+(below, not of the Tab order) named *Sort by …* (`ui.grid.sort-by`, its caption looked up as the caption beside it is; a column with
+no caption is named by what it sorts, in words), and Enter or Space presses it as a click does, Shift with them included. A property column sorts unless
 it says `sortable: false`; a template column sorts when it names a `sortPath`; `AddTextColumn(caption, path, sortable)` says
 either.
 
@@ -141,7 +141,7 @@ a count of the ones in use on the button.
 `SetSearch`. The band is a row of
 controls: the box is a field of the page's own shape and the two buttons take the same ground, height and corner, and the
 field's states — the edge under the pointer, and the active edge while the keyboard is on one or its flyout is open. A key
-pressed in the band, a flyout or the header is that control's own: the rows' keyboard, the editor's F2 and the detail's Enter
+pressed in the band, a flyout or the header is that control's own: the rows' keyboard, the editor's F2 and the detail's Enter, Right and Left
 answer only on the grid itself or in a row.
 
 ```csharp
@@ -167,12 +167,24 @@ field, and a field whose term went empties — except the one the viewer is typi
 ### Paging
 
 A grid over a windowed source reads the next window as the viewer nears the end — the table's own behaviour. With
-`Paging` on (`SetPaging(true)`, or bound), the window is a page instead: a pager under the rows says which rows the page
-holds out of the source's count, and its four buttons — named and hinted in the page's words, with the framework's tooltip —
-ask the source for the first, the previous, the next or the last page. A button with nowhere to go is turned off the
-framework's way (`ui-disabled`, `aria-disabled`), so the one the keyboard just pressed keeps the focus. `WindowSize` is the page size. A query change — a header sorted, a filter typed — re-reads from the first page.
-Previous and Last land on a page boundary, so the pages the viewer steps through are the ones First counts from. A grid that
-holds all its rows draws no pager: it has nothing to page, and `Paging` there does nothing.
+`Paging` on (`SetPaging(true)`, or bound — the property every items host has), the window is a page instead, and the grid draws
+the framework's `PagerComponent` under the rows, aimed at itself: the pages by number with first, previous, next and last, or —
+on a phone, or with `UIPagerMode.Compact` — the rows the page holds out of the source's count between previous and next.
+`ConfigurePager` sets it up — its mode, the page sizes it offers:
+
+```csharp
+SubscriptionGrid.Create("subscriptions")
+    .BindSource(nameof(Controller.Subscriptions))
+    .SetWindowSize(20)
+    .SetPaging(true)
+    .ConfigurePager(pager => pager.SetPageSizes([20, 50, 100]))
+```
+
+`WindowSize` is the page size until the viewer chooses another, which is kept in the browser beside the columns' widths. A query change — a header sorted, a filter typed — re-reads from
+the first page, at the size the viewer chose. Page Up and Page Down in the grid turn its page, the keyboard's row keeping its
+place. Previous and Last land on a page boundary, so the pages the viewer steps through are the ones First counts from. A grid
+that holds all its rows draws no pager: it has nothing to page, and `Paging` there does nothing; a bound `Paging` turned off
+hides the pager. The pager's words are the framework's (`UIStrings.Pager*`).
 
 ### CSV export
 
@@ -227,8 +239,8 @@ new DataGridComponent("orders")
     .SetMultipleDetails(true)
 ```
 
-One row stands open at a time unless `MultipleDetails`. With `ExpandOnClick`, Enter on the keyboard's row opens and closes it
-as a click does; a double click, which opens the row, leaves the details as they stood before its first click; a row of a table
+One row stands open at a time unless `MultipleDetails`. Right on the keyboard's row opens its detail and Left closes it, as the
+chevron does; with `ExpandOnClick`, Enter on the keyboard's row opens and closes it as a click does too; a double click, which opens the row, leaves the details as they stood before its first click; a row of a table
 inside a detail is that table's, and opens nothing of the grid's. A cell that answers the click itself — the checkbox, an
 editable one while the grid edits — never opens the row. The detail is a child of the row, so it stripes, hides and scrolls with it; it is drawn when the row opens, against the
 row's own item, whether the server painted the row or the browser built it. A press on a button, a field or the text inside an
@@ -279,7 +291,7 @@ While a sort orders the rows no row moves, since the sort would put it back. An 
 ### Columns the viewer moves
 
 `SetReorderableColumns(true)` lets a caption be dragged along the header to another place — a line shows where the column would
-land — or moved with Ctrl and an arrow when the keyboard is on it. The order is kept in the browser under the grid's id
+land — or moved with Ctrl and an arrow when the keyboard is on it in the header. The order is kept in the browser under the grid's id
 beside the widths and the hidden columns, and painted before the first frame with them; the chooser's menu lists the columns
 in the order they stand. A pinned column and the grid's own column of checkboxes keep the places they were written in, and
 nothing is dropped among them. A click that sorts and a drag that moves are the same press: a drag that moved a column does
@@ -365,6 +377,23 @@ new DataGridComponent("orders")
 The editor is any input: a search over the known values reads as naturally as a select. It opens on the value the row
 holds, with its list and the keyboard in its search field; a pick puts the keyboard back on the field, where Enter commits.
 
+An editor carries the field's rules (`Validate`, `Required`, `Regex`) and bounds. A typed column takes them through
+`configureEditor`, typed by its editor; a template column's editor is the author's own:
+
+```csharp
+.AddNumberColumn("Quantity", nameof(Order.Quantity), "N0", editable: true, configureEditor: editor => editor.SetMax(100).Validate(UIValidationTrigger.Change, UIComparisonOperator.Greater, 0, "At least one."))
+.AddTextColumn("Note", nameof(Order.Note), sortable: true, editable: true, configureEditor: editor => editor.Required("No note.", severity: UIValidationSeverity.Info))
+```
+
+While the editor is open, its field's mark speaks as the value is typed. An error or a bound holds the value back: Enter, Tab, a
+double click on another cell or a click elsewhere leaves the editor open over it, the focus back in its field, until it is put
+right or Escape takes it back; a warning or a note commits. A closed cell is judged by its editor's rules whenever its row is
+shown — drawn, after a commit, after the server writes it — and a value that fails wears the strongest severity's edge in the box
+the editor's field takes, its words in the mark's tooltip.
+
+An editable cell answers the pointer with the field's faint ground in that same box, and every editable cell on the keyboard's
+row wears it, so a reader sees what opens before it does; nothing while `Editable` is off.
+
 ### Choosing rows
 
 `SelectionMode = Many` puts a column of checkboxes before every other column, with a three-state one over them that takes or
@@ -391,9 +420,31 @@ new DataGridComponent("orders")
     .OnSelectionChange(nameof(OrdersController.SelectionChanged))
 ```
 
+### The keyboard
+
+The grid is one stop of the Tab order: Tab comes to it, then to the band's search box and its Filters and Columns buttons, then to the
+pager where it pages — one stop too, its buttons walked by the arrows — and on out of it. No caption, row, chevron or checkbox is a stop of its own; the framework's keyboard cursor walks the rows
+and the header is a group reached from them — the ARIA grid pattern, by rows (cell by cell comes with editable columns' own keys).
+
+- **Rows.** Up and Down move the keyboard's row, Home and End go to the first and the last, Page Up and Page Down a viewport's height (a page, in a grid that pages)
+  at a time. The grid keeps the focus and names the row (`aria-activedescendant`); the row is lit — the framework's keyboard wash —
+  only while the keyboard holds the grid, never after a press of the pointer.
+- **Enter or Space** on the keyboard's row runs the row's click (`OnRowClick…`), as a press of the pointer does, and Enter its
+  `OnRowOpen…` after it. Where the grid chooses, the framework's rule stands: one row at a time follows the arrows, Enter chooses
+  before it presses, and Space ticks a row of a grid choosing many rather than pressing it.
+- **Right and Left** open and close the row's detail; **F2** opens the row's first editable cell, the editor's Tab, Enter and Escape
+  as above; **Delete** raises the rows' remove where the grid has `OnRowRemove…`.
+- **The header.** Up from the first row goes to the header — to the caption it was last left on — where Left and Right walk the
+  captions in the order the columns stand and Home and End go to the ends; Enter or Space sorts by the caption, Shift with them adds
+  it to the sort, Ctrl with an arrow moves its column, Shift with an arrow sizes it, and Space on the box over the checkboxes takes
+  or clears them. Down goes back to the rows.
+
+To a screen reader the grid is a `grid` of `row`s and `gridcell`s whatever it chooses, its captions `columnheader`s carrying
+`aria-sort`; a windowed or virtualized grid says where each drawn row stands among them all (`aria-rowindex`, `aria-rowcount`).
+
 ## Inside the package
 
-The grid draws no mark of its own: the sort arrow, the pager's ends and chevrons, the detail column's chevron and the marks on
+The grid draws no mark of its own: the sort arrow, the detail column's chevron and the marks on
 the band's buttons are the framework's `ne-` glyphs (`UIGlyphs`), so they are the same drawing family as every field's chevron
 and cross. Its stylesheet imports the framework's Less contract (`Client/plugin/ne-standard-ui.less` — the tokens and the
 mixins, copied like the TypeScript contract beside it) rather than restating the motion, the focus ring or the field's ground.

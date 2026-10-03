@@ -69,14 +69,3 @@ export function setAttribute(element: Element, name: string, value: string | nul
     else if (element.getAttribute(name) !== value)
         element.setAttribute(name, value);
 }
-
-export function readNumberAttribute(element: Element, attribute: string): number | null {
-    const text = element.getAttribute(attribute);
-
-    if (text === null || text.length === 0)
-        return null;
-
-    const value = Number(text);
-
-    return Number.isFinite(value) ? value : null;
-}

@@ -32,6 +32,12 @@ public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UI
     /// <summary>Whether a cell opens its editor on a double click or F2; the editor is the template variant keyed <see cref="EditTemplateKey"/>.</summary>
     public bool Editable { get; init; }
 
+    /// <summary>
+    /// The row property the editor writes — a typed column's own, or the one a template column's editor is bound to — which a closed
+    /// cell is judged by against the editor's rules; null where the editor is bound to none.
+    /// </summary>
+    public string? EditPath { get; init; }
+
     /// <summary>Whether the column's cells hold the chevron that opens and closes a row's detail, rather than a value.</summary>
     public bool DetailToggle { get; init; }
 

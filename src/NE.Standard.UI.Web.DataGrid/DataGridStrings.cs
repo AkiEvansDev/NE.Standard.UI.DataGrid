@@ -47,24 +47,6 @@ public sealed partial class DataGridStrings : IUIStringsSource
     /// <summary>The detail column's name, in the chooser and on its chevron's tooltip.</summary>
     public const string Details = UIDataGridWords.Details;
 
-    /// <summary>The pager's line when the source counts its rows; <c>{from}</c>, <c>{to}</c> and <c>{total}</c> are row numbers.</summary>
-    public const string PageOf = "ui.grid.page-of";
-
-    /// <summary>The pager's line when the source does not count its rows; <c>{from}</c> and <c>{to}</c> are row numbers.</summary>
-    public const string PageRange = "ui.grid.page-range";
-
-    /// <summary>The pager's first-page button.</summary>
-    public const string FirstPage = "ui.grid.first-page";
-
-    /// <summary>The pager's previous-page button.</summary>
-    public const string PreviousPage = "ui.grid.previous-page";
-
-    /// <summary>The pager's next-page button.</summary>
-    public const string NextPage = "ui.grid.next-page";
-
-    /// <summary>The pager's last-page button.</summary>
-    public const string LastPage = "ui.grid.last-page";
-
     /// <summary>A row's checkbox name for a screen reader.</summary>
     public const string SelectRow = UIDataGridWords.SelectRow;
 
@@ -86,12 +68,6 @@ public sealed partial class DataGridStrings : IUIStringsSource
         [ClearFilters] = "Clear filters",
         [Columns] = "Columns",
         [Details] = "Details",
-        [PageOf] = "{from}–{to} of {total}",
-        [PageRange] = "{from}–{to}",
-        [FirstPage] = "First page",
-        [PreviousPage] = "Previous page",
-        [NextPage] = "Next page",
-        [LastPage] = "Last page",
         [SelectRow] = "Select row",
         [SelectAll] = "Select all rows"
     }.ToFrozenDictionary(StringComparer.Ordinal);

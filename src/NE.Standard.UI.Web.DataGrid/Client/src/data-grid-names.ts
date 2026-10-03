@@ -9,8 +9,6 @@ export const GridAttributes = {
     readOnly: "data-ui-grid-readonly",
     expandOnClick: "data-ui-grid-expand-click",
     multipleDetails: "data-ui-grid-multiple-details",
-    paging: "data-ui-grid-paging",
-    page: "data-ui-grid-page",
     aggregate: "data-ui-grid-aggregate",
     property: "data-ui-grid-property",
     filter: "data-ui-grid-filter",
@@ -24,7 +22,8 @@ export const GridAttributes = {
     choices: "data-ui-grid-choices",
     choice: "data-ui-grid-choice",
     raw: "data-ui-grid-raw",
-    moment: "data-ui-grid-moment"
+    moment: "data-ui-grid-moment",
+    rules: "data-ui-grid-rules"
 } as const;
 
 /** The classes the grid's renderers write and its engines read. */
@@ -32,8 +31,6 @@ export const GridClasses = {
     root: "ui-data-grid",
     footer: "ui-data-grid__footer",
     total: "ui-data-grid__total",
-    pager: "ui-data-grid__pager",
-    pageStatus: "ui-data-grid__page-status",
     filtersCount: "ui-data-grid__filters-count",
     filterPanel: "ui-data-grid__filter-panel",
     filterPart: "ui-data-grid__filter-part",
@@ -52,7 +49,8 @@ export const ClientNames = {
     editorClass: "ui-data-grid__editor",
     editorOpenClass: "ui-data-grid__editor--open",
     editingCellClass: "ui-data-grid__cell--editing",
-    detailClass: "ui-data-grid__detail"
+    detailClass: "ui-data-grid__detail",
+    verdictClass: "ui-data-grid__verdict"
 } as const;
 
 /** The events the grid raises, by the names `DataGridEvents` hangs a command on. */
@@ -65,9 +63,7 @@ export const GridEvents = {
 /** The words the client writes itself, by their `DataGridStrings` keys. */
 export const GridWords = {
     yes: "ui.grid.yes",
-    no: "ui.grid.no",
-    pageOf: "ui.grid.page-of",
-    pageRange: "ui.grid.page-range"
+    no: "ui.grid.no"
 } as const;
 
 /** The DOM operation a typed cell's value travels through (`DataGridCellRenderer.ValueOperationKind`). */

@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.Json;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.Abstractions.Styling;
 using NE.Standard.UI.Authoring.Components;
+using NE.Standard.UI.Compiled.Models;
+using NE.Standard.UI.Compiled.Views;
 using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Primitives.Constants;
-using NE.Standard.UI.Primitives.Items;
 using NE.Standard.UI.Primitives.Localization;
 using NE.Standard.UI.Primitives.Styling;
 using NE.Standard.UI.Primitives.Text;
@@ -32,6 +34,12 @@ public class DataGridComponentRenderer : TableComponentRenderer
     /// <summary>On a cell that edits: the template variant its editor is drawn from, which the engine stamps when the cell opens.</summary>
     public const string EditorTemplateAttribute = "data-ui-grid-editor";
 
+    /// <summary>
+    /// On the root: the editable columns whose editors carry rules, as JSON by key — the editor's component and the row property it
+    /// writes — so a closed cell is judged by the rules its editor would show.
+    /// </summary>
+    public const string RulesAttribute = "data-ui-grid-rules";
+
     /// <summary>On the root while the grid's <c>Editable</c> is off: no cell opens its editor.</summary>
     public const string ReadOnlyAttribute = "data-ui-grid-readonly";
 
@@ -40,12 +48,6 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
     /// <summary>On the root: several rows may stand open at once.</summary>
     public const string MultipleDetailsAttribute = "data-ui-grid-multiple-details";
-
-    /// <summary>On the root while a windowed grid pages: the pager under the rows is drawn, and the host carries <see cref="WebAttributes.WindowPaged"/>.</summary>
-    public const string PagingAttribute = "data-ui-grid-paging";
-
-    /// <summary>On a pager's button: which page it turns to.</summary>
-    public const string PageAttribute = "data-ui-grid-page";
 
     /// <summary>On a footer cell: the total it shows; the kind and the format are the column's, as on a cell.</summary>
     public const string AggregateAttribute = "data-ui-grid-aggregate";
@@ -72,9 +74,6 @@ public class DataGridComponentRenderer : TableComponentRenderer
     protected const string SelectCellClassName = "ui-data-grid__cell--select";
     protected const string FooterClassName = "ui-data-grid__footer";
     protected const string TotalClassName = "ui-data-grid__total";
-    protected const string PagerClassName = "ui-data-grid__pager";
-    protected const string PageButtonClassName = "ui-data-grid__page-button";
-    protected const string PageStatusClassName = "ui-data-grid__page-status";
     protected const string BandClassName = "ui-data-grid__band";
     protected const string BandButtonClassName = "ui-data-grid__band-button";
     protected const string FiltersCountClassName = "ui-data-grid__filters-count";
@@ -85,6 +84,8 @@ public class DataGridComponentRenderer : TableComponentRenderer
     protected const string SortIdleClassName = "ui-data-grid__sort-idle";
     protected const string EditableCellClassName = "ui-data-grid__cell--editable";
     protected const string DetailCellClassName = "ui-data-grid__cell--detail";
+
+    private static readonly JsonSerializerOptions RulesJsonOptions = WebWireJson.CreateOptions();
 
     public override string ComponentTypeKey => DataGridComponent.ComponentTypeKey;
 
@@ -110,30 +111,44 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
         RenderFlagAttribute(context, root, DataGridComponent.ExpandOnClickProperty, ExpandOnClickAttribute);
         RenderFlagAttribute(context, root, DataGridComponent.MultipleDetailsProperty, MultipleDetailsAttribute);
-
-        // One property, two marks: the root's for the pager, the host's for the window engine (static in ConfigureHost, live here).
-        if (IsWindowed(context))
-        {
-            _ = RenderProperty<bool?>(context, root, DataGridComponent.PagingProperty, static (target, value) =>
-            {
-                if (value == true)
-                    _ = target.Attribute(PagingAttribute);
-            }, [
-                WebDomOperation.ToggleAttribute(PagingAttribute),
-                WebDomOperation.ToggleAttribute(WebAttributes.WindowPaged, target: $"[{WebAttributes.ItemsHost}]", condition: WebValueCondition.IsTrue)
-            ]);
-        }
+        RenderCellRules(context, root);
 
         base.RenderComponent(context, root);
     }
 
+    /// <summary>Names each editable column whose editor carries rules, with the editor's component and the row property it writes.</summary>
+    private void RenderCellRules(WebRenderContext context, IHtmlElementBuilder root)
+    {
+        CompiledView view = context.ViewResolution.View;
+        Dictionary<string, CellRules>? rules = null;
+
+        foreach (UITableColumn column in ResolveColumns(context))
+        {
+            if (column is not UIDataGridColumn { Editable: true, EditPath: { } path } editable
+                || !view.Graph.TryGetSlot(context.Node.ComponentId, UIComponentSlotKind.TemplateVariant, out UIComponentSlot? slot, editable.EditTemplateKey)
+                || view.Validations.GetByComponent(slot.RootComponentId).Count == 0)
+            {
+                continue;
+            }
+
+            rules ??= new(StringComparer.Ordinal);
+            rules[editable.Key] = new CellRules(slot.RootComponentId.Value, path);
+        }
+
+        if (rules is not null)
+            _ = root.Attribute(RulesAttribute, JsonSerializer.Serialize(rules, RulesJsonOptions));
+    }
+
+    /// <summary>An editable column's editor, by its component, and the row property it writes.</summary>
+    private sealed record CellRules(int Editor, string Path);
+
+    /// <summary>A grid is one whatever its rows do: the keyboard walks its header and its rows.</summary>
+    protected override bool ActsAsGrid(WebRenderContext context)
+        => true;
+
     /// <summary>Whether the grid draws its column of checkboxes: only where the rows may be chosen, many at a time.</summary>
     private static bool HasSelectionColumn(WebRenderContext context)
         => ReadRenderValue<UISelectionMode?>(context, ISelectableItemsComponent.SelectionModeProperty, null) is UISelectionMode.Many;
-
-    /// <summary>Whether the grid reads its rows a window at a time: only such a grid pages — one holding all its rows has nothing to page.</summary>
-    private static bool IsWindowed(WebRenderContext context)
-        => ResolveHostMode(context) == UIItemsHostMode.Windowed;
 
     /// <summary>A grid sorts on the client by what the rows hold, so a static grid publishes its values as a virtualized one does.</summary>
     protected override bool PublishItemValues => true;
@@ -239,7 +254,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
         }));
 
     /// <summary>
-    /// The caption, the sort mark when the column sorts, then the resize handle; a sorting cell is a named tab stop.
+    /// The caption, the sort mark when the column sorts, then the resize handle; a sorting cell is a named stop of the header's keyboard.
     /// </summary>
     protected override void RenderHeaderCellContent(WebRenderContext context, IHtmlElementBuilder cell, UITableColumn column, int index)
     {
@@ -266,7 +281,8 @@ public class DataGridComponentRenderer : TableComponentRenderer
                 : IsContentCaption(context, column) ? (object)column.Caption : UIPhrase.Text(column.Caption);
 
             _ = cell.Attribute(SortAttribute, sortPath);
-            _ = cell.Attribute("tabindex", "0");
+            // Focusable, but no stop of the Tab order: the grid is the one stop, and its header is reached by Up from the first row.
+            _ = cell.Attribute("tabindex", "-1");
             _ = cell.Attribute("aria-sort", "none");
             WebWords.Write(context, cell, "aria-label", DataGridStrings.SortBy, new Dictionary<string, object?>(StringComparer.Ordinal) { ["column"] = caption });
 
@@ -277,16 +293,6 @@ public class DataGridComponentRenderer : TableComponentRenderer
         }
 
         RenderResizer(context, cell, column, index);
-    }
-
-    /// <summary>A paging grid's host is a paged window: the scroll asks for nothing, the pager does.</summary>
-    protected override void ConfigureHost(WebRenderContext context, IHtmlElementBuilder host)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(host);
-
-        if (IsWindowed(context) && ReadRenderValue<bool?>(context, DataGridComponent.PagingProperty, null) == true)
-            _ = host.Attribute(WebAttributes.WindowPaged);
     }
 
     /// <summary>The rows, then a footer of totals in the columns' tracks when a column asked for one; the engine writes the numbers.</summary>
@@ -360,48 +366,15 @@ public class DataGridComponentRenderer : TableComponentRenderer
     }
 
     /// <summary>
-    /// The pager under a windowed grid, outside its frame; drawn while the grid does not page too, since <c>Paging</c> is bindable.
+    /// The pager under the rows, outside the frame: the framework's pager aimed at the grid, there while a windowed grid pages; a
+    /// bound <c>Paging</c> turned off leaves it with no page to show, and it hides.
     /// </summary>
     protected override void RenderUnderTable(WebRenderContext context, IHtmlElementBuilder root, IReadOnlyList<UITableColumn> columns)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(root);
 
-        if (!IsWindowed(context))
-            return;
-
-        _ = root.Element("div", pager =>
-        {
-            _ = pager.Class(PagerClassName);
-            _ = pager.Attribute("role", "navigation");
-
-            RenderPageButton(context, pager, "first", UIGlyphs.FirstPage, DataGridStrings.FirstPage);
-            RenderPageButton(context, pager, "previous", UIGlyphs.ChevronLeft, DataGridStrings.PreviousPage);
-
-            _ = pager.Element("span", status =>
-            {
-                _ = status.Class(PageStatusClassName);
-                _ = status.Attribute("aria-live", "polite");
-            });
-
-            RenderPageButton(context, pager, "next", UIGlyphs.ChevronRight, DataGridStrings.NextPage);
-            RenderPageButton(context, pager, "last", UIGlyphs.LastPage, DataGridStrings.LastPage);
-        });
-    }
-
-    private static void RenderPageButton(WebRenderContext context, IHtmlElementBuilder pager, string page, string icon, string wordKey)
-    {
-        _ = pager.Element("button", button =>
-        {
-            _ = button.Class($"{PageButtonClassName} ui-button ui-button--ghost ui-button--small");
-            _ = button.Attribute("type", "button");
-            _ = button.Attribute(TextContentRendererBase.IconOnlyButtonAttribute);
-            _ = button.Attribute(PageAttribute, page);
-            WebWords.Write(context, button, "aria-label", wordKey);
-            // The framework's tooltip, not the browser's `title`: the grid's other hints look the same, and a switch rewrites it.
-            WebWords.Write(context, button, WebAttributes.Tooltip, wordKey);
-            IconValueRenderer.RenderIcon(button, icon);
-        });
+        RenderRegion(context, root, DataGridComponent.PagerRegionName);
     }
 
     /// <summary>Marks an editable, a detail and a checkbox column's cells, for the engine and the pointer.</summary>
@@ -420,7 +393,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
     /// <summary>
     /// The column's key on every cell, and an editable cell's editor variant and its claim on the double click, which the client
-    /// drops while <c>Editable</c> is off.
+    /// drops while <c>Editable</c> is off; the chevron's and the checkbox's cells claim theirs always.
     /// </summary>
     protected override IReadOnlyDictionary<string, string>? CellAttributes(IReadOnlyList<UITableColumn> columns, int index)
     {
@@ -439,6 +412,11 @@ public class DataGridComponentRenderer : TableComponentRenderer
             attributes[EditorTemplateAttribute] = editable.EditTemplateKey;
             attributes[WebAttributes.NoRowOpen] = string.Empty;
         }
+
+        // The chevron answers the click itself, so it never stands for the row the keyboard presses (`soleControlOf`); the detail
+        // engine opens it from the keyboard by Right and Left.
+        if (columns[index] is UIDataGridColumn { DetailToggle: true })
+            attributes[WebAttributes.NoRowOpen] = string.Empty;
 
         // The checkbox answers the click itself: neither the row's detail nor anything else opens under it.
         if (columns[index].Key == DataGridComponent.SelectionColumnKey)

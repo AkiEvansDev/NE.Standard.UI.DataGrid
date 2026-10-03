@@ -35,6 +35,22 @@ internal sealed class FiltersView : DataGridDemoView, IUIViewDefinition
                         .SetMaxHeight(UILayoutLength.Absolute(420))
                     )
                     .AddChild(CreateStatus(nameof(FiltersController.RowStatus)))
+            ),
+            Example("From the keyboard",
+                "The grid is one stop of the Tab order: Tab comes to it, then to the search box and the two buttons of its band, and on out of it — no caption and no row is a stop of its own. On the grid the arrows walk the rows, Home and End go to the first and the last, Page Up and Page Down a screenful at a time, and the row the keyboard stands on is lit only while the keyboard holds the grid. Enter or Space on a row runs the row's click — here it opens the subscription, as a click on the row does — and Right and Left open and close its detail, as the chevron does. Up from the first row goes to the header: Left and Right walk the captions, Enter or Space sorts by one, Ctrl with an arrow moves its column and Shift with an arrow sizes it; Down goes back to the rows. No row is chosen here: a click and the keyboard open, and that is all.",
+                new StackPanelComponent()
+                    .SetOrientation(UIOrientation.Vertical)
+                    .SetSpacing(8)
+                    .AddChild(SubscriptionGrid.Create("subscriptions-keys", band: true)
+                        .BindItems(nameof(FiltersController.Subscriptions))
+                        .SetEditable(false)
+                        .SetResizableColumns(true)
+                        .SetReorderableColumns(true)
+                        // The row's click, which Enter and Space run from the keyboard; the grid chooses nothing.
+                        .OnRowClickWithItemKey(nameof(FiltersController.RowPressed))
+                        .SetMaxHeight(UILayoutLength.Absolute(360))
+                    )
+                    .AddChild(CreateStatus(nameof(FiltersController.PressStatus)))
             )
         ];
 }

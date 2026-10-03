@@ -59,7 +59,7 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
                     )
             ),
             Example("A page at a time",
-                "With Paging on, the window is a page: the scroll asks for nothing and the pager under the rows does, by offset. The line beside the buttons says which rows the page holds. Cells edit here too: a windowed source takes the write and reads the subscription anew.",
+                "With Paging on, the window is a page: the scroll asks for nothing, and the pager under the rows — the framework's, the one a list or a table pages with — asks for another by offset, as Page Up and Page Down in the grid do. `ConfigurePager` offers the page sizes here. Cells edit here too: a windowed source takes the write and reads the subscription anew.",
                 new StackPanelComponent()
                     .SetOrientation(UIOrientation.Vertical)
                     .SetSpacing(8)
@@ -74,6 +74,7 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
                         .SetHorizontalScroll(UIScrollMode.Auto)
                         .SetMaxHeight(UILayoutLength.Absolute(420))
                         .SetPaging(true)
+                        .ConfigurePager(pager => pager.SetPageSizes([20, 50, 100]))
                     )
                     .AddChild(new TextComponent()
                         .BindTitle(nameof(SourceController.PagedStatus))

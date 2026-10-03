@@ -6,8 +6,6 @@ var e = {
 	readOnly: "data-ui-grid-readonly",
 	expandOnClick: "data-ui-grid-expand-click",
 	multipleDetails: "data-ui-grid-multiple-details",
-	paging: "data-ui-grid-paging",
-	page: "data-ui-grid-page",
 	aggregate: "data-ui-grid-aggregate",
 	property: "data-ui-grid-property",
 	filter: "data-ui-grid-filter",
@@ -21,13 +19,12 @@ var e = {
 	choices: "data-ui-grid-choices",
 	choice: "data-ui-grid-choice",
 	raw: "data-ui-grid-raw",
-	moment: "data-ui-grid-moment"
+	moment: "data-ui-grid-moment",
+	rules: "data-ui-grid-rules"
 }, t = {
 	root: "ui-data-grid",
 	footer: "ui-data-grid__footer",
 	total: "ui-data-grid__total",
-	pager: "ui-data-grid__pager",
-	pageStatus: "ui-data-grid__page-status",
 	filtersCount: "ui-data-grid__filters-count",
 	filterPanel: "ui-data-grid__filter-panel",
 	filterPart: "ui-data-grid__filter-part",
@@ -43,16 +40,15 @@ var e = {
 	editorClass: "ui-data-grid__editor",
 	editorOpenClass: "ui-data-grid__editor--open",
 	editingCellClass: "ui-data-grid__cell--editing",
-	detailClass: "ui-data-grid__detail"
+	detailClass: "ui-data-grid__detail",
+	verdictClass: "ui-data-grid__verdict"
 }, r = {
 	queryChange: "query-change",
 	cellEdit: "cell-edit",
 	selectionChange: "selection-change"
 }, i = {
 	yes: "ui.grid.yes",
-	no: "ui.grid.no",
-	pageOf: "ui.grid.page-of",
-	pageRange: "ui.grid.page-range"
+	no: "ui.grid.no"
 }, a = "data-grid-cell", o = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\s*$/;
 function s(t) {
 	return {
@@ -158,25 +154,19 @@ function x(e, t) {
 	let r = t.closest(`.${n.detailClass}`);
 	return e.isKeyTarget(t) && (r === null || b(r) !== b(t));
 }
-function re(e, t, n) {
+function S(e, t, n) {
 	return t.parentElement !== null && t.parentElement === e.querySelector(_(n));
 }
-function ie(e, t) {
+function re(e, t) {
 	let n = Number(e.getAttribute(t.componentId));
 	return Number.isInteger(n) ? n : null;
 }
-function S(e, t, n) {
+function C(e, t, n) {
 	n === null ? e.removeAttribute(t) : e.getAttribute(t) !== n && e.setAttribute(t, n);
-}
-function C(e, t) {
-	let n = e.getAttribute(t);
-	if (n === null || n.length === 0) return null;
-	let r = Number(n);
-	return Number.isFinite(r) ? r : null;
 }
 //#endregion
 //#region src/data-grid-chooser-engine.ts
-var ae = class {
+var ie = class {
 	tables;
 	states;
 	names;
@@ -209,26 +199,33 @@ var ae = class {
 			e.classList.toggle(this.names.menuItemCheckedClass, t), e.setAttribute("aria-checked", String(t)), this.states.setDisabled(e, r);
 		}
 	}
-}, oe = `.${t.detailCell}`, w = n.detailClass, se = "detail", T = n.expanded, E = e.expandOnClick, ce = e.multipleDetails, D = `${oe} button`, le = "open", ue = class {
+}, ae = `.${t.detailCell}`, w = n.detailClass, oe = "detail", T = n.expanded, E = e.expandOnClick, se = e.multipleDetails, D = `${ae} button`, ce = "open", le = class {
 	rows;
 	names;
+	states;
 	rowSelector;
 	enterDown = !1;
 	beforeClick = null;
 	constructor(e) {
-		this.rows = e.rows, this.names = e.names, this.rowSelector = g(e.names), this.markAll(e.root.querySelectorAll(h)), e.observeComponents(e.root, h, { childList: !0 }, (e) => this.markAll(e)), e.root.addEventListener("keydown", (e) => {
-			e instanceof KeyboardEvent && e.key === "Enter" && e.target instanceof Element && x(this.rows, e.target) && (this.enterDown = !0, window.setTimeout(() => {
-				this.enterDown = !1;
-			}, 0));
-		}, !0), e.root.addEventListener(le, (e) => {
+		this.rows = e.rows, this.names = e.names, this.states = e.states, this.rowSelector = g(e.names), this.markAll(e.root.querySelectorAll(h)), e.observeComponents(e.root, h, { childList: !0 }, (e) => this.markAll(e)), e.root.addEventListener("keydown", (e) => {
+			if (e instanceof KeyboardEvent && e.target instanceof Element && x(this.rows, e.target)) {
+				if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+					this.handleArrow(e, e.target, e.key === "ArrowRight");
+					return;
+				}
+				e.key === "Enter" && (this.enterDown = !0, window.setTimeout(() => {
+					this.enterDown = !1;
+				}, 0));
+			}
+		}, !0), e.root.addEventListener(ce, (e) => {
 			let t = e.target instanceof Element ? e.target.closest(this.rowSelector) : null, n = b(t);
-			t !== null && n !== null && n.hasAttribute(E) && re(n, t, this.names) && (this.enterDown ? this.toggleDetail(n, t) : this.beforeClick?.row === t && this.restoreDetails(n, this.beforeClick.open), this.beforeClick = null);
+			t !== null && n !== null && n.hasAttribute(E) && S(n, t, this.names) && (this.enterDown ? this.toggleDetail(n, t) : this.beforeClick?.row === t && this.restoreDetails(n, this.beforeClick.open), this.beforeClick = null);
 		}), e.root.addEventListener("click", (e) => {
 			if (!(e.target instanceof Element)) return;
 			let t = b(e.target), n = e.target.closest(this.rowSelector);
-			if (t === null || n === null || !re(t, n, this.names)) return;
+			if (t === null || n === null || !S(t, n, this.names)) return;
 			let r = !(e instanceof MouseEvent) || e.detail <= 1;
-			r && (this.beforeClick = null), e.target.closest(`.${w}`)?.parentElement !== n && (e.target.closest(oe) !== null || t.hasAttribute(E) && !this.answersClick(e.target)) && (e.preventDefault(), r && (this.beforeClick = {
+			r && (this.beforeClick = null), e.target.closest(`.${w}`)?.parentElement !== n && (e.target.closest(ae) !== null || t.hasAttribute(E) && !this.answersClick(e.target)) && (e.preventDefault(), r && (this.beforeClick = {
 				row: n,
 				open: this.openDetails(t)
 			}), this.toggleDetail(t, n));
@@ -237,13 +234,19 @@ var ae = class {
 	markAll(e) {
 		for (let t of e) for (let e of v(t, `${D}:not([aria-expanded])`)) e.setAttribute("aria-expanded", "false");
 	}
+	handleArrow(e, t, n) {
+		let r = b(t);
+		if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || r === null || this.states.isInert(r)) return;
+		let i = y(r, `${this.rowSelector}[${this.names.rowFocus}]`);
+		i !== null && S(r, i, this.names) && i.querySelector(`:scope > ${D}`) !== null && (e.preventDefault(), i.hasAttribute(T) !== n && this.toggleDetail(r, i));
+	}
 	toggleDetail(e, t) {
 		if (t.hasAttribute(T)) {
 			O(t);
 			return;
 		}
-		if (!e.hasAttribute(ce)) for (let t of v(e, `${this.rowSelector}[${T}]`)) O(t);
-		let n = ie(e, this.names), r = n === null ? null : this.rows.renderVariant(t, n, se);
+		if (!e.hasAttribute(se)) for (let t of v(e, `${this.rowSelector}[${T}]`)) O(t);
+		let n = re(e, this.names), r = n === null ? null : this.rows.renderVariant(t, n, oe);
 		if (r === null) return;
 		let i = document.createElement("div");
 		i.className = w, i.setAttribute(this.names.noRowDrag, ""), i.appendChild(r), t.appendChild(i), t.setAttribute(T, ""), k(t, !0);
@@ -269,20 +272,22 @@ function k(e, t) {
 }
 //#endregion
 //#region src/data-grid-edit-engine.ts
-var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.readOnly, fe = "input, textarea, select, button, [tabindex]", pe = class {
+var A = `.${t.editableCell}`, ue = e.editor, j = e.kind, M = e.column, N = e.readOnly, de = "input, textarea, select, button, [tabindex]", fe = class {
 	rows;
 	values;
 	tables;
 	states;
 	names;
 	focus;
+	validation;
 	rowSelector;
 	open = /* @__PURE__ */ new Map();
 	unclaimed = /* @__PURE__ */ new WeakSet();
 	leaving = null;
+	restoring = !1;
 	constructor(e) {
 		let t = e.root;
-		this.rows = e.rows, this.values = e.values, this.tables = e.tables, this.states = e.states, this.names = e.names, this.focus = e.focus, this.rowSelector = g(e.names);
+		this.rows = e.rows, this.values = e.values, this.tables = e.tables, this.states = e.states, this.names = e.names, this.focus = e.focus, this.validation = e.validation, this.rowSelector = g(e.names);
 		for (let e of t.querySelectorAll(h)) this.syncClaims(e);
 		t.addEventListener("dblclick", (e) => {
 			let t = e.target instanceof Element ? e.target.closest(A) : null;
@@ -305,7 +310,7 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 		}), t.addEventListener("mousedown", (e) => {
 			let t = b(e.target), n = t === null ? void 0 : this.open.get(t);
 			if (n === void 0 || !(e.target instanceof Element) || !n.editor.contains(e.target)) return;
-			let r = e.target.closest(fe);
+			let r = e.target.closest(de);
 			(r === null || !n.editor.contains(r)) && e.preventDefault();
 		}, !0), t.addEventListener("focusout", (e) => {
 			if (!(e instanceof FocusEvent) || !(e.target instanceof Element)) return;
@@ -313,7 +318,7 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 			if (t === null || n === void 0 || !n.editor.contains(e.target)) return;
 			let r = e.relatedTarget;
 			if (r instanceof Node && n.editor.contains(r)) return;
-			let i = r === null && e.target.isConnected && !_e(e.target);
+			let i = r === null && e.target.isConnected && !ge(e.target);
 			window.setTimeout(() => this.followFocusOut(t, n, i), 0);
 		}, !0);
 	}
@@ -340,7 +345,13 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 		let r = document.activeElement;
 		if (this.open.get(e) !== t || t.editor.contains(r)) return;
 		let i = n && (r === null || r === document.body);
-		i && this.canEdit(e) && (this.focus.first(t.editor)?.focus({ preventScroll: !0 }), t.editor.contains(document.activeElement)) || (this.closeEditor(e, t, this.canEdit(e)), i && e.focus({ preventScroll: !0 }));
+		if (!(i && this.canEdit(e) && (this.focus.first(t.editor)?.focus({ preventScroll: !0 }), t.editor.contains(document.activeElement)))) {
+			if (!this.closeEditor(e, t, this.canEdit(e))) {
+				if (t.editor.contains(document.activeElement)) return;
+				this.closeEditor(e, t, !1);
+			}
+			i && e.focus({ preventScroll: !0 });
+		}
 	}
 	holdWindowChange(e) {
 		let t = e.target;
@@ -348,18 +359,23 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 			e.stopPropagation();
 			return;
 		}
-		if (!e.isTrusted || document.hasFocus() || !(t instanceof Element) || t !== document.activeElement || !ge(t)) return;
+		if (!this.restoring && t instanceof Element && this.refusedHere(t)) {
+			e.stopPropagation();
+			return;
+		}
+		if (!e.isTrusted || document.hasFocus() || !(t instanceof Element) || t !== document.activeElement || !he(t)) return;
 		let n = b(t), r = n === null ? void 0 : this.open.get(n);
 		r !== void 0 && r.editor.contains(t) && e.stopPropagation();
+	}
+	refusedHere(e) {
+		let t = b(e), n = t === null ? void 0 : this.open.get(t);
+		return n !== void 0 && n.editor.contains(e) && this.validation.refuses(e);
 	}
 	openEditor(e) {
 		let t = b(e), r = e.closest(this.rowSelector);
 		if (t === null || r === null || t.hasAttribute(N)) return;
 		let i = this.open.get(t);
-		if (i !== void 0) {
-			if (i.cell === e) return;
-			this.closeEditor(t, i, !0);
-		}
+		if (i !== void 0 && (i.cell === e || !this.closeEditor(t, i, !0))) return;
 		let a = this.createEditor(t, r, e);
 		if (a === null) return;
 		let o = a.querySelector(`[${this.names.valueHolder}][${this.names.bindValue}]`) ?? a.querySelector(`[${this.names.bindValue}]`), s = {
@@ -387,16 +403,16 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 			t.left + t.width / 2 < a ? o = Math.max(o, t.right) : s = Math.min(s, t.left);
 		}
 		let c = n.getBoundingClientRect();
-		r.scrollLeft += me(c.left, c.right, o, s);
+		r.scrollLeft += pe(c.left, c.right, o, s);
 	}
 	createEditor(e, r, i) {
-		let a = i.getAttribute(de), o = ie(e, this.names);
+		let a = i.getAttribute(ue), o = re(e, this.names);
 		if (a === null || o === null) return null;
 		let s = this.rows.renderVariant(r, o, a);
 		if (s === null) return null;
 		let c = document.createElement("div");
 		for (let e of i.attributes) c.setAttribute(e.name, e.value);
-		c.classList.remove(t.editableCell, n.editingCellClass), c.classList.add(n.editorClass), c.removeAttribute(de), c.appendChild(s);
+		c.classList.remove(t.editableCell, n.editingCellClass), c.classList.add(n.editorClass), c.removeAttribute(ue), c.appendChild(s);
 		let l = i.querySelector(`[${j}]`)?.getAttribute(j);
 		return l != null && c.setAttribute(j, l), c;
 	}
@@ -404,8 +420,18 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 		return e === null ? null : this.values.read(e);
 	}
 	closeEditor(e, t, i) {
-		if (this.open.get(e) !== t) return;
-		this.open.delete(e), i ? (t.field !== null && !t.changed && this.fieldValue(t.field) !== t.original && t.field.dispatchEvent(new Event("change", { bubbles: !0 })), (t.changed || this.fieldValue(t.field) !== t.original) && (t.field ?? t.editor).dispatchEvent(new Event(r.cellEdit, { bubbles: !0 }))) : t.field !== null && t.changed && (this.values.write(t.field, t.original), t.field.dispatchEvent(new Event("change", { bubbles: !0 }))), t.field !== null && this.values.release(t.field);
+		if (this.open.get(e) !== t) return !0;
+		if (i && this.refusesEdit(t)) return this.focus.first(t.editor)?.focus({ preventScroll: !0 }), !1;
+		if (this.open.delete(e), i) t.field !== null && !t.changed && this.fieldValue(t.field) !== t.original && t.field.dispatchEvent(new Event("change", { bubbles: !0 })), (t.changed || this.fieldValue(t.field) !== t.original) && (t.field ?? t.editor).dispatchEvent(new Event(r.cellEdit, { bubbles: !0 }));
+		else if (t.field !== null && t.changed) {
+			this.values.write(t.field, t.original), this.restoring = !0;
+			try {
+				t.field.dispatchEvent(new Event("change", { bubbles: !0 }));
+			} finally {
+				this.restoring = !1;
+			}
+		}
+		t.field !== null && this.values.release(t.field);
 		let a = t.editor.contains(document.activeElement);
 		t.cell.classList.remove(n.editingCellClass), this.leaving = t.editor;
 		try {
@@ -413,7 +439,10 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 		} finally {
 			this.leaving = null;
 		}
-		a && e.focus({ preventScroll: !0 });
+		return a && e.focus({ preventScroll: !0 }), !0;
+	}
+	refusesEdit(e) {
+		return e.field !== null && (e.changed || this.fieldValue(e.field) !== e.original) && this.validation.refuses(e.field);
 	}
 	followRow(e) {
 		let t = this.open.get(e);
@@ -444,7 +473,7 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 		}
 		if (!n.editor.contains(e.target)) return;
 		let r = e.target.closest(this.names.popupSelector), i = n.editor.querySelector("[aria-expanded='true']");
-		if ((r === null || !n.editor.contains(r)) && i === null || e.key === "Tab" && he(r, i)) switch (e.key) {
+		if ((r === null || !n.editor.contains(r)) && i === null || e.key === "Tab" && me(r, i)) switch (e.key) {
 			case "Enter":
 				e.preventDefault(), this.commitEditor(t, n);
 				break;
@@ -454,7 +483,7 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 			case "Tab": {
 				let r = this.siblingCell(t, n.cell, e.shiftKey ? -1 : 1);
 				if (r === null) return;
-				e.preventDefault(), this.commitEditor(t, n), this.openEditor(r);
+				e.preventDefault(), this.commitEditor(t, n) && this.openEditor(r);
 				break;
 			}
 			default: return;
@@ -473,22 +502,22 @@ var A = `.${t.editableCell}`, de = e.editor, j = e.kind, M = e.column, N = e.rea
 	}
 	commitEditor(e, t) {
 		let n = document.activeElement instanceof HTMLElement && t.editor.contains(document.activeElement);
-		n && document.activeElement.blur(), this.closeEditor(e, t, !0), n && e.focus({ preventScroll: !0 });
+		return n && document.activeElement.blur(), this.closeEditor(e, t, !0) ? (n && e.focus({ preventScroll: !0 }), !0) : !1;
 	}
 };
-function me(e, t, n, r) {
+function pe(e, t, n, r) {
 	return e < n ? e - n : t > r ? Math.min(t - r, e - n) : 0;
 }
-function he(e, t) {
+function me(e, t) {
 	return e === null ? t?.getAttribute("aria-haspopup") === "listbox" : e.getAttribute("role") === "listbox";
 }
 function P(e) {
 	return e.type === "text" || e.type === "number" || e.type === "search" || e.type === "email" || e.type === "url" || e.type === "tel" || e.type === "password";
 }
-function ge(e) {
+function he(e) {
 	return e instanceof HTMLTextAreaElement || e instanceof HTMLInputElement && P(e);
 }
-function _e(e) {
+function ge(e) {
 	return e.getClientRects().length > 0 && getComputedStyle(e).visibility === "visible";
 }
 //#endregion
@@ -519,7 +548,7 @@ function R(e, t, n) {
 }
 //#endregion
 //#region src/data-grid-filter-engine.ts
-var z = e.filter, B = e.filterKind, V = e.filterBound, H = `[${z}]`, U = `.${t.filterPanel}`, ve = `.${t.filtersCount}`, ye = `.${t.filtersClear}`, W = `.${t.filterPart}`, be = class {
+var z = e.filter, B = e.filterKind, V = e.filterBound, H = `[${z}]`, U = `.${t.filterPanel}`, _e = `.${t.filtersCount}`, ve = `.${t.filtersClear}`, W = `.${t.filterPart}`, ye = class {
 	values;
 	badges;
 	properties;
@@ -532,7 +561,7 @@ var z = e.filter, B = e.filterKind, V = e.filterBound, H = `[${z}]`, U = `.${t.f
 			childList: !0,
 			attributeFilter: [e.names.itemsQuery]
 		}, (e) => this.fillAll(e)), e.root.addEventListener("click", (e) => {
-			let t = e.target instanceof Element ? e.target.closest(ye) : null, n = b(t);
+			let t = e.target instanceof Element ? e.target.closest(ve) : null, n = b(t);
 			t !== null && n !== null && !this.states.isInert(t) && this.clearPanel(n);
 		}), e.root.addEventListener("change", (e) => {
 			let t = e.target instanceof Element ? e.target.closest(H) : null, n = b(t);
@@ -555,7 +584,7 @@ var z = e.filter, B = e.filterKind, V = e.filterBound, H = `[${z}]`, U = `.${t.f
 		for (let e of n) t.has(e) || i.push(...this.readFilterTermsOf(e));
 		R(e, this.names, {
 			...r,
-			filters: Ce(r.filters ?? [], n.flatMap(Se), i)
+			filters: Se(r.filters ?? [], n.flatMap(xe), i)
 		}), this.written.set(e, F(e, this.names)), this.syncFiltersCount(e);
 	}
 	fillAll(e) {
@@ -580,7 +609,7 @@ var z = e.filter, B = e.filterKind, V = e.filterBound, H = `[${z}]`, U = `.${t.f
 	readFilterTermsOf(e) {
 		let t = e.getAttribute(z) ?? "", n = e.getAttribute(B) ?? "text", r = [];
 		for (let i of e.querySelectorAll(`:scope > ${W}`)) {
-			let e = this.partValue(i, n), a = e === null ? null : Ee(t, n, i.getAttribute(V), e);
+			let e = this.partValue(i, n), a = e === null ? null : Te(t, n, i.getAttribute(V), e);
 			a !== null && r.push(a);
 		}
 		return r;
@@ -593,19 +622,19 @@ var z = e.filter, B = e.filterKind, V = e.filterBound, H = `[${z}]`, U = `.${t.f
 		return i === null ? null : String(i);
 	}
 	syncFiltersCount(e) {
-		let t = y(e, ve);
+		let t = y(e, _e);
 		if (t === null) return;
 		let n = L(e, this.names).filters ?? [], r = 0;
-		for (let t of v(e, H)) t.closest(U) !== null && xe(t, n) && r++;
+		for (let t of v(e, H)) t.closest(U) !== null && be(t, n) && r++;
 		this.badges.writeCount(t, r), t.hidden = r === 0;
-		let i = y(e, ye);
+		let i = y(e, ve);
 		i !== null && this.states.setDisabled(i, r === 0);
 	}
 };
-function xe(e, t) {
-	return Se(e).some((e) => G(t, e.property, e.kind, e.bound) !== null);
+function be(e, t) {
+	return xe(e).some((e) => G(t, e.property, e.kind, e.bound) !== null);
 }
-function Se(e) {
+function xe(e) {
 	let t = e.getAttribute(z) ?? "", n = e.getAttribute(B) ?? "text";
 	return [...e.querySelectorAll(`:scope > ${W}`)].map((e) => ({
 		property: t,
@@ -613,7 +642,7 @@ function Se(e) {
 		bound: e.getAttribute(V)
 	}));
 }
-function Ce(e, t, n) {
+function Se(e, t, n) {
 	return [...e.filter((e) => !t.some((t) => t.property === e.itemProperty && G([e], t.property, t.kind, t.bound) !== null)), ...n];
 }
 function G(e, t, n, r) {
@@ -627,7 +656,7 @@ function G(e, t, n, r) {
 			}
 			break;
 		case "date": {
-			let e = r.operator === (i ? "Less" : "GreaterOrEqual") ? we(String(r.value)) : null, t = e !== null && i ? Te(e, -1) : e;
+			let e = r.operator === (i ? "Less" : "GreaterOrEqual") ? Ce(String(r.value)) : null, t = e !== null && i ? we(e, -1) : e;
 			if (t !== null) return t;
 			break;
 		}
@@ -639,16 +668,16 @@ function G(e, t, n, r) {
 	}
 	return null;
 }
-function we(e) {
+function Ce(e) {
 	return /^\d{4}-\d{2}-\d{2}(?:T00:00(?::00(?:\.0+)?)?)?$/.test(e) ? e.slice(0, 10) : null;
 }
-function Te(e, t) {
+function we(e, t) {
 	let n = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e);
 	if (n === null) return null;
 	let r = /* @__PURE__ */ new Date(0);
 	return r.setUTCFullYear(Number(n[1]), Number(n[2]) - 1, Number(n[3]) + t), r.toISOString().slice(0, 10);
 }
-function Ee(e, t, n, r) {
+function Te(e, t, n, r) {
 	let i = n === "to" ? "LessOrEqual" : "GreaterOrEqual";
 	switch (t) {
 		case "number":
@@ -661,7 +690,7 @@ function Ee(e, t, n, r) {
 			};
 		}
 		case "date": {
-			let t = n === "to" ? Te(r, 1) : null;
+			let t = n === "to" ? we(r, 1) : null;
 			return t === null ? {
 				itemProperty: e,
 				operator: i,
@@ -690,77 +719,8 @@ function K(e) {
 	return e.trim().length === 0 || !Number.isFinite(t) ? null : t;
 }
 //#endregion
-//#region src/data-grid-pager-engine.ts
-var De = e.paging, Oe = `:scope > .${t.pager}`, ke = `.${t.pageStatus}`, q = e.page, Ae = 50, je = class {
-	strings;
-	numbers;
-	states;
-	names;
-	hostSelector;
-	constructor(e) {
-		let t = e.root;
-		this.strings = e.strings, this.numbers = e.numbers, this.states = e.states, this.names = e.names, this.hostSelector = _(e.names), this.syncAll(t.querySelectorAll(h)), e.observeComponents(t, h, {
-			childList: !0,
-			attributeFilter: [
-				De,
-				e.names.windowOffset,
-				e.names.windowTotal,
-				e.names.windowMoreAfter
-			]
-		}, (e) => this.syncAll(e)), e.strings.onChange(() => this.syncAll(t.querySelectorAll(h))), t.addEventListener("click", (t) => {
-			let n = t.target instanceof Element ? t.target.closest(`[${q}]`) : null, r = b(n)?.querySelector(this.hostSelector) ?? null;
-			if (n === null || r === null || this.states.isInert(n)) return;
-			let i = Ne(Me(r, this.names), n.getAttribute(q) ?? "");
-			i !== null && (t.preventDefault(), e.windows.requestOffsetAsync(r, i));
-		}, !0);
-	}
-	syncAll(e) {
-		for (let t of e) this.syncPager(t);
-	}
-	syncPager(e) {
-		let t = e.querySelector(this.hostSelector), n = e.querySelector(Oe);
-		if (t === null || n === null || !e.hasAttribute(De)) return;
-		let r = Me(t, this.names), a = n.querySelector(ke);
-		if (a !== null) {
-			let t = r.count === 0 ? 0 : r.offset + 1, n = r.offset + r.count, o = this.numbers.readCulture(e), s = (e) => this.numbers.format(e, "N0", o);
-			r.total === null ? this.strings.write(a, null, i.pageRange, {
-				from: s(t),
-				to: s(n)
-			}) : this.strings.write(a, null, i.pageOf, {
-				from: s(t),
-				to: s(n),
-				total: s(r.total)
-			});
-		}
-		for (let e of n.querySelectorAll(`[${q}]`)) this.states.setDisabled(e, Ne(r, e.getAttribute(q) ?? "") === null);
-	}
-};
-function Me(e, t) {
-	let n = e.querySelectorAll(`:scope > ${g(t)}`).length, r = C(e, t.windowSize) ?? 0;
-	return {
-		offset: C(e, t.windowOffset) ?? 0,
-		count: n,
-		size: r > 0 ? r : n > 0 ? n : Ae,
-		total: C(e, t.windowTotal),
-		moreAfter: e.getAttribute(t.windowMoreAfter) === "true"
-	};
-}
-function Ne(e, t) {
-	switch (t) {
-		case "first": return e.offset > 0 ? 0 : null;
-		case "previous": return e.offset > 0 ? Math.max(0, (Math.ceil(e.offset / e.size) - 1) * e.size) : null;
-		case "next": return e.moreAfter ? e.offset + e.count : null;
-		case "last": {
-			if (e.total === null) return e.moreAfter ? e.offset + e.count : null;
-			let t = Math.max(0, Math.floor((e.total - 1) / e.size) * e.size);
-			return e.offset < t ? t : null;
-		}
-		default: return null;
-	}
-}
-//#endregion
 //#region src/data-grid-selection-engine.ts
-var J = `[${e.select}]`, Pe = `[${e.selectAll}]`, Y = "input[type='checkbox']", Fe = /* @__PURE__ */ new Set(["SelectedKeys", "SelectedKey"]), Ie = class {
+var q = `[${e.select}]`, Ee = `[${e.selectAll}]`, J = "input[type='checkbox']", De = /* @__PURE__ */ new Set(["SelectedKeys", "SelectedKey"]), Oe = class {
 	selection;
 	states;
 	names;
@@ -770,13 +730,13 @@ var J = `[${e.select}]`, Pe = `[${e.selectAll}]`, Y = "input[type='checkbox']", 
 	said = /* @__PURE__ */ new WeakMap();
 	constructor(e) {
 		this.selection = e.selection, this.states = e.states, this.names = e.names, this.hostSelector = _(e.names), this.rowSelector = g(e.names), this.ownRowSelector = `[${e.names.itemsHost}] > ${this.rowSelector}`, e.root.addEventListener("change", (e) => {
-			let t = e.target instanceof Element ? e.target.closest(Y) : null, n = b(t);
+			let t = e.target instanceof Element ? e.target.closest(J) : null, n = b(t);
 			if (t === null || n === null) return;
-			if (t.closest(Pe) !== null) {
+			if (t.closest(Ee) !== null) {
 				this.selection.setSelected(n, v(n, this.ownRowSelector).filter((e) => this.canChoose(e)), t.checked), this.sync(n);
 				return;
 			}
-			let r = t.closest(J) === null ? null : t.closest(this.rowSelector);
+			let r = t.closest(q) === null ? null : t.closest(this.rowSelector);
 			r !== null && (this.selection.toggle(r), this.sync(n));
 		}, !0), e.propertyPatchEngine.addValueChangeHandler((t) => this.notePushed(e.root, t)), this.syncAll(e.root.querySelectorAll(h)), e.observeComponents(e.root, h, {
 			childList: !0,
@@ -793,13 +753,13 @@ var J = `[${e.select}]`, Pe = `[${e.selectAll}]`, Y = "input[type='checkbox']", 
 		return !e.hasAttribute(this.names.unselectable) && !this.states.isInert(e);
 	}
 	sync(e) {
-		let t = y(e, `${Pe} ${Y}`);
-		(t !== null || y(e, J) !== null) && this.syncBoxes(e, t), this.sayChange(e);
+		let t = y(e, `${Ee} ${J}`);
+		(t !== null || y(e, q) !== null) && this.syncBoxes(e, t), this.sayChange(e);
 	}
 	syncBoxes(e, t) {
 		let n = 0, r = 0;
 		for (let t of v(e, this.ownRowSelector)) {
-			let i = this.selection.isSelected(t), a = y(e, `${J} ${Y}`, t), o = this.canChoose(t);
+			let i = this.selection.isSelected(t), a = y(e, `${q} ${J}`, t), o = this.canChoose(t);
 			o && !t.classList.contains(this.names.hiddenClass) && (n++, i && r++), a !== null && (a.checked !== i && (a.checked = i), this.states.setDisabled(a, !o));
 		}
 		t !== null && (t.checked = r > 0 && r === n, t.indeterminate = r > 0 && r < n, this.states.setDisabled(t, n === 0));
@@ -816,7 +776,7 @@ var J = `[${e.select}]`, Pe = `[${e.selectAll}]`, Y = "input[type='checkbox']", 
 		return e.querySelector(this.hostSelector)?.getAttribute(this.names.selectedKeys) ?? e.getAttribute(this.names.selectedKey);
 	}
 	notePushed(e, t) {
-		if (t.local || !Fe.has(t.propertyName)) return;
+		if (t.local || !De.has(t.propertyName)) return;
 		let n = t.components.length > 0 ? t.components.filter((e) => e.matches(h)) : [...e.querySelectorAll(h)];
 		for (let e of n) e instanceof HTMLElement && this.said.set(e, this.keysOf(e));
 	}
@@ -826,7 +786,7 @@ var J = `[${e.select}]`, Pe = `[${e.selectAll}]`, Y = "input[type='checkbox']", 
 };
 //#endregion
 //#region src/data-grid-sort.ts
-function Le(e, t, n) {
+function ke(e, t, n) {
 	let r = e.findIndex((e) => e.itemProperty === t), i = r < 0 ? null : e[r].direction, a = i === null ? "Ascending" : i === "Ascending" ? "Descending" : null;
 	if (!n) return a === null ? [] : [{
 		itemProperty: t,
@@ -842,7 +802,7 @@ function Le(e, t, n) {
 		direction: a
 	}, o;
 }
-function Re(e, t) {
+function Ae(e, t) {
 	let n = e.findIndex((e) => e.itemProperty === t);
 	return n < 0 ? null : {
 		direction: e[n].direction,
@@ -851,16 +811,16 @@ function Re(e, t) {
 }
 //#endregion
 //#region src/data-grid-sort-engine.ts
-var X = e.sort, ze = `.${t.sortMark}`, Be = class {
+var Y = e.sort, je = `.${t.sortMark}`, Me = class {
 	names;
 	headerCellSelector;
 	constructor(e) {
 		let t = e.root;
-		this.names = e.names, this.headerCellSelector = `:scope > .${e.names.tableScrollClass} > .${e.names.tableHeaderClass} > [${X}]`, this.syncAll(t.querySelectorAll(h)), e.observeComponents(t, h, {
+		this.names = e.names, this.headerCellSelector = `:scope > .${e.names.tableScrollClass} > .${e.names.tableHeaderClass} > [${Y}]`, this.syncAll(t.querySelectorAll(h)), e.observeComponents(t, h, {
 			childList: !0,
 			attributeFilter: [e.names.itemsQuery]
 		}, (e) => this.syncAll(e)), t.addEventListener("click", (e) => this.handleHeaderPress(e, e instanceof MouseEvent && e.shiftKey), !0), t.addEventListener("keydown", (e) => {
-			e instanceof KeyboardEvent && (e.key === "Enter" || e.key === " ") && e.target instanceof Element && e.target.hasAttribute(X) && this.handleHeaderPress(e, e.shiftKey);
+			e instanceof KeyboardEvent && (e.key === "Enter" || e.key === " ") && e.target instanceof Element && e.target.hasAttribute(Y) && this.handleHeaderPress(e, e.shiftKey);
 		}, !0);
 	}
 	syncAll(e) {
@@ -869,22 +829,22 @@ var X = e.sort, ze = `.${t.sortMark}`, Be = class {
 	syncSortMarks(e) {
 		let t = L(e, this.names).sorts ?? [];
 		for (let r of e.querySelectorAll(this.headerCellSelector)) {
-			let e = Re(t, r.getAttribute(X) ?? ""), i = r.querySelector(ze);
-			S(r, "aria-sort", e === null ? "none" : e.direction === "Ascending" ? "ascending" : "descending"), S(r, n.sorted, e === null ? null : e.direction === "Ascending" ? "asc" : "desc"), i !== null && S(i, n.sortPlace, e !== null && t.length > 1 ? String(e.place) : null);
+			let e = Ae(t, r.getAttribute(Y) ?? ""), i = r.querySelector(je);
+			C(r, "aria-sort", e === null ? "none" : e.direction === "Ascending" ? "ascending" : "descending"), C(r, n.sorted, e === null ? null : e.direction === "Ascending" ? "asc" : "desc"), i !== null && C(i, n.sortPlace, e !== null && t.length > 1 ? String(e.place) : null);
 		}
 	}
 	handleHeaderPress(e, t) {
 		if (e.defaultPrevented || !(e.target instanceof Element) || e.target.closest(`.${this.names.tableResizerClass}`) !== null) return;
-		let n = e.target.closest(`[${X}]`), r = b(n), i = n?.getAttribute(X) ?? null;
+		let n = e.target.closest(`[${Y}]`), r = b(n), i = n?.getAttribute(Y) ?? null;
 		if (n === null || r === null || i === null || i.length === 0) return;
 		e.preventDefault();
 		let a = L(r, this.names);
 		R(r, this.names, {
 			...a,
-			sorts: Le(a.sorts ?? [], i, t)
+			sorts: ke(a.sorts ?? [], i, t)
 		});
 	}
-}, Ve = e.aggregate, He = e.column, Z = e.raw, Ue = class {
+}, Ne = e.aggregate, X = e.column, Z = e.raw, Pe = class {
 	formatting;
 	rows;
 	names;
@@ -894,7 +854,7 @@ var X = e.sort, ze = `.${t.sortMark}`, Be = class {
 	pending = /* @__PURE__ */ new Set();
 	scheduled = !1;
 	constructor(e, n) {
-		this.formatting = n, this.rows = e.rows, this.names = e.names, this.hostSelector = _(e.names), this.totalSelector = `:scope > .${e.names.tableScrollClass} > .${t.footer} > .${t.total}[${Ve}]`, this.shownRowSelector = `:scope > ${g(e.names)}:not(.${e.names.hiddenClass})`, this.syncAll(e.root.querySelectorAll(h)), e.observeComponents(e.root, h, {
+		this.formatting = n, this.rows = e.rows, this.names = e.names, this.hostSelector = _(e.names), this.totalSelector = `:scope > .${e.names.tableScrollClass} > .${t.footer} > .${t.total}[${Ne}]`, this.shownRowSelector = `:scope > ${g(e.names)}:not(.${e.names.hiddenClass})`, this.syncAll(e.root.querySelectorAll(h)), e.observeComponents(e.root, h, {
 			childList: !0,
 			attributeFilter: [
 				"class",
@@ -911,9 +871,9 @@ var X = e.sort, ze = `.${t.sortMark}`, Be = class {
 		if (n.length === 0) return;
 		let r = t.querySelector(this.hostSelector);
 		if (r === null) return;
-		let i = r.getAttribute(this.names.hostMode) === "windowed", a = i ? We(r, this.names) : null, o = i ? null : this.rows.itemsOf(r), c = this.formatting.numbers.readCulture(t), l = this.formatting.temporal.readCulture(t);
+		let i = r.getAttribute(this.names.hostMode) === "windowed", a = i ? Fe(r, this.names) : null, o = i ? null : this.rows.itemsOf(r), c = this.formatting.numbers.readCulture(t), l = this.formatting.temporal.readCulture(t);
 		for (let t of n) {
-			let n = t.getAttribute(He) ?? "", u = t.getAttribute(e.property) ?? n, d = t.getAttribute(Ve) ?? "", f = i ? a?.[u] ?? null : o === null ? d === "count" ? r.querySelectorAll(this.shownRowSelector).length : qe(d, Ke(r, n, this.shownRowSelector)) : d === "count" ? o.length : qe(d, Ge(o, u, this.rows)), p = f === null ? "" : ee(f, s(t), c, l, this.formatting);
+			let n = t.getAttribute(X) ?? "", u = t.getAttribute(e.property) ?? n, d = t.getAttribute(Ne) ?? "", f = i ? a?.[u] ?? null : o === null ? d === "count" ? r.querySelectorAll(this.shownRowSelector).length : Re(d, Le(r, n, this.shownRowSelector)) : d === "count" ? o.length : Re(d, Ie(o, u, this.rows)), p = f === null ? "" : ee(f, s(t), c, l, this.formatting);
 			t.textContent !== p && (t.textContent = p);
 		}
 	}
@@ -926,7 +886,7 @@ var X = e.sort, ze = `.${t.sortMark}`, Be = class {
 		}));
 	}
 };
-function We(e, t) {
+function Fe(e, t) {
 	let n = e.getAttribute(t.windowAggregates);
 	if (n === null || n.length === 0) return null;
 	try {
@@ -935,7 +895,7 @@ function We(e, t) {
 		return null;
 	}
 }
-function Ge(e, t, n) {
+function Ie(e, t, n) {
 	let r = [];
 	for (let i of e) {
 		let e = m(n.readPath(i, t));
@@ -943,56 +903,125 @@ function Ge(e, t, n) {
 	}
 	return r;
 }
-function Ke(e, t, n) {
+function Le(e, t, n) {
 	let r = [];
 	for (let i of e.querySelectorAll(n)) {
-		let e = i.querySelector(`:scope > [${He}="${CSS.escape(t)}"] [${Z}]`), n = e === null ? NaN : Number(e.getAttribute(Z));
+		let e = i.querySelector(`:scope > [${X}="${CSS.escape(t)}"] [${Z}]`), n = e === null ? NaN : Number(e.getAttribute(Z));
 		Number.isFinite(n) && r.push(n);
 	}
 	return r;
 }
-function qe(e, t) {
+function Re(e, t) {
 	if (e === "count") return t.length;
 	if (t.length === 0) return null;
 	switch (e) {
 		case "sum": return t.reduce((e, t) => e + t, 0);
 		case "average": return t.reduce((e, t) => e + t, 0) / t.length;
-		case "min": return Je(t, -1);
-		case "max": return Je(t, 1);
+		case "min": return ze(t, -1);
+		case "max": return ze(t, 1);
 		default: return null;
 	}
 }
-function Je(e, t) {
+function ze(e, t) {
 	let n = e[0];
 	for (let r = 1; r < e.length; r++) (e[r] - n) * t > 0 && (n = e[r]);
 	return n;
 }
 //#endregion
+//#region src/data-grid-verdict-engine.ts
+var Be = /* @__PURE__ */ new Map(), Ve = class {
+	rows;
+	validation;
+	names;
+	rulesByGrid = /* @__PURE__ */ new WeakMap();
+	boxes = /* @__PURE__ */ new WeakMap();
+	constructor(e) {
+		this.rows = e.rows, this.validation = e.validation, this.names = e.names;
+		for (let t of e.root.querySelectorAll(h)) this.judgeGrid(t);
+		e.observeComponents(e.root, g(e.names), {
+			childList: !0,
+			characterData: !0,
+			relevant: (e) => !this.isVerdictWrite(e)
+		}, (e) => {
+			for (let t of e) this.judgeRow(t);
+		});
+	}
+	judgeGrid(e) {
+		if (this.rulesOf(e).size !== 0) for (let t of e.querySelectorAll(g(this.names))) this.judgeRow(t);
+	}
+	isVerdictWrite(e) {
+		let t = e.target instanceof Element ? e.target : e.target.parentElement;
+		if (t !== null && t.closest(`.${n.verdictClass}`) !== null) return !0;
+		let r = [...e.addedNodes, ...e.removedNodes];
+		return r.length > 0 && r.every((e) => e instanceof Element && e.classList.contains(n.verdictClass));
+	}
+	judgeRow(n) {
+		let r = b(n);
+		if (r === null || !S(r, n, this.names)) return;
+		let i = this.rulesOf(r);
+		if (i.size === 0) return;
+		let a = this.rows.itemOf(n);
+		if (a !== void 0) for (let r of n.children) {
+			if (!(r instanceof HTMLElement) || !r.classList.contains(t.editableCell)) continue;
+			let n = i.get(r.getAttribute(e.column) ?? "");
+			n !== void 0 && this.judgeCell(r, n.editor, this.rows.readPath(a, n.path));
+		}
+	}
+	judgeCell(e, t, r) {
+		let i = this.validation.judge(t, r), a = this.boxes.get(e);
+		if (i !== null || a !== void 0) {
+			if (a === void 0 || a.parentElement !== e) {
+				a = document.createElement("span"), a.className = n.verdictClass;
+				let t = document.createElement("span");
+				t.setAttribute(this.names.validationMessage, ""), a.append(t), e.append(a), this.boxes.set(e, a);
+			}
+			this.validation.mark(a, i?.severity ?? null, i?.words ?? null);
+		}
+	}
+	rulesOf(t) {
+		let n = this.rulesByGrid.get(t);
+		return n === void 0 && (n = He(t.getAttribute(e.rules)), this.rulesByGrid.set(t, n)), n;
+	}
+};
+function He(e) {
+	if (e === null || e.length === 0) return Be;
+	try {
+		let t = JSON.parse(e), n = /* @__PURE__ */ new Map();
+		for (let [e, r] of Object.entries(t)) typeof r.editor == "number" && typeof r.path == "string" && n.set(e, {
+			editor: r.editor,
+			path: r.path
+		});
+		return n;
+	} catch {
+		return Be;
+	}
+}
+//#endregion
 //#region src/data-grid-engine.ts
-var Ye = class {
+var Ue = class {
 	formatting;
 	constructor(e) {
 		this.formatting = {
 			numbers: e.numbers,
 			temporal: e.temporal,
 			strings: e.strings
-		}, new Be(e), new pe(e), new be(e), new je(e), new Ue(e, this.formatting), new ae(e), new ue(e), new Ie(e), e.strings.onChange(() => d(e.root, this.formatting));
+		}, new Me(e), new fe(e), new ye(e), new Pe(e, this.formatting), new ie(e), new le(e), new Oe(e), new Ve(e), e.strings.onChange(() => d(e.root, this.formatting));
 	}
 	applyCellValue(e, t) {
 		l(e, t, this.formatting);
 	}
-}, Xe = 2;
-function Ze() {
+}, We = 2;
+function Ge() {
 	let e = window.NEStandardUI;
 	if (e === void 0 || typeof e.registerEngine != "function") throw Error("NE.Standard.UI.Web.DataGrid needs the framework's client (ui.js) on the page before it.");
-	if (e.contractVersion !== Xe) throw Error(`NE.Standard.UI.Web.DataGrid was built for plugin contract ${Xe}, but the framework's client on the page implements ${String(e.contractVersion ?? "an older one")}; install the package version that matches the framework.`);
+	if (e.contractVersion !== We) throw Error(`NE.Standard.UI.Web.DataGrid was built for plugin contract ${We}, but the framework's client on the page implements ${String(e.contractVersion ?? "an older one")}; install the package version that matches the framework.`);
 	return e;
 }
 //#endregion
 //#region src/data-grid.ts
-var Q = Ze(), $;
+var Q = Ge(), $;
 Q.registerEvent(r.queryChange, { settlesValue: !0 }), Q.registerEvent(r.cellEdit, { settlesValue: !0 }), Q.registerEvent(r.selectionChange, { settlesValue: !0 }), Q.registerEngine((e) => {
-	$ = new Ye(e);
+	$ = new Ue(e);
 }), Q.registerDomOperation({
 	kind: a,
 	handler: (e) => $?.applyCellValue(e.target, e.value)

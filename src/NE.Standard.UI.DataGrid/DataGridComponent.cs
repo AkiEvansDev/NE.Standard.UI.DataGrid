@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NE.Standard.UI.Abstractions.Binding;
 using NE.Standard.UI.Abstractions.Binding.Properties;
 using NE.Standard.UI.Abstractions.Interaction;
 using NE.Standard.UI.Abstractions.Items;
@@ -15,6 +16,7 @@ using NE.Standard.UI.Components.Foundation;
 using NE.Standard.UI.Primitives.Annotations;
 using NE.Standard.UI.Primitives.Binding;
 using NE.Standard.UI.Primitives.Constants;
+using NE.Standard.UI.Primitives.Items;
 using NE.Standard.UI.Primitives.Styling;
 
 namespace NE.Standard.UI.DataGrid;
@@ -48,6 +50,9 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     /// <summary>The region of the checkbox over that column, which takes or clears the rows the grid has drawn.</summary>
     public const string SelectAllRegionName = "selection-all";
 
+    /// <summary>The region the pager stands in, under the rows of a windowed grid that pages.</summary>
+    public const string PagerRegionName = "pager";
+
     // The band's parts and the header's checkbox stand outside every row: a template variant is compiled in the row's scope, so
     // each would carry the row's key in its address with no row around it to supply one.
     private readonly Dictionary<string, IVisualComponent> _regions = new(StringComparer.Ordinal);
@@ -55,6 +60,9 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     // Every editor registers the cell-edit command when it is added, or when the command is named later, whichever comes second.
     private readonly List<Action<string>> _editorRegistrations = [];
     private string? _cellEditCommand;
+
+    // Built with the grid, so it may be configured before the grid pages; it joins the regions once the grid is windowed and pages.
+    private readonly PagerComponent _pager;
 
     // The search box's placeholder, kept apart from the box so it may be named before or after SetSearch draws one.
     private string _searchPlaceholder = UIDataGridWords.Search;
@@ -66,10 +74,44 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
         // Alone in their cells with no words of their own, so each is named for a screen reader.
         _ = SetTemplateVariantCore($"{UITableColumn.TemplatePrefix}:{SelectionColumnKey}", new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(UIDataGridWords.SelectRow));
         _regions[SelectAllRegionName] = new CheckboxComponent().SetHorizontalAlignment(UIAlignment.Center).SetAccessibleName(UIDataGridWords.SelectAll);
+        _pager = new PagerComponent().SetTarget(Id);
+
+        // The grid's own client reads rows raw — a total over any column, an export, a filter on any field — past what its templates bind.
+        _ = ReadsWholeItems();
     }
 
     /// <inheritdoc/>
-    public IReadOnlyDictionary<string, IVisualComponent> Regions => _regions;
+    /// <remarks>Read when the view compiles, once <c>BindSource</c> and <c>SetPaging</c> have both been said, in whichever order.</remarks>
+    public IReadOnlyDictionary<string, IVisualComponent> Regions
+    {
+        get
+        {
+            if (Pages())
+                _regions[PagerRegionName] = _pager;
+            else
+                _ = _regions.Remove(PagerRegionName);
+
+            return _regions;
+        }
+    }
+
+    /// <summary>Whether the grid shows its window as a page: windowed, and <c>Paging</c> on or bound.</summary>
+    private bool Pages()
+    {
+        if (HostMode != UIItemsHostMode.Windowed)
+            return false;
+
+        if (Paging == true)
+            return true;
+
+        for (var i = 0; i < Bindings.Count; i++)
+        {
+            if (Bindings[i].Target.Equals(IItemsHostComponent.PagingProperty))
+                return true;
+        }
+
+        return false;
+    }
 
     /// <inheritdoc/>
     public bool HasRegions => _regions.Count > 0;
@@ -79,12 +121,6 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     /// </summary>
     [UIComponentProperty(DefaultValue = true)]
     public bool? Editable { get; set; }
-
-    /// <summary>
-    /// Gets or sets whether a windowed grid pages with a pager under the rows instead of loading more as the viewer nears the end.
-    /// </summary>
-    [UIComponentProperty(DefaultValue = false)]
-    public bool? Paging { get; set; }
 
     /// <summary>
     /// Gets whether the band holds a column chooser, whose choices persist in the browser; set by <c>SetColumnChooser</c>. Render-time only.
@@ -201,6 +237,18 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     }
 
     /// <summary>
+    /// Configures the pager under the rows — its look, the page sizes it offers — drawn while a windowed grid pages (<c>Paging</c>).
+    /// </summary>
+    public T ConfigurePager(Action<PagerComponent> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+
+        configure(_pager);
+
+        return Self;
+    }
+
+    /// <summary>
     /// Draws a search box over the grid; what is typed matches <paramref name="propertyPath"/> as case-insensitive text, with every
     /// term required.
     /// </summary>
@@ -210,9 +258,9 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
         SearchPath = propertyPath;
 
-        // A field of the page's own shape, not a ghost: the band is a row of controls, and the buttons beside it take the same
-        // ground.
-        _searchField = new TextInputComponent().SetPlaceholder(_searchPlaceholder).SetShowClearButton(true).SetDebounceMilliseconds(300);
+        // A field of the page's own ground, not a ghost: the band is a row of controls, and the buttons beside it take the same
+        // ground. Tonal, a toolbar's lone search beside its buttons, with no line the buttons would not have.
+        _searchField = new TextInputComponent().SetPlaceholder(_searchPlaceholder).SetAppearance(UIInputAppearance.Tonal).SetShowClearButton(true).SetDebounceMilliseconds(300);
 
         _regions[SearchRegionName] = new DataGridFilterComponent().SetProperty(propertyPath).SetKind(UIDataGridColumnKind.Text).AddChild(_searchField);
 
@@ -262,25 +310,29 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
     /// <summary>
     /// Adds a column showing the row's text at <paramref name="propertyPath"/>, sortable by it unless told otherwise, edited in a text field when
-    /// <paramref name="editable"/>.
+    /// <paramref name="editable"/>, which <paramref name="configureEditor"/> gives its rules (<c>Validate</c>, <c>Required</c>, <c>Regex</c>).
     /// </summary>
-    public T AddTextColumn(string caption, string propertyPath, bool sortable, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+    public T AddTextColumn(string caption, string propertyPath, bool sortable, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false, Action<TextInputComponent>? configureEditor = null)
     {
-        UIDataGridColumn column = CreateColumn(caption, propertyPath, UIDataGridColumnKind.Text, sortable, editable, filterable, width, alignment, key, pinned, aggregate, icon, hidden, content);
+        UIDataGridColumn column = CreateColumn(caption, propertyPath, UIDataGridColumnKind.Text, sortable, editable, filterable, width, alignment, key, pinned, aggregate, icon, hidden, content, configureEditor is not null);
 
         _ = AddColumn(column, CreateTextCell(propertyPath, alignment));
 
         if (filterable)
             _ = SetFilter(column);
 
-        return editable ? SetEditor(column, new TextInputComponent(), propertyPath) : Self;
+        return editable ? SetEditor(column, Configured(new TextInputComponent(), Typed(configureEditor)), propertyPath) : Self;
     }
 
-    private UIDataGridColumn CreateColumn(string caption, string propertyPath, UIDataGridColumnKind kind, bool sortable, bool editable, bool filterable, UIGridUnit? width, UITextAlignment? alignment, string? key, bool pinned, UIDataGridAggregate aggregate, string? icon, bool hidden, bool content)
+    private UIDataGridColumn CreateColumn(string caption, string propertyPath, UIDataGridColumnKind kind, bool sortable, bool editable, bool filterable, UIGridUnit? width, UITextAlignment? alignment, string? key, bool pinned, UIDataGridAggregate aggregate, string? icon, bool hidden, bool content, bool configured)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(propertyPath);
 
-        return new UIDataGridColumn(key ?? PropertyColumnKey(propertyPath), caption, width ?? UIGridUnit.Auto(), alignment) { Kind = kind, PropertyPath = propertyPath, Sortable = sortable, Editable = editable, Filterable = filterable, FilterKind = kind, Pinned = pinned, Aggregate = aggregate, Icon = icon, Hidden = hidden, IsContent = content };
+        // An editor configured on a column that never opens one would carry rules nobody meets.
+        if (configured && !editable)
+            throw new ArgumentException("An editor is configured only on an editable column.", nameof(configured));
+
+        return new UIDataGridColumn(key ?? PropertyColumnKey(propertyPath), caption, width ?? UIGridUnit.Auto(), alignment) { Kind = kind, PropertyPath = propertyPath, Sortable = sortable, Editable = editable, EditPath = editable ? propertyPath : null, Filterable = filterable, FilterKind = kind, Pinned = pinned, Aggregate = aggregate, Icon = icon, Hidden = hidden, IsContent = content };
     }
 
     /// <summary>A property column is keyed by its property, a template column by its sort path — the key a cell-edit command names — unless a column has that key already.</summary>
@@ -374,14 +426,15 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
     /// <summary>
     /// Adds a column showing the number at <paramref name="propertyPath"/>, formatted as <c>N2</c> unless given, end-aligned and
-    /// sorted numerically; edited in a number field when <paramref name="editable"/>.
+    /// sorted numerically; edited in a number field when <paramref name="editable"/>, which <paramref name="configureEditor"/> gives its
+    /// rules (<c>Validate</c>, <c>Required</c>) or bounds.
     /// </summary>
-    public T AddNumberColumn(string caption, string propertyPath, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
-        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Number, format ?? "N2", null, null, sortable, editable, filterable, width, alignment ?? UITextAlignment.End, key, aggregate, pinned, icon, hidden, content);
+    public T AddNumberColumn(string caption, string propertyPath, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false, Action<NumberInputComponent>? configureEditor = null)
+        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Number, format ?? "N2", null, null, sortable, editable, filterable, width, alignment ?? UITextAlignment.End, key, aggregate, pinned, icon, hidden, content, Typed(configureEditor));
 
-    private T AddTypedColumn(string caption, string propertyPath, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, bool sortable, bool editable, bool filterable, UIGridUnit? width, UITextAlignment? alignment, string? key, UIDataGridAggregate aggregate, bool pinned, string? icon, bool hidden, bool content)
+    private T AddTypedColumn(string caption, string propertyPath, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, bool sortable, bool editable, bool filterable, UIGridUnit? width, UITextAlignment? alignment, string? key, UIDataGridAggregate aggregate, bool pinned, string? icon, bool hidden, bool content, Action<IInputComponent>? configureEditor)
     {
-        UIDataGridColumn column = CreateColumn(caption, propertyPath, kind, sortable, editable, filterable, width, alignment, key, pinned, aggregate, icon, hidden, content) with { Format = format, Currency = currency, Choices = choices };
+        UIDataGridColumn column = CreateColumn(caption, propertyPath, kind, sortable, editable, filterable, width, alignment, key, pinned, aggregate, icon, hidden, content, configureEditor is not null) with { Format = format, Currency = currency, Choices = choices };
 
         DataGridCellComponent cell = new DataGridCellComponent()
             .SetKind(kind)
@@ -400,14 +453,27 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
         return kind switch
         {
-            UIDataGridColumnKind.Number or UIDataGridColumnKind.Money => SetEditor(column, new NumberInputComponent(), propertyPath),
-            UIDataGridColumnKind.Date when HasTimeToken(format) => SetEditor(column, new DateTimeInputComponent(), propertyPath),
-            UIDataGridColumnKind.Date => SetEditor(column, new DateInputComponent(), propertyPath),
-            UIDataGridColumnKind.Boolean => SetEditor(column, new CheckboxComponent(), propertyPath),
-            UIDataGridColumnKind.Enum => SetEditor(column, new SelectComponent().SetOptions(CreateOptions(choices)), propertyPath),
-            _ => SetEditor(column, new TextInputComponent(), propertyPath)
+            UIDataGridColumnKind.Number or UIDataGridColumnKind.Money => SetEditor(column, Configured(new NumberInputComponent(), configureEditor), propertyPath),
+            UIDataGridColumnKind.Date when HasTimeToken(format) => SetEditor(column, Configured(new DateTimeInputComponent(), configureEditor), propertyPath),
+            UIDataGridColumnKind.Date => SetEditor(column, Configured(new DateInputComponent(), configureEditor), propertyPath),
+            UIDataGridColumnKind.Boolean => SetEditor(column, Configured(new CheckboxComponent(), configureEditor), propertyPath),
+            UIDataGridColumnKind.Enum => SetEditor(column, Configured(new SelectComponent().SetOptions(CreateOptions(choices)), configureEditor), propertyPath),
+            _ => SetEditor(column, Configured(new TextInputComponent(), configureEditor), propertyPath)
         };
     }
+
+    /// <summary>The editor after the author's own configuration — its rules, its bounds — where there is one.</summary>
+    private static TInput Configured<TInput>(TInput editor, Action<IInputComponent>? configure)
+        where TInput : IInputComponent
+    {
+        configure?.Invoke(editor);
+        return editor;
+    }
+
+    /// <summary>A typed method's configuration, as the typed columns' shared path takes it.</summary>
+    private static Action<IInputComponent>? Typed<TInput>(Action<TInput>? configure)
+        where TInput : IInputComponent
+        => configure is null ? null : editor => configure((TInput)editor);
 
     /// <summary>Whether a date pattern shows a time — an hour, a minute or a second token — so the editor offers one.</summary>
     private static bool HasTimeToken(string? format)
@@ -415,49 +481,50 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
     /// <summary>
     /// Adds a column showing the amount at <paramref name="propertyPath"/> as money, in the page's currency format or
-    /// <paramref name="currency"/>; edited in a number field when <paramref name="editable"/>.
+    /// <paramref name="currency"/>; edited in a number field when <paramref name="editable"/>, which <paramref name="configureEditor"/>
+    /// gives its rules or bounds.
     /// </summary>
-    public T AddMoneyColumn(string caption, string propertyPath, string? currency = null, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
-        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Money, format ?? "C", currency, null, sortable, editable, filterable, width, alignment ?? UITextAlignment.End, key, aggregate, pinned, icon, hidden, content);
+    public T AddMoneyColumn(string caption, string propertyPath, string? currency = null, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, UIDataGridAggregate aggregate = UIDataGridAggregate.None, bool pinned = false, string? icon = null, bool hidden = false, bool content = false, Action<NumberInputComponent>? configureEditor = null)
+        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Money, format ?? "C", currency, null, sortable, editable, filterable, width, alignment ?? UITextAlignment.End, key, aggregate, pinned, icon, hidden, content, Typed(configureEditor));
 
     /// <summary>
     /// Adds a column showing the date at <paramref name="propertyPath"/>, patterned as <c>yyyy-MM-dd</c> unless given; edited in a
-    /// date or date-and-time picker when <paramref name="editable"/>.
+    /// date or date-and-time picker when <paramref name="editable"/>, which <paramref name="configureEditor"/> gives its rules.
     /// </summary>
-    public T AddDateColumn(string caption, string propertyPath, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
-        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Date, format ?? "yyyy-MM-dd", null, null, sortable, editable, filterable, width, alignment, key, UIDataGridAggregate.None, pinned, icon, hidden, content);
+    public T AddDateColumn(string caption, string propertyPath, string? format = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false, Action<IInputComponent>? configureEditor = null)
+        => AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Date, format ?? "yyyy-MM-dd", null, null, sortable, editable, filterable, width, alignment, key, UIDataGridAggregate.None, pinned, icon, hidden, content, Typed(configureEditor));
 
     /// <summary>
     /// Adds a column showing the flag at <paramref name="propertyPath"/> as a word: the two given, or the page's own yes and no; edited as a
-    /// checkbox when <paramref name="editable"/>.
+    /// checkbox when <paramref name="editable"/>, which <paramref name="configureEditor"/> gives its rules.
     /// </summary>
-    public T AddBooleanColumn(string caption, string propertyPath, string? trueCaption = null, string? falseCaption = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+    public T AddBooleanColumn(string caption, string propertyPath, string? trueCaption = null, string? falseCaption = null, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false, Action<CheckboxComponent>? configureEditor = null)
     {
         IReadOnlyList<UIChoice>? choices = trueCaption is null && falseCaption is null
             ? null
             : UIChoices.Boolean(trueCaption ?? UIDataGridWords.Yes, falseCaption ?? UIDataGridWords.No);
 
-        return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Boolean, null, null, choices, sortable, editable, filterable, width, alignment ?? UITextAlignment.Center, key, UIDataGridAggregate.None, pinned, icon, hidden, content);
+        return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Boolean, null, null, choices, sortable, editable, filterable, width, alignment ?? UITextAlignment.Center, key, UIDataGridAggregate.None, pinned, icon, hidden, content, Typed(configureEditor));
     }
 
     /// <summary>
     /// Adds a column showing the value at <paramref name="propertyPath"/> by the caption of the choice it matches; edited in a select over the
-    /// same choices when <paramref name="editable"/>.
+    /// same choices when <paramref name="editable"/>, which <paramref name="configureEditor"/> gives its rules.
     /// </summary>
-    public T AddEnumColumn(string caption, string propertyPath, IReadOnlyList<UIChoice> choices, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+    public T AddEnumColumn(string caption, string propertyPath, IReadOnlyList<UIChoice> choices, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false, Action<SelectComponent>? configureEditor = null)
     {
         ArgumentNullException.ThrowIfNull(choices);
 
-        return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Enum, null, null, choices, sortable, editable, filterable, width, alignment, key, UIDataGridAggregate.None, pinned, icon, hidden, content);
+        return AddTypedColumn(caption, propertyPath, UIDataGridColumnKind.Enum, null, null, choices, sortable, editable, filterable, width, alignment, key, UIDataGridAggregate.None, pinned, icon, hidden, content, Typed(configureEditor));
     }
 
     /// <summary>
     /// Adds a column showing the <typeparamref name="TEnum"/> at <paramref name="propertyPath"/>: each member by its
     /// <see cref="System.ComponentModel.DescriptionAttribute"/>, or its name with the words separated.
     /// </summary>
-    public T AddEnumColumn<TEnum>(string caption, string propertyPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+    public T AddEnumColumn<TEnum>(string caption, string propertyPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool sortable = true, bool editable = false, bool filterable = false, bool pinned = false, string? icon = null, bool hidden = false, bool content = false, Action<SelectComponent>? configureEditor = null)
         where TEnum : struct, Enum
-        => AddEnumColumn(caption, propertyPath, UIChoices.FromEnum<TEnum>(), width, alignment, key, sortable, editable, filterable, pinned, icon, hidden, content);
+        => AddEnumColumn(caption, propertyPath, UIChoices.FromEnum<TEnum>(), width, alignment, key, sortable, editable, filterable, pinned, icon, hidden, content, configureEditor);
 
     /// <summary>
     /// Adds a column whose cells render <paramref name="template"/> against the row, sortable by <paramref name="sortPath"/>.
@@ -478,11 +545,25 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
     {
         ArgumentNullException.ThrowIfNull(editor);
 
-        UIDataGridColumn column = new(key ?? (sortPath is null ? NextColumnKey() : PropertyColumnKey(sortPath)), caption, width ?? UIGridUnit.Auto(), alignment) { SortPath = sortPath, Sortable = sortPath is not null, Editable = true, Pinned = pinned, Icon = icon, Hidden = hidden, IsContent = content };
+        UIDataGridColumn column = new(key ?? (sortPath is null ? NextColumnKey() : PropertyColumnKey(sortPath)), caption, width ?? UIGridUnit.Auto(), alignment) { SortPath = sortPath, Sortable = sortPath is not null, Editable = true, EditPath = RelativeValuePath(editor), Pinned = pinned, Icon = icon, Hidden = hidden, IsContent = content };
 
         _ = AddColumn(column, template);
 
         return SetEditor(column, editor, null);
+    }
+
+    /// <summary>The row property an editor's value is bound to, relatively, as a closed cell is judged by it; null where it is bound to none.</summary>
+    private static string? RelativeValuePath(IVisualComponent editor)
+    {
+        for (var i = 0; i < editor.Bindings.Count; i++)
+        {
+            UIBinding binding = editor.Bindings[i];
+
+            if (binding.Target == IInputComponent.ValueProperty && binding.Scope == UIBindingScope.Relative)
+                return binding.Source.ToString();
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -89,5 +90,47 @@ internal sealed partial class ColumnsController : UIControllerBase
         EditStatus = subscription is null
             ? UIPhrase.Of("grid-demo.columns.row-gone", ("id", id))
             : SubscriptionGrid.EditedLine(subscription, column, Context.Handle.Session.Language);
+    }
+
+    /// <summary>The quote the rules example edits: its editors carry client rules, and only a value no error refuses lands here.</summary>
+    [RecursiveMember(false)]
+    public RecursiveCollection<QuoteLine> QuoteLines { get; } = [.. QuoteLine.Create()];
+
+    [RecursiveMember]
+    public partial UIPhrase? QuoteStatus { get; set; } = new("grid-demo.quote.hint");
+
+    /// <summary>A quote's cell committed: the line holds the value already, and its total follows.</summary>
+    [UICommand]
+    public void QuoteLineEdited(string id, string column)
+    {
+        QuoteLine? line = QuoteLines.FirstOrDefault(candidate => candidate.Id == id);
+
+        line?.Refresh();
+
+        QuoteStatus = line is null
+            ? UIPhrase.Of("grid-demo.columns.row-gone", ("id", id))
+            : QuoteEditedLine(line, column, Context.Handle.Session.Language);
+    }
+
+    /// <summary>The line a committed quote cell leaves: the column by its caption and the value as its cell shows it.</summary>
+    private static UIPhrase QuoteEditedLine(QuoteLine line, string column, string language)
+    {
+        CultureInfo culture = SubscriptionGrid.CultureOf(language);
+        var caption = column switch
+        {
+            nameof(QuoteLine.Servers) => "grid-demo.column.servers",
+            nameof(QuoteLine.Price) => "grid-demo.column.price",
+            _ => "grid-demo.column.note"
+        };
+        // Object, or the texts below would be taken for phrases: a plain string argument is a literal.
+        var value = column switch
+        {
+            nameof(QuoteLine.Servers) => (object)line.Servers.ToString("N0", culture),
+            nameof(QuoteLine.Price) => line.Price.ToString("N2", culture),
+            _ when string.IsNullOrWhiteSpace(line.Note) => new UIPhrase("grid-demo.quote.empty"),
+            _ => line.Note
+        };
+
+        return UIPhrase.Of("grid-demo.edited", ("number", line.Number), ("column", new UIPhrase(caption)), ("value", value));
     }
 }

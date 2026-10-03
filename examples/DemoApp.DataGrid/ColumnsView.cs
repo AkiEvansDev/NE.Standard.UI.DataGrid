@@ -70,6 +70,32 @@ internal sealed class ColumnsView : DataGridDemoView, IUIViewDefinition
                         .SetTitleType(UITextAppearance.Caption)
                         .SetTitleColor(UIThemeColor.FromStyle(UIColorStyle.Muted))
                     )
+            ),
+            Example("Rules in a cell",
+                "A typed column's editor takes the field's rules and bounds through configureEditor: a line holds at least one server (an error) and at most a hundred (a bound), a price over €300 a server warns, and an empty note is noted (info). A closed cell is judged by its editor's rules whenever it is shown — as the page opens, after a commit, after the server writes the row — and wears the verdict as a field does: the severity's edge, and a mark whose tooltip speaks it; the quote opens with one of each. Double-click a cell and type 0, 120, 320 or nothing: the field's mark speaks as you type. An error or a bound holds the value back: Enter, Tab or a click elsewhere leaves the editor open over it, the focus back in the field, until it is put right or Escape takes it back. A warning or a note commits, and the closed cell keeps wearing it.",
+                new StackPanelComponent()
+                    .SetOrientation(UIOrientation.Vertical)
+                    .SetSpacing(8)
+                    .AddChild(new DataGridComponent("quote")
+                        .AddTextColumn("ID", nameof(QuoteLine.Number), sortable: true, UIGridUnit.Absolute(110), content: true)
+                        .AddEnumColumn("grid-demo.column.plan", nameof(QuoteLine.Plan), SubscriptionChoices.Plans, UIGridUnit.Absolute(140))
+                        .AddNumberColumn("grid-demo.column.servers", nameof(QuoteLine.Servers), "N0", UIGridUnit.Absolute(120), editable: true, configureEditor: editor => editor
+                            .SetAllowDecimals(false)
+                            .SetMax(100)
+                            .Validate(UIValidationTrigger.Change, UIComparisonOperator.Greater, 0, "grid-demo.quote.servers-rule")
+                        )
+                        .AddMoneyColumn("grid-demo.column.price", nameof(QuoteLine.Price), "€", width: UIGridUnit.Absolute(160), editable: true, configureEditor: editor => editor
+                            .Validate(UIValidationTrigger.Change, UIComparisonOperator.LessOrEqual, QuoteLine.PriceLimit, "grid-demo.quote.price-rule", UIValidationSeverity.Warning)
+                        )
+                        .AddTextColumn("grid-demo.column.note", nameof(QuoteLine.Note), sortable: true, UIGridUnit.Absolute(240), editable: true, configureEditor: editor => editor
+                            .Required("grid-demo.quote.note-rule", severity: UIValidationSeverity.Info)
+                        )
+                        // Not editable: the servers times the price, and changes with either.
+                        .AddMoneyColumn("grid-demo.column.monthly", nameof(QuoteLine.Total), "€", width: UIGridUnit.Absolute(150))
+                        .BindItems(nameof(ColumnsController.QuoteLines))
+                        .OnCellEdit(nameof(ColumnsController.QuoteLineEdited))
+                    )
+                    .AddChild(CreateStatus(nameof(ColumnsController.QuoteStatus)))
             )
         ];
 }

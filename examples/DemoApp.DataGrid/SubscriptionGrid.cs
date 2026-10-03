@@ -160,7 +160,7 @@ internal static class SubscriptionGrid
         return UIPhrase.Of("grid-demo.edited", ("number", subscription.Number), ("column", shown?.Caption is { } caption ? new UIPhrase(caption) : UIPhrase.Text(column)), ("value", value));
     }
 
-    private static CultureInfo CultureOf(string language)
+    internal static CultureInfo CultureOf(string language)
     {
         try
         {

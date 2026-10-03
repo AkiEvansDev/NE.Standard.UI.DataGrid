@@ -259,29 +259,11 @@
         .ui-text-nowrap();
     }
 
-// The pager under the table and outside its frame, drawn only while the grid pages: a row of buttons on the page, as the band is.
-.ui-data-grid__pager {
-    display: none;
-    align-items: center;
+// The framework's pager under the table and outside its frame, at the grid's end: a row of buttons on the page, as the band is.
+.ui-data-grid > .ui-pager {
     justify-content: flex-end;
-    gap: @ui-space-1;
-    padding: @ui-space-2 0 0;
-    font-size: var(--ui-text-caption-font-size);
+    padding-top: @ui-space-2;
 }
-
-    .ui-data-grid[data-ui-grid-paging] > .ui-data-grid__pager {
-        display: flex;
-    }
-
-    .ui-data-grid__page-status {
-        margin-inline: @ui-space-2;
-        font-variant-numeric: tabular-nums;
-    }
-
-    // Four marks of the framework's own — the ends and the two chevrons — on the framework's own small ghost buttons.
-    .ui-data-grid__page-button > .ui-icon {
-        font-size: @ui-glyph-md;
-    }
 
 // A cell hides while its editor, a sibling cell, stands in its track. No pointer cursor: rows are read far more than edited.
 .ui-data-grid__cell--editing {
@@ -306,17 +288,32 @@
         text-align: center;
     }
 
+    // The field centred in the cell's own height rather than padded under it: padded, a one-line row grew by the field's excess as
+    // the editor opened, and the field left the box the closed cell's ground showed.
     .ui-data-grid__editor--open {
         display: flex;
+        align-items: center;
     }
 
-    // The field's text lands where the cell's stood: a ghost field insets its own by half a step and a border.
-    // No field's own cap at the track's width, which would leave the box short by both insets and push an end field's past the edge.
+    .ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-data-grid__editor--open {
+        padding-block: 0;
+    }
+
+    // The field's text lands where the cell's stood: set back by the field's own inset, whatever its appearance and size; an editor
+    // with none of its own, by a ghost field's. No field's own cap at the track's width, which would leave the box short by both
+    // insets and push an end field's past the edge.
     .ui-data-grid__editor > [data-ui-id] {
         flex: 1 1 auto;
         min-width: 0;
         max-width: none;
-        margin-inline: calc(-1 * (@ui-space-2 + var(--ui-border-width, 1px)));
+        margin-inline: calc(-1 * var(--ui-field-inset, calc(@ui-space-2 + var(--ui-border-width, 1px))));
+    }
+
+    // A cell of two lines (a title over its description) edits on its first: the one-line field stands at the top, lifted by a ghost
+    // field's half-leading, so the title's words stay where they were instead of dropping to the middle of the row.
+    .ui-data-grid__cell--editing:has([data-ui-text-description]) + .ui-data-grid__editor > .ui-input--ghost {
+        align-self: flex-start;
+        margin-block-start: calc(@ui-space-2 + (1lh - @ui-button-height-sm) / 2);
     }
 
     // A checkbox takes its own width, so the cell's alignment stands it where the word stood.
@@ -328,6 +325,70 @@
     // Digits of one width, as the cell's, so the number does not shift when the editor opens.
     .ui-data-grid__editor:is([data-ui-grid-kind="number"], [data-ui-grid-kind="money"], [data-ui-grid-kind="date"]) input {
         font-variant-numeric: tabular-nums;
+    }
+
+// The box a cell's editor field takes when it opens — a ghost field, a small button's height, set in from the cell's edges by the
+// cell's padding less the field's own inset, centred, or on the first line of a two-line cell — so the ground a closed cell wears
+// and its verdict's edge are the field's shape, and opening the editor changes nothing but what is inside.
+.ui-data-grid-field-box() {
+    position: absolute;
+    inset-inline: calc(@ui-space-3 - @ui-space-2 - var(--ui-border-width, 1px));
+    top: var(--ui-data-grid-field-top, calc(50% - @ui-button-height-sm / 2));
+    bottom: var(--ui-data-grid-field-top, auto);
+    height: var(--ui-data-grid-field-height, @ui-button-height-sm);
+    border: var(--ui-border-width, 1px) solid transparent;
+    border-radius: var(--ui-radius-input);
+    pointer-events: none;
+}
+
+// The ground and the verdict's box are placed in the cell; a pinned cell is sticky, which places them already.
+.ui-data-grid__cell--editable {
+    isolation: isolate;
+}
+
+    // A two-line cell's box holds both lines, set in by as much as a one-line cell's; its editor opens on the first line inside it.
+    // Rejected: the field's box on the first line with the description lowered under it, a gap between a text's lines for an
+    // editor's sake.
+    .ui-data-grid__cell--editable:has([data-ui-text-description]) {
+        --ui-data-grid-field-top: calc(@ui-space-2 + (1lh - @ui-button-height-sm) / 2);
+        --ui-data-grid-field-height: auto;
+    }
+
+    .ui-data-grid__cell--editable:not(.ui-table__cell--pinned) {
+        position: relative;
+    }
+
+    // Under the cell's words, in a stacking context of the cell's own, so the row's stripe and wash stay under it.
+    .ui-data-grid__cell--editable::before {
+        content: "";
+        .ui-data-grid-field-box();
+        z-index: -1;
+        background: var(--ui-wash-hover);
+        opacity: 0;
+        transition: opacity @ui-motion-fast @ui-motion-ease;
+    }
+
+    // An editable cell answers the pointer with the field's ground, and the keyboard's row shows every one F2 and Tab reach; only
+    // while the grid edits. No text cursor: rows are read far more than edited.
+    @media @ui-can-hover {
+        .ui-data-grid:not([data-ui-grid-readonly], .ui-disabled, .ui-loading) .ui-data-grid__cell--editable:hover::before {
+            opacity: 1;
+        }
+    }
+
+    .ui-data-grid:not([data-ui-grid-readonly], .ui-disabled, .ui-loading)@{ui-row-cursor-focus} > .ui-table__scroll > [data-ui-items-host] > .ui-table__row[data-ui-row-focus] > .ui-data-grid__cell--editable::before {
+        opacity: 1;
+    }
+
+    // A closed cell's verdict (data-grid-verdict-engine.ts): the severity's edge in the field's box, and the mark the framework's
+    // tooltip speaks through. Over the core's `position: relative` for a marked field, which would take it out of the box.
+    .ui-data-grid .ui-data-grid__cell--editable > .ui-data-grid__verdict {
+        .ui-data-grid-field-box();
+        pointer-events: auto;
+    }
+
+    .ui-data-grid .ui-data-grid__cell--editable > .ui-data-grid__verdict:is(.ui-invalid, .ui-validation--warning, .ui-validation--info) {
+        border-color: var(--ui-validation-color, var(--ui-color-danger-ink));
     }
 
 // A row's detail: a band under its cells across every track, drawn only while the row stands open.
@@ -432,5 +493,10 @@
     .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-press}:not(@{ui-keyboard-focus}),
     .ui-data-grid__filters-clear@{ui-button-live}:active:not(@{ui-keyboard-focus}) {
         outline: 2px solid Highlight;
+    }
+
+    // The severities' inks are gone: a verdict's edge is the system's mark colour, its words the tooltip's.
+    .ui-data-grid .ui-data-grid__cell--editable > .ui-data-grid__verdict:is(.ui-invalid, .ui-validation--warning, .ui-validation--info) {
+        border-color: Mark;
     }
 }

@@ -1,7 +1,8 @@
 // A cell that edits: double click or F2 opens an editor over it (Enter/blur commits, Escape reverts, Tab advances). The editor
-// renders on demand from the cell's variant, so only one exists at a time.
+// renders on demand from the cell's variant, so only one exists at a time. A value its field refuses — an error rule's, one past a
+// bound — is never sent, and the editor stays open over it until it is put right or Escape takes it back.
 
-import type { ComponentStates, DomNames, Focus, ItemRows, PluginEngineContext, TableColumns, ValueReading } from "ne-standard-ui";
+import type { ComponentStates, DomNames, FieldValidation, Focus, ItemRows, PluginEngineContext, TableColumns, ValueReading } from "ne-standard-ui";
 import { componentIdOf, gridOf, isRowKeyTarget, ownDescendants, ownFirst, RootSelector, rowSelector } from "./data-grid-dom.ts";
 import { ClientNames, GridAttributes, GridClasses, GridEvents } from "./data-grid-names.ts";
 
@@ -38,6 +39,7 @@ export class DataGridEditEngine {
     private readonly states: ComponentStates;
     private readonly names: DomNames;
     private readonly focus: Focus;
+    private readonly validation: FieldValidation;
     private readonly rowSelector: string;
     // One editor per grid, in a map that can be walked, since a state change above the grids is checked against every open editor.
     private readonly open = new Map<HTMLElement, OpenEditor>();
@@ -45,6 +47,8 @@ export class DataGridEditEngine {
     private readonly unclaimed = new WeakSet<HTMLElement>();
     // The editor being taken off the page, while it goes.
     private leaving: HTMLElement | null = null;
+    // An Escape putting back the value the row held, which goes out whatever the rules say of it.
+    private restoring = false;
 
     public constructor(context: PluginEngineContext) {
         const root = context.root;
@@ -55,6 +59,7 @@ export class DataGridEditEngine {
         this.states = context.states;
         this.names = context.names;
         this.focus = context.focus;
+        this.validation = context.validation;
         this.rowSelector = rowSelector(context.names);
 
         for (const grid of root.querySelectorAll<HTMLElement>(RootSelector))
@@ -209,7 +214,14 @@ export class DataGridEditEngine {
                 return;
         }
 
-        this.closeEditor(grid, state, this.canEdit(grid));
+        // Refused, the editor keeps the focus, as a form's submit takes it back to its field; one hidden whole cannot, and goes
+        // without its value, as Escape takes it.
+        if (!this.closeEditor(grid, state, this.canEdit(grid))) {
+            if (state.editor.contains(document.activeElement))
+                return;
+
+            this.closeEditor(grid, state, false);
+        }
 
         if (dropped)
             grid.focus({ preventScroll: true });
@@ -229,6 +241,12 @@ export class DataGridEditEngine {
             return;
         }
 
+        // A value the open editor's field refuses is not the row's: stopped before the binding sends it, the field saying why.
+        if (!this.restoring && field instanceof Element && this.refusedHere(field)) {
+            domEvent.stopPropagation();
+            return;
+        }
+
         // Trusted only: the editor's own change on a commit or an Escape is raised from script, whatever the window.
         if (!domEvent.isTrusted || document.hasFocus() || !(field instanceof Element) || field !== document.activeElement || !isCaretField(field))
             return;
@@ -239,6 +257,14 @@ export class DataGridEditEngine {
         // A number field's edit text, which its engine puts back after a change, comes back with the focus on the reader's return.
         if (state !== undefined && state.editor.contains(field))
             domEvent.stopPropagation();
+    }
+
+    /** Whether a field inside an open editor refuses the value it holds; judged, so the field shows the verdict. */
+    private refusedHere(field: Element): boolean {
+        const grid = gridOf(field);
+        const state = grid === null ? undefined : this.open.get(grid);
+
+        return state !== undefined && state.editor.contains(field) && this.validation.refuses(field);
     }
 
     private openEditor(cell: HTMLElement): void {
@@ -253,10 +279,8 @@ export class DataGridEditEngine {
         const current = this.open.get(grid);
 
         if (current !== undefined) {
-            if (current.cell === cell)
+            if (current.cell === cell || !this.closeEditor(grid, current, true))
                 return;
-
-            this.closeEditor(grid, current, true);
         }
 
         const editor = this.createEditor(grid, row, cell);
@@ -375,9 +399,15 @@ export class DataGridEditEngine {
         return field === null ? null : this.values.read(field);
     }
 
-    private closeEditor(grid: HTMLElement, state: OpenEditor, commit: boolean): void {
+    /** Closes the editor, committing or taking its edit back; answers false where the field refuses the edit, the editor left open. */
+    private closeEditor(grid: HTMLElement, state: OpenEditor, commit: boolean): boolean {
         if (this.open.get(grid) !== state)
-            return;
+            return true;
+
+        if (commit && this.refusesEdit(state)) {
+            this.focus.first(state.editor)?.focus({ preventScroll: true });
+            return false;
+        }
 
         this.open.delete(grid);
 
@@ -392,7 +422,14 @@ export class DataGridEditEngine {
         else if (state.field !== null && state.changed) {
             // A change that already went out is taken back the same way: the server holds it, so letting the field go would keep it.
             this.values.write(state.field, state.original);
-            state.field.dispatchEvent(new Event("change", { bubbles: true }));
+            this.restoring = true;
+
+            try {
+                state.field.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+            finally {
+                this.restoring = false;
+            }
         }
 
         // Released on every close: a commit that sent nothing let nothing go, and after an Escape the framework restores the value.
@@ -414,6 +451,13 @@ export class DataGridEditEngine {
         // The keyboard stays on the row: the grid's root holds the focus and the cursor names the row.
         if (focused)
             grid.focus({ preventScroll: true });
+
+        return true;
+    }
+
+    /** An edit the field refuses: a value changed from the one the editor opened on, failing an error rule or past a bound. */
+    private refusesEdit(state: OpenEditor): boolean {
+        return state.field !== null && (state.changed || this.fieldValue(state.field) !== state.original) && this.validation.refuses(state.field);
     }
 
     /** The editor of a grid whose cell left the page is opened again on the cell that took its place, if the row is still there. */
@@ -509,8 +553,10 @@ export class DataGridEditEngine {
                     return;
 
                 domEvent.preventDefault();
-                this.commitEditor(grid, state);
-                this.openEditor(next);
+
+                if (this.commitEditor(grid, state))
+                    this.openEditor(next);
+
                 break;
             }
             default:
@@ -540,18 +586,24 @@ export class DataGridEditEngine {
         return index < 0 ? null : cells[index + step] ?? null;
     }
 
-    /** Commits by the keyboard, blurring the field first: a composed control writes what was typed only on its own input's blur. */
-    private commitEditor(grid: HTMLElement, state: OpenEditor): void {
+    /**
+     * Commits by the keyboard, blurring the field first: a composed control writes what was typed only on its own input's blur.
+     * Answers false where the field refused the edit and the editor stays open.
+     */
+    private commitEditor(grid: HTMLElement, state: OpenEditor): boolean {
         const held = document.activeElement instanceof HTMLElement && state.editor.contains(document.activeElement);
 
         if (held)
             (document.activeElement as HTMLElement).blur();
 
-        this.closeEditor(grid, state, true);
+        if (!this.closeEditor(grid, state, true))
+            return false;
 
         // The blur took the focus out of the editor before the close could see it, so the keyboard is put back on the row here.
         if (held)
             grid.focus({ preventScroll: true });
+
+        return true;
     }
 }
 

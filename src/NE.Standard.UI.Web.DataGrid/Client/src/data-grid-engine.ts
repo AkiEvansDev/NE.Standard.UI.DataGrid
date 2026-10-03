@@ -7,10 +7,10 @@ import { DataGridChooserEngine } from "./data-grid-chooser-engine.ts";
 import { DataGridDetailEngine } from "./data-grid-detail-engine.ts";
 import { DataGridEditEngine } from "./data-grid-edit-engine.ts";
 import { DataGridFilterEngine } from "./data-grid-filter-engine.ts";
-import { DataGridPagerEngine } from "./data-grid-pager-engine.ts";
 import { DataGridSelectionEngine } from "./data-grid-selection-engine.ts";
 import { DataGridSortEngine } from "./data-grid-sort-engine.ts";
 import { DataGridTotalsEngine } from "./data-grid-totals-engine.ts";
+import { DataGridVerdictEngine } from "./data-grid-verdict-engine.ts";
 
 export class DataGridEngine {
     private readonly formatting: CellFormatting;
@@ -21,11 +21,11 @@ export class DataGridEngine {
         new DataGridSortEngine(context);
         new DataGridEditEngine(context);
         new DataGridFilterEngine(context);
-        new DataGridPagerEngine(context);
         new DataGridTotalsEngine(context, this.formatting);
         new DataGridChooserEngine(context);
         new DataGridDetailEngine(context);
         new DataGridSelectionEngine(context);
+        new DataGridVerdictEngine(context);
 
         // A cell's words and culture are drawn here, not marked: a language switch writes each cell that keeps its value again from it,
         // after the framework wrote the grid's packs in the new language.

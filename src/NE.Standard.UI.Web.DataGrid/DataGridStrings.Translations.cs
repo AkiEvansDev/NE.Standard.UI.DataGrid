@@ -23,12 +23,6 @@ public sealed partial class DataGridStrings
             [ClearFilters] = "Сбросить фильтры",
             [Columns] = "Столбцы",
             [Details] = "Подробности",
-            [PageOf] = "{from}–{to} из {total}",
-            [PageRange] = "{from}–{to}",
-            [FirstPage] = "Первая страница",
-            [PreviousPage] = "Предыдущая страница",
-            [NextPage] = "Следующая страница",
-            [LastPage] = "Последняя страница",
             [SelectRow] = "Выбрать строку",
             [SelectAll] = "Выбрать все строки"
         }.ToFrozenDictionary(StringComparer.Ordinal),
@@ -46,12 +40,6 @@ public sealed partial class DataGridStrings
             [ClearFilters] = "清除筛选",
             [Columns] = "列",
             [Details] = "详情",
-            [PageOf] = "第 {from}–{to} 行，共 {total} 行",
-            [PageRange] = "第 {from}–{to} 行",
-            [FirstPage] = "第一页",
-            [PreviousPage] = "上一页",
-            [NextPage] = "下一页",
-            [LastPage] = "最后一页",
             [SelectRow] = "选择行",
             [SelectAll] = "选择所有行"
         }.ToFrozenDictionary(StringComparer.Ordinal)
