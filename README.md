@@ -271,8 +271,9 @@ over the author's — a column hidden from the start or below a tier; a word tha
 
 The grid's rows move as a table's do. With `SetDraggable(true)` a row whose item does not refuse it (`CanDrag = false`) is dragged
 between two others — a line marks where it would land — or moved one place by Alt+Up and Alt+Down, and the command named by
-`OnRowMoveWithItemKey` gets the row's key and the index it now takes, which is where `RecursiveCollection.Move` puts it. Nothing
-moves on the client: the controller moves the item, and the collection's move reaches the page.
+`OnRowMoveWithItemKey` gets the row's key and the index it now takes, which is where `RecursiveCollection.Move` puts it. The row
+stands in its new place as soon as it is dropped; the command's answer says where it stays, and a controller that refuses, fails
+or loses the connection puts it back.
 
 ```csharp
 new DataGridComponent("steps")
