@@ -262,6 +262,46 @@ test("Tab from a select whose list is open moves on to the next cell's editor", 
     assert.ok(fakeDocument.activeElement instanceof FakeInput);
 });
 
+/** A select's editor as it opens: its value input holding the plan, the trigger naming its open list. */
+function choiceEditor(): { editor: FakeElement; value: FakeInput; trigger: FakeElement } {
+    const value = new FakeInput("hidden");
+    const trigger = FakeElement.of("ui-select__trigger", { "aria-expanded": "true", "aria-haspopup": "listbox", tabindex: "0" }, "button");
+
+    value.value = "Starter";
+    value.attributes.set(names.valueHolder, "");
+    value.attributes.set(names.bindValue, "1");
+
+    return { editor: new FakeElement().append(value, trigger), value, trigger };
+}
+
+test("a choice in a cell's list commits and gives the keyboard back to the grid once the list closes", () => {
+    const choice = choiceEditor();
+    const { grid, cell, heard } = createGrid(() => choice.editor);
+
+    fakeWindow.dispatch(cell, new FakeEvent("dblclick"));
+    choice.trigger.focus();
+    choice.value.value = "Pro";
+    choice.trigger.attributes.set("aria-expanded", "false");
+    fakeWindow.dispatch(choice.value, new FakeEvent("change"));
+    fakeWindow.runTimers();
+
+    assert.ok(!isOpen(cell));
+    assert.equal(heard.edits, 1);
+    assert.equal(fakeDocument.activeElement, grid);
+});
+
+test("a choice that leaves its list open, one choosing many, keeps the editor", () => {
+    const choice = choiceEditor();
+    const { cell } = createGrid(() => choice.editor);
+
+    fakeWindow.dispatch(cell, new FakeEvent("dblclick"));
+    choice.value.value = "Pro";
+    fakeWindow.dispatch(choice.value, new FakeEvent("change"));
+    fakeWindow.runTimers();
+
+    assert.ok(isOpen(cell));
+});
+
 test("Tab inside a popup that is not a list stays the popup's", () => {
     const button = FakeElement.of("", { tabindex: "0" }, "button");
     const { cell, next } = createGrid(() => new FakeElement().append(numberField(), FakeElement.of("", { role: "dialog" }).append(button)));

@@ -75,13 +75,19 @@ export class DataGridEditEngine {
             this.openEditor(cell);
         }, true);
 
-        // Noted, since a select or checkbox commits as it's chosen and Escape must still take it back.
+        // Noted, since a select or checkbox sends as it's chosen and Escape must still take it back.
         root.addEventListener("change", domEvent => {
             const grid = gridOf(domEvent.target);
             const state = grid === null ? undefined : this.open.get(grid);
 
-            if (state !== undefined && domEvent.target instanceof Node && state.editor.contains(domEvent.target))
-                state.changed = true;
+            if (grid === null || state === undefined || !(domEvent.target instanceof Node) || !state.editor.contains(domEvent.target))
+                return;
+
+            state.changed = true;
+
+            // Once the list has closed behind the choice, which its engine does after the change.
+            if (domEvent.target === state.field)
+                window.setTimeout(() => this.followChoice(grid, state), 0);
         }, true);
 
         // On the window, ahead of the value binding: it listens on the root and starts before any package, so there it has already sent.
@@ -152,6 +158,17 @@ export class DataGridEditEngine {
             // After the blur's own change has been dispatched, which the browser does before the focus moves on.
             window.setTimeout(() => this.followFocusOut(grid, state, hid), 0);
         }, true);
+    }
+
+    /**
+     * A choice made in a cell's list is the whole edit, as Enter is: the editor commits and the keyboard goes back to the row, rather
+     * than a closed list standing in the cell with the focus on it. A list still open after the choice (one choosing many) stays.
+     */
+    private followChoice(grid: HTMLElement, state: OpenEditor): void {
+        const trigger = state.editor.querySelector<HTMLElement>(this.names.listTriggerSelector);
+
+        if (this.open.get(grid) === state && trigger !== null && trigger.getAttribute("aria-expanded") !== "true")
+            this.closeEditor(grid, state, true);
     }
 
     /** An editable cell claims its double click for the editor only while the grid edits; otherwise it opens the row. */

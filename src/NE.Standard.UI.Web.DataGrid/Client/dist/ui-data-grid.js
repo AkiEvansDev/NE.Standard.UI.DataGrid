@@ -294,7 +294,7 @@ var A = `.${t.editableCell}`, ue = e.editor, j = e.kind, M = e.column, N = e.rea
 			t !== null && t.closest(h) !== null && (e.preventDefault(), this.openEditor(t));
 		}, !0), t.addEventListener("change", (e) => {
 			let t = b(e.target), n = t === null ? void 0 : this.open.get(t);
-			n !== void 0 && e.target instanceof Node && n.editor.contains(e.target) && (n.changed = !0);
+			t !== null && n !== void 0 && e.target instanceof Node && n.editor.contains(e.target) && (n.changed = !0, e.target === n.field && window.setTimeout(() => this.followChoice(t, n), 0));
 		}, !0), window.addEventListener("change", (e) => this.holdWindowChange(e), !0), t.addEventListener("keydown", (e) => this.handleKeyDown(e), !0), e.observeComponents(t, h, { childList: !0 }, (e) => {
 			for (let t of e) this.followRow(t), this.syncClaims(t);
 		}), e.observeComponents(t, h, {
@@ -321,6 +321,10 @@ var A = `.${t.editableCell}`, ue = e.editor, j = e.kind, M = e.column, N = e.rea
 			let i = r === null && e.target.isConnected && !ge(e.target);
 			window.setTimeout(() => this.followFocusOut(t, n, i), 0);
 		}, !0);
+	}
+	followChoice(e, t) {
+		let n = t.editor.querySelector(this.names.listTriggerSelector);
+		this.open.get(e) === t && n !== null && n.getAttribute("aria-expanded") !== "true" && this.closeEditor(e, t, !0);
 	}
 	syncClaims(e) {
 		let t = !e.hasAttribute(N);
