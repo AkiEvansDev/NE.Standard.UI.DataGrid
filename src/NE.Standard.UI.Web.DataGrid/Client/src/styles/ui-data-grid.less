@@ -3,10 +3,10 @@
 @import (reference) "../../plugin/ne-standard-ui.less";
 
 // A sortable caption under the pointer but not over the resize handle, which overhangs the next caption: its wash would answer a
-// press that resizes.
-@ui-data-grid-sort-hover: ~":hover:not(:has(> .ui-table__resizer:is(:hover, [data-ui-splitting])))";
+// press that resizes. The core's columns engine marks the caption while its handle has the pointer (`data-ui-inner-pointer`).
+@ui-data-grid-sort-hover: ~":hover:not([data-ui-inner-pointer~='hover'])";
 // Its press, for every pointer: a press on the handle is the caption's too, but the handle's own.
-@ui-data-grid-sort-press: ~":active:not(:has(> .ui-table__resizer:is(:active, [data-ui-splitting])))";
+@ui-data-grid-sort-press: ~":active:not([data-ui-inner-pointer~='press'])";
 
 // A row a step taller than the table's, with more air in its cells: a grid is a screen's main surface, read row by row. The grid's
 // own rows only, as every row and header rule here: a table in a row's detail keeps its own.
@@ -21,12 +21,11 @@
 // A sorting header cell's wash is an inset shadow over its ground: a pinned caption's ground is opaque, and a translucent ground
 // would let the captions scrolled under it show through. At rest the shadow is clear, so only its colour moves.
 .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort] {
-    user-select: none;
     box-shadow: inset 0 0 0 100vmax transparent;
     transition: box-shadow @ui-motion-fast @ui-motion-ease;
 }
 
-    @media @ui-can-hover {
+    @media @{ui-can-hover} {
         .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} {
             box-shadow: inset 0 0 0 100vmax var(--ui-wash-hover);
         }
@@ -69,7 +68,7 @@
         display: none;
     }
 
-    @media @ui-can-hover {
+    @media @{ui-can-hover} {
         .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} > .ui-data-grid__sort-idle {
             opacity: 0.7;
         }
@@ -251,7 +250,7 @@
         position: sticky;
         bottom: 0;
         z-index: 2;
-        background-color: var(--ui-surface-color, var(--ui-color-background));
+        background-color: var(--ui-ground, var(--ui-color-background));
         background-image: linear-gradient(var(--ui-row-wash), var(--ui-row-wash));
     }
 
@@ -270,9 +269,16 @@
     display: none;
 }
 
+// The editor stands in the cell's track, its field centred in the cell's own height rather than padded under it: padded, a one-line row
+// grew by the field's excess as the editor opened, and the field left the box the closed cell's ground showed.
 .ui-data-grid__editor {
-    display: none;
+    display: flex;
+    align-items: center;
 }
+
+    .ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-data-grid__editor {
+        padding-block: 0;
+    }
 
     // The field's text follows the column's edge, as the cell's did; the caret's pixel past the text goes into the padding, or the
     // number would step a pixel aside as the editor opens.
@@ -288,17 +294,6 @@
         text-align: center;
     }
 
-    // The field centred in the cell's own height rather than padded under it: padded, a one-line row grew by the field's excess as
-    // the editor opened, and the field left the box the closed cell's ground showed.
-    .ui-data-grid__editor--open {
-        display: flex;
-        align-items: center;
-    }
-
-    .ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-data-grid__editor--open {
-        padding-block: 0;
-    }
-
     // The field's text lands where the cell's stood: set back by the field's own inset, whatever its appearance and size; an editor
     // with none of its own, by a ghost field's. No field's own cap at the track's width, which would leave the box short by both
     // insets and push an end field's past the edge.
@@ -311,7 +306,7 @@
 
     // A cell of two lines (a title over its description) edits on its first: the one-line field stands at the top, lifted by a ghost
     // field's half-leading, so the title's words stay where they were instead of dropping to the middle of the row.
-    .ui-data-grid__cell--editing:has([data-ui-text-description]) + .ui-data-grid__editor > .ui-input--ghost {
+    .ui-data-grid__cell--editing[data-ui-grid-two-line] + .ui-data-grid__editor > .ui-input--ghost {
         align-self: flex-start;
         margin-block-start: calc(@ui-space-2 + (1lh - @ui-button-height-sm) / 2);
     }
@@ -347,9 +342,9 @@
 }
 
     // A two-line cell's box holds both lines, set in by as much as a one-line cell's; its editor opens on the first line inside it.
-    // Rejected: the field's box on the first line with the description lowered under it, a gap between a text's lines for an
-    // editor's sake.
-    .ui-data-grid__cell--editable:has([data-ui-text-description]) {
+    // The edit engine marks the cell while its text shows a description. Rejected: the field's box on the first line with the
+    // description lowered under it, a gap between a text's lines for an editor's sake.
+    .ui-data-grid__cell--editable[data-ui-grid-two-line] {
         --ui-data-grid-field-top: calc(@ui-space-2 + (1lh - @ui-button-height-sm) / 2);
         --ui-data-grid-field-height: auto;
     }
@@ -368,16 +363,18 @@
         transition: opacity @ui-motion-fast @ui-motion-ease;
     }
 
-    // An editable cell answers the pointer with the field's ground, and the keyboard's row shows every one F2 and Tab reach; only
-    // while the grid edits. No text cursor: rows are read far more than edited.
-    @media @ui-can-hover {
-        .ui-data-grid:not([data-ui-grid-readonly], .ui-disabled, .ui-loading) .ui-data-grid__cell--editable:hover::before {
+    // An editable cell answers the pointer with the field's ground, only while the grid edits. While the keyboard's frame shows (the
+    // grid's own focus, not the pointer's) no cell wears it, the framed one neither: the frame alone is the cursor, and a ground beside
+    // or inside it reads as a second one. No text cursor: rows are read far more than edited.
+    @media @{ui-can-hover} {
+        .ui-data-grid:not([data-ui-grid-readonly], .ui-disabled, .ui-loading):not(@{ui-row-cursor-focus}) .ui-data-grid__cell--editable:hover::before {
             opacity: 1;
         }
     }
 
-    .ui-data-grid:not([data-ui-grid-readonly], .ui-disabled, .ui-loading)@{ui-row-cursor-focus} > .ui-table__scroll > [data-ui-items-host] > .ui-table__row[data-ui-row-focus] > .ui-data-grid__cell--editable::before {
-        opacity: 1;
+    // A committed editor stands over its hidden cell until the answer comes: it wears the cursor's frame the cell would.
+    .ui-data-grid@{ui-row-cursor-focus} > .ui-table__scroll > [data-ui-items-host] > .ui-table__row[data-ui-row-focus] > .ui-data-grid__cell--editing[data-ui-cell-focus] + .ui-data-grid__editor {
+        .ui-keyboard-frame();
     }
 
     // A closed cell's verdict (data-grid-verdict-engine.ts): the severity's edge in the field's box, and the mark the framework's
@@ -387,7 +384,7 @@
         pointer-events: auto;
     }
 
-    .ui-data-grid .ui-data-grid__cell--editable > .ui-data-grid__verdict:is(.ui-invalid, .ui-validation--warning, .ui-validation--info) {
+    .ui-data-grid .ui-data-grid__cell--editable > .ui-data-grid__verdict:is(@{ui-validation-marked}) {
         border-color: var(--ui-validation-color, var(--ui-color-danger-ink));
     }
 
@@ -453,17 +450,17 @@
         .ui-disabled-state();
     }
 
-    // Nor a hand beside it: the root, the box and its gap, keeps the checkbox's pointer, which only a disabled root takes back.
-    .ui-data-grid__cell--select .ui-checkbox:has(> .ui-checkbox__input.ui-disabled),
-    .ui-table__header-cell[data-ui-grid-select-all] .ui-checkbox:has(> .ui-checkbox__input.ui-disabled) {
+    // Nor a hand beside it: the root, the box and its gap, keeps the checkbox's pointer, which only a disabled root takes back; the
+    // selection engine marks the root of a box it turned off.
+    .ui-checkbox[data-ui-grid-box-off] {
         cursor: default;
     }
 
 // A typed cell is one line of the row's own text, cut with an ellipsis where the column is narrower than the value.
 .ui-data-grid-cell {
     display: block;
-    min-width: 0;
-    max-width: 100%;
+    .ui-responsive-property(min-width, --ui-min-width, 0);
+    .ui-responsive-property(max-width, --ui-max-width, 100%);
     .ui-text-nowrap();
 }
 
@@ -482,7 +479,7 @@
         outline-offset: -2px;
     }
 
-    @media @ui-can-hover {
+    @media @{ui-can-hover} {
         .ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover}:not(@{ui-keyboard-focus}),
         .ui-data-grid__filters-clear@{ui-button-live}:hover:not(@{ui-keyboard-focus}) {
             outline: 1px dashed CanvasText;
@@ -496,7 +493,7 @@
     }
 
     // The severities' inks are gone: a verdict's edge is the system's mark colour, its words the tooltip's.
-    .ui-data-grid .ui-data-grid__cell--editable > .ui-data-grid__verdict:is(.ui-invalid, .ui-validation--warning, .ui-validation--info) {
+    .ui-data-grid .ui-data-grid__cell--editable > .ui-data-grid__verdict:is(@{ui-validation-marked}) {
         border-color: Mark;
     }
 }

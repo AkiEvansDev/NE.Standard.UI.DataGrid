@@ -1,8 +1,9 @@
-// A row's detail, opened at the detail column's chevron, by Right and Left on the keyboard's row, or, when the grid says so, by a click
-// or Enter on the row. The template is drawn when opened and removed when closed, so only shown details exist.
+// A row's detail, opened at the detail column's chevron — by a click, or Enter or Space with the keyboard's cursor on its cell — or,
+// when the grid says so, by a click or Enter on the row. The template is drawn when opened and removed when closed, so only shown details
+// exist. An open detail is a cell spanning its row, a line of its own in the core's cell cursor.
 
-import type { ComponentStates, DomNames, ItemRows, PluginEngineContext } from "ne-standard-ui";
-import { componentIdOf, gridOf, isOwnRow, isRowKeyTarget, ownDescendants, ownFirst, RootSelector, rowSelector } from "./data-grid-dom.ts";
+import type { DomNames, ItemRows, PluginEngineContext } from "ne-standard-ui";
+import { componentIdOf, gridOf, isOwnRow, ownDescendants, RootSelector, rowSelector } from "./data-grid-dom.ts";
 import { ClientNames, GridAttributes, GridClasses } from "./data-grid-names.ts";
 
 const ToggleSelector = `.${GridClasses.detailCell}`;
@@ -24,7 +25,6 @@ type DetailsBefore = {
 export class DataGridDetailEngine {
     private readonly rows: ItemRows;
     private readonly names: DomNames;
-    private readonly states: ComponentStates;
     private readonly rowSelector: string;
     // Set while an Enter is being handled: the core raises the row's `open` for Enter and for a double click alike; Enter toggles
     // the detail, and a double click, whose own two clicks toggled it already, puts it back.
@@ -35,24 +35,15 @@ export class DataGridDetailEngine {
     public constructor(context: PluginEngineContext) {
         this.rows = context.rows;
         this.names = context.names;
-        this.states = context.states;
         this.rowSelector = rowSelector(context.names);
 
         this.markAll(context.root.querySelectorAll<HTMLElement>(RootSelector));
         context.observeComponents(context.root, RootSelector, { childList: true }, grids => this.markAll(grids));
 
-        // Enter, Right and Left on the grid itself or in a row, where the row keyboard answers them; one in the band, a flyout or the
-        // header is that part's own.
-        context.root.addEventListener("keydown", domEvent => {
-            if (!(domEvent instanceof KeyboardEvent) || !(domEvent.target instanceof Element) || !isRowKeyTarget(this.rows, domEvent.target))
-                return;
-
-            if (domEvent.key === "ArrowRight" || domEvent.key === "ArrowLeft") {
-                this.handleArrow(domEvent, domEvent.target, domEvent.key === "ArrowRight");
-                return;
-            }
-
-            if (domEvent.key !== "Enter")
+        // Enter on the cursor's cell, which the core offers before it acts (`names.cellKey`): left to the row, it raises the row's open.
+        // Enter on the chevron's cell presses the chevron instead, and one an editor took raises nothing.
+        context.root.addEventListener(context.names.cellKey, domEvent => {
+            if (domEvent.defaultPrevented || !(domEvent instanceof CustomEvent) || (domEvent.detail as { readonly key: string }).key !== "Enter")
                 return;
 
             this.enterDown = true;
@@ -122,37 +113,15 @@ export class DataGridDetailEngine {
         }
     }
 
-    /**
-     * Right opens the keyboard's row's detail and Left closes it, as a tree grid's row unfolds: the chevron is a part of the row that
-     * answers its own press, out of the Tab order (the core's `ownPressControlsOf`). A key with a modifier is another's, and a row with
-     * no chevron has no detail to open.
-     */
-    private handleArrow(domEvent: KeyboardEvent, target: Element, open: boolean): void {
-        const grid = gridOf(target);
-
-        if (domEvent.defaultPrevented || domEvent.ctrlKey || domEvent.metaKey || domEvent.altKey || domEvent.shiftKey || grid === null || this.states.isInert(grid))
-            return;
-
-        const row = ownFirst(grid, `${this.rowSelector}[${this.names.rowFocus}]`);
-
-        if (row === null || !isOwnRow(grid, row, this.names) || row.querySelector(`:scope > ${ChevronSelector}`) === null)
-            return;
-
-        domEvent.preventDefault();
-
-        if (row.hasAttribute(ExpandedAttribute) !== open)
-            this.toggleDetail(grid, row);
-    }
-
     private toggleDetail(grid: HTMLElement, row: HTMLElement): void {
         if (row.hasAttribute(ExpandedAttribute)) {
-            closeDetail(row);
+            this.closeDetail(row);
             return;
         }
 
         if (!grid.hasAttribute(MultipleAttribute)) {
             for (const other of ownDescendants(grid, `${this.rowSelector}[${ExpandedAttribute}]`))
-                closeDetail(other);
+                this.closeDetail(other);
         }
 
         const componentId = componentIdOf(grid, this.names);
@@ -164,6 +133,11 @@ export class DataGridDetailEngine {
         const detail = document.createElement("div");
 
         detail.className = DetailClass;
+        // A cell spanning the row, under its cells: the keyboard's cursor reaches it by Down, and Enter or F2 goes into it.
+        detail.setAttribute("role", "gridcell");
+        // Over the columns shown, first among them; the core's column layout writes both again as the columns change.
+        detail.setAttribute("aria-colindex", "1");
+        detail.setAttribute("aria-colspan", String(this.rows.cellsOf(row).length));
         // Inside the row, yet not the row to lift: a press there never drags it where the grid's rows are Draggable.
         detail.setAttribute(this.names.noRowDrag, "");
         detail.appendChild(content);
@@ -172,11 +146,24 @@ export class DataGridDetailEngine {
         markExpanded(row, true);
     }
 
+    /** Takes a row's detail in; the keyboard's cursor standing on it goes back to the row's cells, in the column it stood in. */
+    private closeDetail(row: HTMLElement): void {
+        const detail = row.querySelector(`:scope > .${DetailClass}`);
+        const held = detail?.hasAttribute(this.names.cellFocus) === true;
+
+        row.removeAttribute(ExpandedAttribute);
+        detail?.remove();
+        markExpanded(row, false);
+
+        if (held)
+            this.rows.moveCursor(row);
+    }
+
     /** Puts the details back as they stood: the same elements, so what a reader did inside one (a scroll, a field) is still there. */
     private restoreDetails(grid: HTMLElement, open: ReadonlyMap<HTMLElement, Element | null>): void {
         for (const row of ownDescendants(grid, `${this.rowSelector}[${ExpandedAttribute}]`)) {
             if (!open.has(row))
-                closeDetail(row);
+                this.closeDetail(row);
         }
 
         for (const [row, detail] of open) {
@@ -204,12 +191,6 @@ export class DataGridDetailEngine {
 
         return open;
     }
-}
-
-function closeDetail(row: HTMLElement): void {
-    row.removeAttribute(ExpandedAttribute);
-    row.querySelector(`:scope > .${DetailClass}`)?.remove();
-    markExpanded(row, false);
 }
 
 /** The chevron says whether the detail it opens is out, for a reader who cannot see it turn. */

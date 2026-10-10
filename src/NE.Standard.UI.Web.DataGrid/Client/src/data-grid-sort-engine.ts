@@ -24,8 +24,9 @@ export class DataGridSortEngine {
         context.observeComponents(root, RootSelector, { childList: true, attributeFilter: [context.names.itemsQuery] }, grids => this.syncAll(grids));
 
         root.addEventListener("click", domEvent => this.handleHeaderPress(domEvent, domEvent instanceof MouseEvent && domEvent.shiftKey), true);
+        // Shift adds the column to the sort; another chord on a caption is not its press.
         root.addEventListener("keydown", domEvent => {
-            if (domEvent instanceof KeyboardEvent && (domEvent.key === "Enter" || domEvent.key === " ") && domEvent.target instanceof Element && domEvent.target.hasAttribute(SortAttribute))
+            if (domEvent instanceof KeyboardEvent && (domEvent.key === "Enter" || domEvent.key === " ") && context.shortcuts.isPlainKey(domEvent, { shift: true }) && domEvent.target instanceof Element && domEvent.target.hasAttribute(SortAttribute))
                 this.handleHeaderPress(domEvent, domEvent.shiftKey);
         }, true);
     }

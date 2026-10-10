@@ -1,9 +1,11 @@
-// A cell that edits: double click or F2 opens an editor over it (Enter/blur commits, Escape reverts, Tab advances). The editor
-// renders on demand from the cell's variant, so only one exists at a time. A value its field refuses — an error rule's, one past a
-// bound — is never sent, and the editor stays open over it until it is put right or Escape takes it back.
+// A cell that edits: a double click, or Enter, F2 or a typed character on the keyboard's cursor cell (the core's cell cursor, offered
+// as `names.cellKey`), opens an editor over it — Enter or a blur commits, Escape reverts, Tab commits and opens the next editable
+// cell, row after row. The editor renders on demand from the cell's variant, so only one is open at a time. A value its field refuses — an error rule's, one past a
+// bound — is never sent, and the editor stays open over it until it is put right or Escape takes it back. A committed editor stays
+// over its cell, showing the new value and taking nothing, until the commit is answered: the cell under it still holds the old one.
 
-import type { ComponentStates, DomNames, FieldValidation, Focus, ItemRows, PluginEngineContext, TableColumns, ValueReading } from "ne-standard-ui";
-import { componentIdOf, gridOf, isRowKeyTarget, ownDescendants, ownFirst, RootSelector, rowSelector } from "./data-grid-dom.ts";
+import type { CellKey, ComponentStates, DomNames, FieldValidation, Focus, ItemRows, PluginEngineContext, ShortcutWords, ValueReading } from "ne-standard-ui";
+import { componentIdOf, gridOf, isOwnRow, ownDescendants, ownFirst, RootSelector, rowSelector } from "./data-grid-dom.ts";
 import { ClientNames, GridAttributes, GridClasses, GridEvents } from "./data-grid-names.ts";
 
 const EditableCellSelector = `.${GridClasses.editableCell}`;
@@ -32,17 +34,42 @@ type EditorPlace = {
     readonly changed: boolean;
 };
 
+/** The `cell-edit` events a command was taken for, each answered once its command is: what a committed editor waits for. */
+export class CellEditAnswers {
+    private readonly answers = new WeakMap<Event, Promise<void>>();
+    private readonly settles = new WeakMap<Event, () => void>();
+
+    /** The event's registration `started`: a command runs for it. */
+    public start(domEvent: Event): void {
+        this.answers.set(domEvent, new Promise(resolve => this.settles.set(domEvent, resolve)));
+    }
+
+    /** The event's registration `completed`: its command was answered, or never will be. */
+    public finish(domEvent: Event): void {
+        this.settles.get(domEvent)?.();
+        this.settles.delete(domEvent);
+    }
+
+    /** The answer to a `cell-edit` just dispatched, or null where no command took it. */
+    public answerTo(domEvent: Event): Promise<void> | null {
+        return this.answers.get(domEvent) ?? null;
+    }
+}
+
 export class DataGridEditEngine {
     private readonly rows: ItemRows;
     private readonly values: ValueReading;
-    private readonly tables: TableColumns;
     private readonly states: ComponentStates;
     private readonly names: DomNames;
     private readonly focus: Focus;
     private readonly validation: FieldValidation;
+    private readonly shortcuts: ShortcutWords;
     private readonly rowSelector: string;
+    private readonly answers: CellEditAnswers;
     // One editor per grid, in a map that can be walked, since a state change above the grids is checked against every open editor.
     private readonly open = new Map<HTMLElement, OpenEditor>();
+    // Committed editors waiting for their answer, by the cell each stands over.
+    private readonly settling = new Map<HTMLElement, OpenEditor>();
     // The grids whose editable cells gave their double click back to the row while editing was off.
     private readonly unclaimed = new WeakSet<HTMLElement>();
     // The editor being taken off the page, while it goes.
@@ -50,20 +77,31 @@ export class DataGridEditEngine {
     // An Escape putting back the value the row held, which goes out whatever the rules say of it.
     private restoring = false;
 
-    public constructor(context: PluginEngineContext) {
+    public constructor(context: PluginEngineContext, answers: CellEditAnswers) {
         const root = context.root;
 
+        this.answers = answers;
         this.rows = context.rows;
         this.values = context.values;
-        this.tables = context.tables;
         this.states = context.states;
         this.names = context.names;
         this.focus = context.focus;
         this.validation = context.validation;
+        this.shortcuts = context.shortcuts;
         this.rowSelector = rowSelector(context.names);
 
         for (const grid of root.querySelectorAll<HTMLElement>(RootSelector))
             this.syncClaims(grid);
+
+        // A cell whose text shows a description stands on two lines, which its field's box holds: marked as rows are drawn and as a
+        // description comes and goes with its row's value.
+        for (const cell of root.querySelectorAll<HTMLElement>(EditableCellSelector))
+            this.markTwoLine(cell);
+
+        context.observeComponents(root, EditableCellSelector, { childList: true, attributeFilter: [this.names.textDescription] }, cells => {
+            for (const cell of cells)
+                this.markTwoLine(cell);
+        });
 
         root.addEventListener("dblclick", domEvent => {
             const cell = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(EditableCellSelector) : null;
@@ -94,6 +132,7 @@ export class DataGridEditEngine {
         window.addEventListener("change", domEvent => this.holdWindowChange(domEvent), true);
 
         root.addEventListener("keydown", domEvent => this.handleKeyDown(domEvent), true);
+        root.addEventListener(this.names.cellKey, domEvent => this.handleCellKey(domEvent));
 
         // An editor whose row was redrawn reopens on the new row's cell with the draft put back, rather than losing the edit; a row
         // drawn while editing is off gives its double click back too.
@@ -158,6 +197,13 @@ export class DataGridEditEngine {
             // After the blur's own change has been dispatched, which the browser does before the focus moves on.
             window.setTimeout(() => this.followFocusOut(grid, state, hid), 0);
         }, true);
+    }
+
+    private markTwoLine(cell: HTMLElement): void {
+        const twoLine = cell.querySelector(`[${this.names.textDescription}]`) !== null;
+
+        if (cell.hasAttribute(ClientNames.twoLine) !== twoLine)
+            cell.toggleAttribute(ClientNames.twoLine, twoLine);
     }
 
     /**
@@ -241,7 +287,7 @@ export class DataGridEditEngine {
         }
 
         if (dropped)
-            grid.focus({ preventScroll: true });
+            this.focus.giveBack(state.cell);
     }
 
     /**
@@ -264,8 +310,9 @@ export class DataGridEditEngine {
             return;
         }
 
-        // Trusted only: the editor's own change on a commit or an Escape is raised from script, whatever the window.
-        if (!domEvent.isTrusted || document.hasFocus() || !(field instanceof Element) || field !== document.activeElement || !isCaretField(field))
+        // Trusted only: the editor's own change on a commit or an Escape is raised from script, whatever the window. Only a field the reader
+        // types in raises one on a blur.
+        if (!domEvent.isTrusted || document.hasFocus() || !(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) || field !== document.activeElement)
             return;
 
         const grid = gridOf(field);
@@ -300,6 +347,16 @@ export class DataGridEditEngine {
                 return;
         }
 
+        // A commit of this cell still unanswered gives way: the new editor stands where it stood.
+        const committed = this.settling.get(cell);
+
+        if (committed !== undefined)
+            this.finishSettling(committed);
+
+        // The keyboard's cursor stands on the cell edited, brought into view clear of the pinned cells: Enter and Escape give it back
+        // there, and Tab moves it along.
+        this.rows.moveCursor(row, cell);
+
         const editor = this.createEditor(grid, row, cell);
 
         if (editor === null)
@@ -319,23 +376,27 @@ export class DataGridEditEngine {
         // The editor stands as tall as the cell it replaces, so a row of two lines does not shrink around a one-line field.
         editor.style.minHeight = `${cell.getBoundingClientRect().height}px`;
         cell.classList.add(ClientNames.editingCellClass);
-        editor.classList.add(ClientNames.editorOpenClass);
         cell.after(editor);
 
         const focusable = this.focus.first(editor);
 
         focusable?.focus({ preventScroll: true });
-        this.reveal(grid, row, editor);
 
-        if (focusable instanceof HTMLInputElement && isCaretInput(focusable))
+        // Selected whole: a character typed on the closed cell lands here and replaces the value, as a spreadsheet's does.
+        if (focusable instanceof HTMLInputElement || focusable instanceof HTMLTextAreaElement)
             focusable.select();
 
         // A choice cell opens its list with the editor, since a second press would say nothing new; through the framework's trigger,
-        // so the list opens and closes its way.
+        // so the list opens and closes its way. Pressed once the select has met the page — its engine marks the chosen option on the
+        // insertion's record, a microtask queued ahead of this one — or the list opens on its first option.
         const trigger = editor.querySelector<HTMLElement>(this.names.listTriggerSelector);
 
-        if (trigger !== null && trigger.getAttribute("aria-expanded") !== "true")
-            trigger.click();
+        if (trigger !== null) {
+            queueMicrotask(() => {
+                if (this.open.get(grid) === state && trigger.getAttribute("aria-expanded") !== "true")
+                    trigger.click();
+            });
+        }
 
         // An empty read is taken again once the field has met the page: a select's engine fills its value input from its markup on
         // its next turn, and a commit measured against the empty one would send a value nobody changed.
@@ -345,39 +406,6 @@ export class DataGridEditEngine {
                     state.original = this.fieldValue(field);
             }, 0);
         }
-    }
-
-    /**
-     * A grid wider than its box scrolls sideways: the editor Tab or F2 opened past either edge is brought into the box, clear of the
-     * pinned cells standing over its start. The focus itself scrolls nothing, or the page would jump with it.
-     */
-    private reveal(grid: HTMLElement, row: HTMLElement, editor: HTMLElement): void {
-        const box = grid.querySelector<HTMLElement>(`:scope > .${this.names.tableScrollClass}`);
-
-        if (box === null || box.scrollWidth <= box.clientWidth)
-            return;
-
-        const area = box.getBoundingClientRect();
-        const middle = area.left + area.width / 2;
-        let start = area.left + box.clientLeft;
-        let end = start + box.clientWidth;
-
-        // A pinned cell sticks at the edge it stands nearer to: the start, or the end in a right-to-left grid.
-        for (const cell of row.children) {
-            if (cell === editor || !(cell instanceof HTMLElement) || getComputedStyle(cell).position !== "sticky")
-                continue;
-
-            const rect = cell.getBoundingClientRect();
-
-            if (rect.left + rect.width / 2 < middle)
-                start = Math.max(start, rect.right);
-            else
-                end = Math.min(end, rect.left);
-        }
-
-        const rect = editor.getBoundingClientRect();
-
-        box.scrollLeft += revealDelta(rect.left, rect.right, start, end);
     }
 
     /** The column's editor variant drawn against the row's item, in the display cell's own shape so it stands in the same track. */
@@ -401,6 +429,13 @@ export class DataGridEditEngine {
         editor.classList.remove(GridClasses.editableCell, ClientNames.editingCellClass);
         editor.classList.add(ClientNames.editorClass);
         editor.removeAttribute(EditorTemplateAttribute);
+        editor.removeAttribute(ClientNames.twoLine);
+        // The cell's id is the one the grid names as its cursor, and the cursor stays on the cell.
+        editor.removeAttribute("id");
+        editor.removeAttribute(this.names.cellFocus);
+        // Its keys are its own: no row cursor or detail of the grid acts on them, and its Escape takes the edit back — no dialog, flyout
+        // or drawer the grid stands in closes on it first.
+        editor.setAttribute(this.names.ownsKeys, "");
         editor.appendChild(content);
 
         const kind = cell.querySelector(`[${KindAttribute}]`)?.getAttribute(KindAttribute);
@@ -428,13 +463,20 @@ export class DataGridEditEngine {
 
         this.open.delete(grid);
 
+        let answer: Promise<void> | null = null;
+
         if (commit) {
             // A caret field says `change` on blur or Enter only; here the value is committed whether or not the focus moves.
             if (state.field !== null && !state.changed && this.fieldValue(state.field) !== state.original)
                 state.field.dispatchEvent(new Event("change", { bubbles: true }));
 
-            if (state.changed || this.fieldValue(state.field) !== state.original)
-                (state.field ?? state.editor).dispatchEvent(new Event(GridEvents.cellEdit, { bubbles: true }));
+            if (state.changed || this.fieldValue(state.field) !== state.original) {
+                const edit = new Event(GridEvents.cellEdit, { bubbles: true });
+
+                (state.field ?? state.editor).dispatchEvent(edit);
+                // The command's answer carries what the cell shows (a value the server derives too); with none, the value's own answer.
+                answer = this.answers.answerTo(edit) ?? (state.field === null ? null : this.values.whenSettled(state.field));
+            }
         }
         else if (state.field !== null && state.changed) {
             // A change that already went out is taken back the same way: the server holds it, so letting the field go would keep it.
@@ -449,11 +491,24 @@ export class DataGridEditEngine {
             }
         }
 
-        // Released on every close: a commit that sent nothing let nothing go, and after an Escape the framework restores the value.
+        const focused = state.editor.contains(document.activeElement);
+
+        if (answer === null)
+            this.takeOff(state);
+        else
+            this.settle(state, answer);
+
+        // The keyboard stays on the row, in the cell: the grid's root holds the focus and the cursor names the row and its cell.
+        if (focused)
+            this.focus.giveBack(state.cell);
+
+        return true;
+    }
+
+    /** Lets the editor's field go and takes the editor off its cell; after an Escape, the framework restores the field's value. */
+    private takeOff(state: OpenEditor): void {
         if (state.field !== null)
             this.values.release(state.field);
-
-        const focused = state.editor.contains(document.activeElement);
 
         state.cell.classList.remove(ClientNames.editingCellClass);
         this.leaving = state.editor;
@@ -464,12 +519,43 @@ export class DataGridEditEngine {
         finally {
             this.leaving = null;
         }
+    }
 
-        // The keyboard stays on the row: the grid's root holds the focus and the cursor names the row.
-        if (focused)
-            grid.focus({ preventScroll: true });
+    /**
+     * A committed editor stays over its cell, taking nothing, until the answer has written the cell: taken off at once, the cell showed
+     * its old value for the round trip. The field stays held meanwhile, or its release would put that old value back into it.
+     */
+    private settle(state: OpenEditor, answer: Promise<void>): void {
+        if (state.editor.contains(document.activeElement))
+            this.blurLeaving(state.editor);
 
-        return true;
+        state.editor.inert = true;
+        this.settling.set(state.cell, state);
+
+        const settled = (): void => this.finishSettling(state);
+
+        answer.then(settled, settled);
+    }
+
+    /** Takes the focus out of a leaving editor; the `change` the browser raises for its field as it goes is not the reader's. */
+    private blurLeaving(editor: HTMLElement): void {
+        this.leaving = editor;
+
+        try {
+            (document.activeElement as HTMLElement).blur();
+        }
+        finally {
+            this.leaving = null;
+        }
+    }
+
+    /** Takes a committed editor off once its answer came, or as another editor opens on its cell. */
+    private finishSettling(state: OpenEditor): void {
+        if (this.settling.get(state.cell) !== state)
+            return;
+
+        this.settling.delete(state.cell);
+        this.takeOff(state);
     }
 
     /** An edit the field refuses: a value changed from the one the editor opened on, failing an error rule or past a bound. */
@@ -516,7 +602,7 @@ export class DataGridEditEngine {
     }
 
     private handleKeyDown(domEvent: Event): void {
-        if (!(domEvent instanceof KeyboardEvent) || domEvent.defaultPrevented || domEvent.isComposing || !(domEvent.target instanceof Element))
+        if (!(domEvent instanceof KeyboardEvent) || domEvent.defaultPrevented || this.shortcuts.isComposing(domEvent) || !(domEvent.target instanceof Element))
             return;
 
         const grid = gridOf(domEvent.target);
@@ -527,23 +613,7 @@ export class DataGridEditEngine {
 
         const state = this.open.get(grid);
 
-        // F2 on the keyboard's row opens its first editable cell on screen; in the band, a flyout or the header it is that field's.
-        if (state === undefined) {
-            if (domEvent.key !== "F2" || !isRowKeyTarget(this.rows, domEvent.target))
-                return;
-
-            const row = ownFirst(grid, `${this.rowSelector}[${this.names.rowFocus}]`);
-            const cell = row === null ? null : this.editableCells(grid, row)[0] ?? null;
-
-            if (cell !== null) {
-                domEvent.preventDefault();
-                this.openEditor(cell);
-            }
-
-            return;
-        }
-
-        if (!state.editor.contains(domEvent.target))
+        if (state === undefined || !state.editor.contains(domEvent.target))
             return;
 
         // A popup the field opened owns Enter and Escape until it closes (own-control.ts in the core), open by its opener's word,
@@ -581,26 +651,74 @@ export class DataGridEditEngine {
         }
     }
 
-    /** The row's shown editable cells, in the viewer's column order. */
-    private editableCells(grid: HTMLElement, row: HTMLElement): HTMLElement[] {
-        // The cells stand in the author's order, and a hidden column's cell cannot take the focus.
-        const order = this.tables.columnOrder(grid);
-        const cells = [...row.querySelectorAll<HTMLElement>(`:scope > ${EditableCellSelector}`)]
-            .filter(cell => !this.tables.isColumnHidden(grid, cell.getAttribute(ColumnAttribute) ?? ""));
+    /**
+     * Enter, F2 or a typed character on the cursor's cell (`names.cellKey`): an editable cell of a grid that edits opens its editor, and
+     * the key is the grid's; a typed character replaces the value its field opened on.
+     */
+    private handleCellKey(domEvent: Event): void {
+        if (!(domEvent instanceof CustomEvent) || domEvent.defaultPrevented)
+            return;
 
-        return cells
-            .map(cell => ({ cell, position: order.indexOf(cell.getAttribute(ColumnAttribute) ?? "") }))
-            .sort((a, b) => a.position - b.position)
-            .map(entry => entry.cell);
+        const { cell, key, keyboard } = domEvent.detail as CellKey;
+        const grid = gridOf(cell);
+
+        if (grid === null || !cell.classList.contains(GridClasses.editableCell) || !this.canEdit(grid))
+            return;
+
+        domEvent.preventDefault();
+        keyboard.preventDefault();
+        this.openEditor(cell);
+
+        // After the field's own engines have met the editor, which they do on the page's next microtask: a date's writes its text then.
+        if (key !== "Enter" && key !== "F2")
+            queueMicrotask(() => this.typeInto(grid, key));
     }
 
-    /** The editable cell `step` places along the row from the given one, or null at the row's end. */
-    private siblingCell(grid: HTMLElement, cell: HTMLElement, step: number): HTMLElement | null {
+    /**
+     * Writes a character typed on a closed cell into its open editor's field in place of the value, as a spreadsheet's typing does, and
+     * says so as the reader's typing would. Written rather than left to the key, which would land in a selection the field's engine has
+     * since rewritten. A field that types nothing (a select's list) takes no character.
+     */
+    private typeInto(grid: HTMLElement, character: string): void {
+        const field = document.activeElement;
+
+        if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) || this.open.get(grid)?.editor.contains(field) !== true || field.readOnly)
+            return;
+
+        field.value = character;
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    /** The row's shown editable cells, in the order the core's cell cursor walks them: the viewer's. */
+    private editableCells(row: HTMLElement): HTMLElement[] {
+        return this.rows.cellsOf(row).filter(cell => cell.classList.contains(GridClasses.editableCell));
+    }
+
+    /** The editable cell `step` places along the row from the given one, else the first or last of the next row shown; null past the grid's ends. */
+    private siblingCell(grid: HTMLElement, cell: HTMLElement, step: 1 | -1): HTMLElement | null {
         const row = cell.closest<HTMLElement>(this.rowSelector);
-        const cells = row === null ? [] : this.editableCells(grid, row);
+        const cells = row === null ? [] : this.editableCells(row);
         const index = cells.indexOf(cell);
 
-        return index < 0 ? null : cells[index + step] ?? null;
+        if (row === null || index < 0)
+            return null;
+
+        const next = cells[index + step];
+
+        if (next !== undefined)
+            return next;
+
+        for (let other = siblingRow(row, step); other !== null; other = siblingRow(other, step)) {
+            if (!other.matches(this.rowSelector) || !isOwnRow(grid, other, this.names) || other.classList.contains(this.names.hiddenClass))
+                continue;
+
+            const candidates = this.editableCells(other);
+
+            if (candidates.length > 0)
+                return step > 0 ? candidates[0] : candidates[candidates.length - 1];
+        }
+
+        return null;
     }
 
     /**
@@ -618,32 +736,22 @@ export class DataGridEditEngine {
 
         // The blur took the focus out of the editor before the close could see it, so the keyboard is put back on the row here.
         if (held)
-            grid.focus({ preventScroll: true });
+            this.focus.giveBack(state.cell);
 
         return true;
     }
 }
 
-/** How far a box scrolls sideways to bring a part between `start` and `end`: its start first, where the part is wider than the room. */
-export function revealDelta(left: number, right: number, start: number, end: number): number {
-    if (left < start)
-        return left - start;
+/** The element beside a row in its host, `step` along: the next or the previous. */
+function siblingRow(row: Element, step: 1 | -1): HTMLElement | null {
+    const sibling = step > 0 ? row.nextElementSibling : row.previousElementSibling;
 
-    return right > end ? Math.min(right - end, left - start) : 0;
+    return sibling instanceof HTMLElement ? sibling : null;
 }
 
 /** Whether the popup open in an editor is a list: the one the focus stands in, else the one its opener names. */
 function isList(popup: Element | null, opener: Element | null): boolean {
     return popup === null ? opener?.getAttribute("aria-haspopup") === "listbox" : popup.getAttribute("role") === "listbox";
-}
-
-function isCaretInput(field: HTMLInputElement): boolean {
-    return field.type === "text" || field.type === "number" || field.type === "search" || field.type === "email" || field.type === "url" || field.type === "tel" || field.type === "password";
-}
-
-/** A field the reader types in, whose `change` the browser raises on a blur. */
-function isCaretField(element: Element): boolean {
-    return element instanceof HTMLTextAreaElement || (element instanceof HTMLInputElement && isCaretInput(element));
 }
 
 /** Whether an element can still be seen: laid out, and not `visibility: hidden`, as a column hidden at a narrower width is. */

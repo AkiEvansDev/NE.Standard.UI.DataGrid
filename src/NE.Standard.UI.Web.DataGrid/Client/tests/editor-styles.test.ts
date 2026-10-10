@@ -1,6 +1,6 @@
 // Read back from the compiled stylesheet: an editor stands in its cell's box, a two-line cell's on its first line, and an end column's
 // number does not move as it opens; the ground a closed cell answers the pointer with, and its verdict's edge, are the editor field's
-// box; the filters' panel fits a phone.
+// box; a caption's wash and an off box's hand read the engines' marks; the filters' panel fits a phone.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -27,15 +27,15 @@ test("an editor's field reaches past the cell's padding by the field's own inset
 });
 
 test("a two-line cell's ghost field stands on the cell's first line, lifted by its half-leading", () => {
-    const field = declarations(".ui-data-grid__cell--editing:has([data-ui-text-description]) + .ui-data-grid__editor > .ui-input--ghost") ?? "";
+    const field = declarations(".ui-data-grid__cell--editing[data-ui-grid-two-line] + .ui-data-grid__editor > .ui-input--ghost") ?? "";
 
     assert.match(field, /align-self: flex-start;/);
     assert.match(field, /margin-block-start: calc\(0\.5rem \+ \(1lh - 1\.75rem\) \/ 2\);/);
 });
 
-test("an open editor centres its field in the cell's height, padded only at the sides, so a one-line row keeps its height", () => {
-    assert.match(declarations(".ui-data-grid__editor--open") ?? "", /align-items: center;/);
-    assert.match(declarations(".ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-data-grid__editor--open") ?? "", /padding-block: 0;/);
+test("an editor centres its field in the cell's height, padded only at the sides, so a one-line row keeps its height", () => {
+    assert.match(declarations(".ui-data-grid__editor") ?? "", /align-items: center;/);
+    assert.match(declarations(".ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-data-grid__editor") ?? "", /padding-block: 0;/);
 });
 
 test("a closed cell's ground and its verdict's edge take the box the editor's ghost field will: its inset, height and radius", () => {
@@ -51,17 +51,28 @@ test("a closed cell's ground and its verdict's edge take the box the editor's gh
 });
 
 test("a two-line cell's box holds both lines, set in as a one-line cell's, and its description keeps its place", () => {
-    const twoLine = declarations(".ui-data-grid__cell--editable:has([data-ui-text-description])") ?? "";
+    const twoLine = declarations(".ui-data-grid__cell--editable[data-ui-grid-two-line]") ?? "";
 
     assert.match(twoLine, /--ui-data-grid-field-top: calc\(0\.5rem \+ \(1lh - 1\.75rem\) \/ 2\);/);
     assert.match(twoLine, /--ui-data-grid-field-height: auto;/);
     assert.doesNotMatch(css, /\.ui-text__description \{[^}]*margin-top/);
 });
 
-test("the ground shows under the pointer and on the keyboard's row only while the grid edits", () => {
-    assert.match(css, /\.ui-data-grid:not\(\[data-ui-grid-readonly\], \.ui-disabled, \.ui-loading\) \.ui-data-grid__cell--editable:hover::before \{\s*opacity: 1;/);
-    assert.match(css, /\.ui-table__row\[data-ui-row-focus\] > \.ui-data-grid__cell--editable::before \{\s*opacity: 1;/);
+test("the ground shows under the pointer alone, only while the grid edits; the keyboard's frame takes it off every cell, its own too", () => {
+    assert.match(css, /\.ui-data-grid:not\(\[data-ui-grid-readonly\], \.ui-disabled, \.ui-loading\):not\(:focus:not\(\[data-ui-pointer-focus\]\)\) \.ui-data-grid__cell--editable:hover::before \{\s*opacity: 1;/);
+    assert.doesNotMatch(css, /\.ui-data-grid__cell--editable\[data-ui-cell-focus\]::before/);
+    assert.doesNotMatch(css, /:not\(:has\(> \[data-ui-cell-focus\]\)\) > \.ui-data-grid__cell--editable::before/);
     assert.doesNotMatch(declarations(".ui-data-grid__cell--editable") ?? "", /cursor/);
+});
+
+test("a sortable caption's wash and an off box's pointer read the engines' marks, a caption's off while its column edge has the pointer", () => {
+    assert.match(css, /\.ui-table__header-cell\[data-ui-grid-sort\]:hover:not\(\[data-ui-inner-pointer~='hover'\]\) \{\s*box-shadow: inset 0 0 0 100vmax var\(--ui-wash-hover\);/);
+    assert.match(css, /\.ui-table__header-cell\[data-ui-grid-sort\]:active:not\(\[data-ui-inner-pointer~='press'\]\) \{\s*box-shadow: inset 0 0 0 100vmax var\(--ui-wash-active\);/);
+    assert.match(declarations(".ui-checkbox[data-ui-grid-box-off]") ?? "", /cursor: default;/);
+});
+
+test("a committed editor standing over its cell wears the cursor's frame the hidden cell would", () => {
+    assert.match(css, /\.ui-data-grid__cell--editing\[data-ui-cell-focus\] \+ \.ui-data-grid__editor \{\s*outline: 2px solid var\(--ui-color-primary-ink\);/);
 });
 
 test("a verdict's edge outranks the box's own transparent edge, in the severity's ink", () => {

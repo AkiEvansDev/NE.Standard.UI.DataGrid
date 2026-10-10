@@ -1,7 +1,7 @@
 // The footer under the rows: a total per column that asked for one, computed here or, for a windowed source, sent by the server
 // with the window; written through the cells' formatter.
 
-import type { DomNames, ItemRows, PluginEngineContext } from "ne-standard-ui";
+import type { DomNames, ItemRows, NumberFormatting, PluginEngineContext } from "ne-standard-ui";
 import { formatCellValue, readCellShape, toNumber } from "./data-grid-cell.ts";
 import type { CellFormatting } from "./data-grid-cell.ts";
 import { hostSelector, RootSelector, rowSelector } from "./data-grid-dom.ts";
@@ -73,7 +73,7 @@ export class DataGridTotalsEngine {
             const value = windowed
                 ? answered?.[property] ?? null
                 : held !== null
-                    ? aggregate === "count" ? held.length : aggregateOf(aggregate, heldValues(held, property, this.rows))
+                    ? aggregate === "count" ? held.length : aggregateOf(aggregate, heldValues(held, property, this.rows, this.formatting.numbers))
                     : aggregate === "count" ? host.querySelectorAll(this.shownRowSelector).length : aggregateOf(aggregate, rawValues(host, column, this.shownRowSelector));
             const text = value === null ? "" : formatCellValue(value, readCellShape(total), numbers, dates, this.formatting);
 
@@ -118,11 +118,11 @@ function readAggregates(host: Element, names: DomNames): Readonly<Record<string,
 }
 
 /** The values of one property over the items a host holds whole, read as a cell reads its number; an item with none is skipped. */
-function heldValues(items: readonly unknown[], property: string, rows: ItemRows): number[] {
+function heldValues(items: readonly unknown[], property: string, rows: ItemRows, numbers: NumberFormatting): number[] {
     const values: number[] = [];
 
     for (const item of items) {
-        const value = toNumber(rows.readPath(item, property));
+        const value = toNumber(rows.readPath(item, property), numbers);
 
         if (value !== null)
             values.push(value);

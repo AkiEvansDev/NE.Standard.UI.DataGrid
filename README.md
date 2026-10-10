@@ -141,8 +141,8 @@ a count of the ones in use on the button.
 `SetSearch`. The band is a row of
 controls: the box is a field of the page's own shape and the two buttons take the same ground, height and corner, and the
 field's states — the edge under the pointer, and the active edge while the keyboard is on one or its flyout is open. A key
-pressed in the band, a flyout or the header is that control's own: the rows' keyboard, the editor's F2 and the detail's Enter, Right and Left
-answer only on the grid itself or in a row.
+pressed in the band, a flyout or the header is that control's own: the grid's cell cursor, and the Enter, F2 or character that
+opens an editor, answer only on the grid itself or in a row.
 
 ```csharp
 .AddTextColumn("Order", nameof(Order.Number), sortable: true, filterable: true)
@@ -239,8 +239,9 @@ new DataGridComponent("orders")
     .SetMultipleDetails(true)
 ```
 
-One row stands open at a time unless `MultipleDetails`. Right on the keyboard's row opens its detail and Left closes it, as the
-chevron does; with `ExpandOnClick`, Enter on the keyboard's row opens and closes it as a click does too; a double click, which opens the row, leaves the details as they stood before its first click; a row of a table
+One row stands open at a time unless `MultipleDetails`. From the keyboard, Enter or Space on the chevron's cell opens and closes it,
+as a click on the chevron does; an open detail is a cell spanning its row, which Down from the row reaches and Up from the row under
+it, Enter or F2 going into it; with `ExpandOnClick`, Enter on the keyboard's row opens and closes it as a click does too; a double click, which opens the row, leaves the details as they stood before its first click; a row of a table
 inside a detail is that table's, and opens nothing of the grid's. A cell that answers the click itself — the checkbox, an
 editable one while the grid edits — never opens the row. The detail is a child of the row, so it stripes, hides and scrolls with it; it is drawn when the row opens, against the
 row's own item, whether the server painted the row or the browser built it. A press on a button, a field or the text inside an
@@ -292,7 +293,7 @@ While a sort orders the rows no row moves, since the sort would put it back. An 
 ### Columns the viewer moves
 
 `SetReorderableColumns(true)` lets a caption be dragged along the header to another place — a line shows where the column would
-land — or moved with Ctrl and an arrow when the keyboard is on it in the header. The order is kept in the browser under the grid's id
+land — or moved with Alt and an arrow when the keyboard is on it in the header. The order is kept in the browser under the grid's id
 beside the widths and the hidden columns, and painted before the first frame with them; the chooser's menu lists the columns
 in the order they stand. A pinned column and the grid's own column of checkboxes keep the places they were written in, and
 nothing is dropped among them. A click that sorts and a drag that moves are the same press: a drag that moved a column does
@@ -301,8 +302,8 @@ not sort. What the server writes — a CSV export — is in the order the column
 ### Wide grids and pinned columns
 
 A grid wider than its box scrolls sideways as a whole, as the framework's table does by default — the header moves with the
-rows, the band and the pager keep their place at the start edge, the footer of totals stays over the pager, and an editor Tab
-or F2 opens past either edge is scrolled into the box, clear of the pinned columns — and a column that
+rows, the band and the pager keep their place at the start edge, the footer of totals stays over the pager, and the keyboard's cell
+past either edge — and the editor opened on it — is scrolled into the box, clear of the pinned columns — and a column that
 says `pinned: true` stays in place while the rest slide under it. Pinned columns lead the grid; one after an unpinned
 column is refused.
 
@@ -352,12 +353,16 @@ column takes the editor the author bound:
 .OnCellEdit(nameof(OrdersController.CellEdited))   // CellEdited(string id, string column)
 ```
 
-A double click on the cell, or F2 on the keyboard's row, opens the editor in the cell's own track. The editor is drawn at that
-moment and taken away again when it closes, so a grid of a hundred rows carries one editor rather than one per editable cell.
-Enter or a click elsewhere commits, Escape puts the value back, Tab and Shift+Tab move along the row's editable cells — in the
-order the viewer sees the columns, skipping a hidden one, as F2 opens the first of them; Tab moves on from a select's or a
-search's open list too, committing what the field holds. A choice from the editor's list — a
-select's or a search's, by Enter or a click — keeps the keyboard in the editor, and the next Enter commits; leaving the window
+A double click on the cell, or Enter, F2 or a typed character with the keyboard's cursor on it, opens the editor in the cell's own
+track; a typed character replaces the value, as a spreadsheet's typing does. The editor is drawn at that moment and taken away
+again when it closes, so a grid of a hundred rows carries one editor rather than one per editable cell. Enter or a click elsewhere
+commits, Escape puts the value back, Tab and Shift+Tab commit and open the next or the previous editable cell — in the order the
+viewer sees the columns, skipping a hidden one — and past a row's last go on to the next row's first (Shift+Tab to the previous
+row's last); Tab moves on from a select's or a search's open list too, committing what the field holds. A choice from the
+editor's list — a select's or a search's, by Enter or a click — commits as Enter does. Enter or Escape gives the keyboard back to
+the edited cell, the cursor standing on it. The keys inside the editor are its own: Left and Right move the caret. A committed
+editor stays over its cell, showing the new value and the cursor's frame, until the
+commit's answer has written the cell, so the old value never shows in between; leaving the window
 for another (Alt+Tab, the address bar) leaves the editor open and sends nothing, the change a browser raises on the way out
 included. An editor whose column hides under it (a narrower window) commits and leaves the keyboard on the grid. The value
 travels the framework's ordinary two-way path — the field's `Value` is bound to the row's property — so a row of a bound
@@ -376,7 +381,7 @@ new DataGridComponent("orders")
 ```
 
 The editor is any input: a search over the known values reads as naturally as a select. It opens on the value the row
-holds, with its list and the keyboard in its search field; a pick puts the keyboard back on the field, where Enter commits.
+holds, with its list and the keyboard in its search field; a pick commits, as Enter does.
 
 An editor carries the field's rules (`Validate`, `Required`, `Regex`) and bounds. A typed column takes them through
 `configureEditor`, typed by its editor; a template column's editor is the author's own:
@@ -392,8 +397,8 @@ right or Escape takes it back; a warning or a note commits. A closed cell is jud
 shown — drawn, after a commit, after the server writes it — and a value that fails wears the strongest severity's edge in the box
 the editor's field takes, its words in the mark's tooltip.
 
-An editable cell answers the pointer with the field's faint ground in that same box, and every editable cell on the keyboard's
-row wears it, so a reader sees what opens before it does; nothing while `Editable` is off.
+An editable cell answers the pointer with the field's faint ground in that same box, so a reader sees what opens before it does;
+nothing while `Editable` is off, nor while the keyboard's frame shows, the frame alone being the cursor.
 
 ### Choosing rows
 
@@ -404,7 +409,7 @@ virtualized or windowed one, never rows the source has not handed over; a row a 
 carries no resize handle, the chooser never offers it and an export never writes it. While it is there a click on a row chooses
 nothing, that click belonging to the row's detail. The keyboard still chooses, and adds to the ticks rather than replacing them:
 Space on the keyboard's row ticks or unticks it, Shift with an arrow takes the range from the row last clicked or ticked to the
-one it reaches, and Enter opens the row rather than choosing it. A row whose item refuses the choice (`CanSelect = false`) has
+one it reaches, and Enter opens the row rather than choosing it, but on the checkbox's own cell turns its box as Space does. A row whose item refuses the choice (`CanSelect = false`) has
 its box turned off, and the box over them neither takes nor counts it; with no row to take, that box is turned off too — the
 framework's way, so a box keeps a focus it holds. The table's row template reads `CanSelect` off the item by name, so a
 bindable property of that name turns the box off and on as it changes (the demo's cancelled subscriptions).
@@ -424,21 +429,23 @@ new DataGridComponent("orders")
 ### The keyboard
 
 The grid is one stop of the Tab order: Tab comes to it, then to the band's search box and its Filters and Columns buttons, then to the
-pager where it pages — one stop too, its buttons walked by the arrows — and on out of it. No caption, row, chevron or checkbox is a stop of its own; the framework's keyboard cursor walks the rows
-and the header is a group reached from them — the ARIA grid pattern, by rows (cell by cell comes with editable columns' own keys).
+pager where it pages — one stop too, its buttons walked by the arrows — and on out of it. No caption, row, chevron or checkbox is a stop of its own; the framework's cell cursor walks the cells
+and the header is a group reached from them — the ARIA grid pattern, cell by cell.
 
-- **Rows.** Up and Down move the keyboard's row, Home and End go to the first and the last, Page Up and Page Down a viewport's height (a page, in a grid that pages)
-  at a time. The grid keeps the focus and names the row (`aria-activedescendant`); the row is lit — the framework's keyboard wash —
-  only while the keyboard holds the grid, never after a press of the pointer.
-- **Enter or Space** on the keyboard's row runs the row's click (`OnRowClick…`), as a press of the pointer does, and Enter its
-  `OnRowOpen…` after it. Where the grid chooses, the framework's rule stands: one row at a time follows the arrows, Enter chooses
-  before it presses, and Space ticks a row of a grid choosing many rather than pressing it.
-- **Right and Left** open and close the row's detail; **F2** opens the row's first editable cell, the editor's Tab, Enter and Escape
-  as above; **Delete** raises the rows' remove where the grid has `OnRowRemove…`.
-- **The header.** Up from the first row goes to the header — to the caption it was last left on — where Left and Right walk the
+- **Cells.** Left and Right move along the row through every cell, read-only ones and the checkbox's and chevron's included, Home
+  and End to the row's first and last; Up and Down move between rows in the same column — an open detail is a line of its own —
+  Ctrl+Home and Ctrl+End to the first and the last row, Page Up and Page Down a viewport's height (a page, in a grid that pages) at
+  a time. The grid keeps the focus and names the cell (`aria-activedescendant`); the row is lit with the framework's keyboard wash
+  and the cell wears its frame — only while the keyboard holds the grid, never after a press of the pointer.
+- **Enter, F2 or a character** on an editable cell opens its editor, as above. **Enter or Space** on the chevron's cell opens or
+  closes the detail, and Enter on the checkbox's cell ticks or unticks its row; elsewhere Enter runs the row's click (`OnRowClick…`), as a press of the pointer does, and its `OnRowOpen…`
+  after it. Where the grid chooses, the framework's rule stands: one row at a time follows the arrows, Enter chooses before it
+  presses, and Space ticks a row of a grid choosing many — Shift with Up or Down takes the range — rather than pressing it.
+- **Delete** raises the rows' remove where the grid has `OnRowRemove…`.
+- **The header.** Up from the first row goes to the header — to the caption of the cursor's column — where Left and Right walk the
   captions in the order the columns stand and Home and End go to the ends; Enter or Space sorts by the caption, Shift with them adds
-  it to the sort, Ctrl with an arrow moves its column, Shift with an arrow sizes it, and Space on the box over the checkboxes takes
-  or clears them. Down goes back to the rows.
+  it to the sort, Alt with an arrow moves its column, Shift with an arrow sizes it, and Space on the box over the checkboxes takes
+  or clears them. Down goes back to the rows, in the caption's column.
 
 To a screen reader the grid is a `grid` of `row`s and `gridcell`s whatever it chooses, its captions `columnheader`s carrying
 `aria-sort`; a windowed or virtualized grid says where each drawn row stands among them all (`aria-rowindex`, `aria-rowcount`).
@@ -450,7 +457,7 @@ the band's buttons are the framework's `ne-` glyphs (`UIGlyphs`), so they are th
 and cross. Its stylesheet imports the framework's Less contract (`Client/plugin/ne-standard-ui.less` — the tokens and the
 mixins, copied like the TypeScript contract beside it) rather than restating the motion, the focus ring or the field's ground.
 The engines are classes started once per page from the framework's engine context, in the shape the framework's own engines
-take, and they need the framework's plugin contract 2: the names the framework writes on the page come from its `names`, and
+take, and they need the framework's plugin contract 4: the names the framework writes on the page come from its `names`, and
 whether a part answers the reader from its `states`, through which the grid also turns its own controls off
 (`states.setDisabled`). The grid's own names are spelled once, in `data-grid-names.ts`, which a test holds to the renderers'
 constants; a cell's text is held to the same corpus on the server and in the browser. Under forced colours the states the grid draws with a wash or

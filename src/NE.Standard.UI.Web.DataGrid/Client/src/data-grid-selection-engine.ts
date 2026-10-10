@@ -1,9 +1,9 @@
 // The grid's column of checkboxes. The chosen rows are the host's own (`SelectedKeys`): the engine asks the framework to take or
 // release a row and keeps the boxes in step. A row click chooses nothing while the column is there: it is the detail's and the editor's.
 
-import type { ComponentStates, DomNames, ItemSelection, PluginEngineContext, PropertyValueChange } from "ne-standard-ui";
+import type { CellKey, ComponentStates, DomNames, ItemSelection, PluginEngineContext, PropertyValueChange } from "ne-standard-ui";
 import { gridOf, hostSelector, ownDescendants, ownFirst, RootSelector, rowSelector } from "./data-grid-dom.ts";
-import { GridAttributes, GridEvents } from "./data-grid-names.ts";
+import { ClientNames, GridAttributes, GridEvents } from "./data-grid-names.ts";
 
 const SelectCellSelector = `[${GridAttributes.select}]`;
 const SelectAllSelector = `[${GridAttributes.selectAll}]`;
@@ -52,6 +52,9 @@ export class DataGridSelectionEngine {
             this.sync(grid);
         }, true);
 
+        // Enter on the cursor's box cell turns its box, as Space does, rather than raising the row's open: the cell is the box's.
+        context.root.addEventListener(context.names.cellKey, domEvent => this.handleCellKey(domEvent));
+
         // A list the server pushed is the controller's own, not a change for it to hear about.
         context.propertyPatchEngine.addValueChangeHandler(change => this.notePushed(context.root, change));
 
@@ -59,6 +62,23 @@ export class DataGridSelectionEngine {
         // A class is how a filter hides a row, which changes what the box over them all counts; a row's refusal flips as its item's
         // `CanSelect` does.
         context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: [context.names.selected, context.names.selectedKey, context.names.selectedKeys, context.names.unselectable, "class"] }, grids => this.syncAll(grids));
+    }
+
+    private handleCellKey(domEvent: Event): void {
+        if (domEvent.defaultPrevented || !(domEvent instanceof CustomEvent))
+            return;
+
+        const { cell, key, keyboard } = domEvent.detail as CellKey;
+        const row = key === "Enter" && cell.matches(SelectCellSelector) ? cell.closest<HTMLElement>(this.rowSelector) : null;
+        const grid = gridOf(row);
+
+        if (row === null || grid === null || !this.canChoose(row))
+            return;
+
+        domEvent.preventDefault();
+        keyboard.preventDefault();
+        this.selection.toggle(row);
+        this.sync(grid);
     }
 
     /** Whether the viewer can choose the row: it does not refuse it (`CanSelect`), and neither it nor the grid is disabled. */
@@ -102,15 +122,25 @@ export class DataGridSelectionEngine {
                 box.checked = selected;
 
             // A row that refuses the choice says so on its box, rather than ticking under the press and unticking again.
-            this.states.setDisabled(box, !choosable);
+            this.turnOff(box, !choosable);
         }
 
         if (all !== null) {
             all.checked = chosen > 0 && chosen === shown;
             // Neither none nor all: the third state a box can only be put into from script.
             all.indeterminate = chosen > 0 && chosen < shown;
-            this.states.setDisabled(all, shown === 0);
+            this.turnOff(all, shown === 0);
         }
+    }
+
+    /** A box turned off on its input, never its root (which would drop a focus it holds); the root is marked for its pointer. */
+    private turnOff(box: HTMLInputElement, off: boolean): void {
+        this.states.setDisabled(box, off);
+
+        const root = box.parentElement;
+
+        if (root !== null && root.hasAttribute(ClientNames.boxOff) !== off)
+            root.toggleAttribute(ClientNames.boxOff, off);
     }
 
     private sayChange(grid: HTMLElement): void {

@@ -81,7 +81,7 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
             if (kind == UIDataGridColumnKind.Date && DataGridCellFormatter.WrittenMoment(value) is { } moment)
                 _ = target.Attribute(MomentAttribute, moment);
 
-            if (DataGridCellFormatter.ChoiceValue(value, kind, culture) is { } choice)
+            if (DataGridCellFormatter.ChoiceValue(value, kind) is { } choice)
                 _ = target.Attribute(ChoiceAttribute, choice);
         }, [WebDomOperation.Custom(ValueOperationKind)]);
     }

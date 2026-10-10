@@ -24,21 +24,27 @@ const names = {
     noRowOpen: "data-ui-no-row-open",
     noRowDrag: "data-ui-no-row-drag",
     rowFocus: "data-ui-row-focus",
+    cellFocus: "data-ui-cell-focus",
+    cellKey: "ui-cell-key",
     tableRowClass: "ui-table__row",
     tableScrollClass: "ui-table__scroll"
 };
+
+/** Where the core's cell cursor was moved to by the engine (`rows.moveCursor`): the rows, in order. */
+const moved: FakeElement[] = [];
 
 /** A grid whose rows open their detail on a click, one at a time, and the rows' cells to press; the first row has a chevron. */
 function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeElement[]; grid: FakeElement; chevron: FakeElement } {
     const root = new FakeElement();
     const chevron = new FakeElement("button");
-    const first = FakeElement.of(names.tableRowClass).append(FakeElement.of("cell"), FakeElement.of(GridClasses.detailCell).append(chevron));
-    const second = FakeElement.of(names.tableRowClass).append(FakeElement.of("cell"));
+    const first = FakeElement.of(names.tableRowClass).append(FakeElement.of("cell", { role: "gridcell" }), FakeElement.of(GridClasses.detailCell, { role: "gridcell" }).append(chevron));
+    const second = FakeElement.of(names.tableRowClass).append(FakeElement.of("cell", { role: "gridcell" }));
     const drawn: FakeElement[] = [];
 
     fakeDocument.body.replaceChildren(root);
     fakeWindow.listeners.clear();
     fakeWindow.timers.length = 0;
+    moved.length = 0;
     const grid = FakeElement.of("ui-data-grid", { [names.componentId]: "7", [GridAttributes.expandOnClick]: "" })
         .append(FakeElement.of(names.tableScrollClass).append(FakeElement.of("", { [names.itemsHost]: "" }).append(first, second)));
 
@@ -54,7 +60,10 @@ function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeEle
 
                 return content;
             },
-            isKeyTarget: () => true
+            isKeyTarget: () => true,
+            // The core's cell cursor: a row's own cells, as its columns stand.
+            cellsOf: (row: FakeElement) => row.children.filter(child => child.getAttribute("role") === "gridcell"),
+            moveCursor: (row: FakeElement) => moved.push(row)
         },
         names,
         states: { isInert: () => false },
@@ -133,62 +142,77 @@ test("a double click inside an open detail is the detail's, whatever an earlier 
     assert.equal(detailOf(first), shown);
 });
 
-test("Enter on the row still opens and closes its detail", () => {
+/** The core offering Enter on the cursor's cell (`names.cellKey`) before it acts; `taken` where an editor took it first. */
+function offerEnter(row: FakeElement, taken = false): void {
+    const offer = new CustomEvent(names.cellKey, { bubbles: true, cancelable: true, detail: { cell: row.children[0], key: "Enter", keyboard: new FakeKeyboardEvent("Enter") } });
+
+    if (taken)
+        offer.preventDefault();
+
+    row.children[0].dispatchEvent(offer);
+}
+
+test("Enter left to the row still opens and closes its detail, with the row's open the core raises for it", () => {
     const { first } = createGrid();
 
-    fakeWindow.dispatch(first, new FakeKeyboardEvent("Enter"));
+    offerEnter(first);
     fakeWindow.dispatch(first, new FakeEvent("open"));
     fakeWindow.runTimers();
 
     assert.notEqual(detailOf(first), null);
 
-    fakeWindow.dispatch(first, new FakeKeyboardEvent("Enter"));
+    offerEnter(first);
     fakeWindow.dispatch(first, new FakeEvent("open"));
     fakeWindow.runTimers();
 
     assert.equal(detailOf(first), null);
 });
 
-test("Enter on the row toggles its detail once, though the framework raises the row's click for it too", () => {
-    const { first } = createGrid();
+test("Enter toggles the detail once, though the framework raises the row's click for it too; one an editor took toggles nothing", () => {
+    const { first, second } = createGrid();
 
     // The core's keyboard press of a row (`ui-row-press`): the row's click command, never a click this engine counts.
-    fakeWindow.dispatch(first, new FakeKeyboardEvent("Enter"));
+    offerEnter(first);
     fakeWindow.dispatch(first, new FakeEvent("ui-row-press"));
     fakeWindow.dispatch(first, new FakeEvent("open"));
     fakeWindow.runTimers();
 
     assert.notEqual(detailOf(first), null);
+
+    offerEnter(second, true);
+    fakeWindow.dispatch(second, new FakeEvent("open"));
+    fakeWindow.runTimers();
+
+    assert.equal(detailOf(second), null);
 });
 
-test("Right opens the keyboard's row's detail and Left closes it, as its chevron does by a click", () => {
-    const { first, grid, chevron } = createGrid();
+test("an open detail is a cell spanning its row, and the cursor standing on it goes back to the row as it closes", () => {
+    const { first, chevron } = createGrid();
+
+    fakeWindow.dispatch(chevron, new FakeMouseEvent(1));
+
+    const shown = detailOf(first);
+
+    assert.ok(shown !== null);
+    assert.equal(shown.getAttribute("role"), "gridcell");
+    assert.equal(shown.getAttribute("aria-colindex"), "1");
+    assert.equal(shown.getAttribute("aria-colspan"), "2");
+
+    shown.setAttribute(names.cellFocus, "");
+    fakeWindow.dispatch(chevron, new FakeMouseEvent(1));
+
+    assert.equal(detailOf(first), null);
+    assert.deepEqual(moved, [first]);
+});
+
+test("Right and Left on the keyboard's row are the cell cursor's: they open and close no detail", () => {
+    const { first, grid } = createGrid();
 
     first.setAttribute(names.rowFocus, "");
 
     const right = new FakeKeyboardEvent("ArrowRight");
 
     fakeWindow.dispatch(grid, right);
-    assert.equal(right.defaultPrevented, true);
-    assert.notEqual(detailOf(first), null);
-    assert.equal(chevron.getAttribute("aria-expanded"), "true");
-
-    // Again Right leaves it open; Left closes it.
-    fakeWindow.dispatch(grid, new FakeKeyboardEvent("ArrowRight"));
-    assert.notEqual(detailOf(first), null);
-
-    fakeWindow.dispatch(grid, new FakeKeyboardEvent("ArrowLeft"));
-    assert.equal(detailOf(first), null);
-});
-
-test("Right on a row with no chevron leaves the key alone", () => {
-    const { second, grid } = createGrid();
-
-    second.setAttribute(names.rowFocus, "");
-
-    const right = new FakeKeyboardEvent("ArrowRight");
-
-    fakeWindow.dispatch(grid, right);
     assert.equal(right.defaultPrevented, false);
-    assert.equal(detailOf(second), null);
+    assert.equal(detailOf(first), null);
 });

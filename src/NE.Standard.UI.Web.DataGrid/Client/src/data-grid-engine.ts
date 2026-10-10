@@ -6,6 +6,7 @@ import type { CellFormatting } from "./data-grid-cell.ts";
 import { DataGridChooserEngine } from "./data-grid-chooser-engine.ts";
 import { DataGridDetailEngine } from "./data-grid-detail-engine.ts";
 import { DataGridEditEngine } from "./data-grid-edit-engine.ts";
+import type { CellEditAnswers } from "./data-grid-edit-engine.ts";
 import { DataGridFilterEngine } from "./data-grid-filter-engine.ts";
 import { DataGridSelectionEngine } from "./data-grid-selection-engine.ts";
 import { DataGridSortEngine } from "./data-grid-sort-engine.ts";
@@ -15,11 +16,11 @@ import { DataGridVerdictEngine } from "./data-grid-verdict-engine.ts";
 export class DataGridEngine {
     private readonly formatting: CellFormatting;
 
-    public constructor(context: PluginEngineContext) {
+    public constructor(context: PluginEngineContext, cellEditAnswers: CellEditAnswers) {
         this.formatting = { numbers: context.numbers, temporal: context.temporal, strings: context.strings };
 
         new DataGridSortEngine(context);
-        new DataGridEditEngine(context);
+        new DataGridEditEngine(context, cellEditAnswers);
         new DataGridFilterEngine(context);
         new DataGridTotalsEngine(context, this.formatting);
         new DataGridChooserEngine(context);

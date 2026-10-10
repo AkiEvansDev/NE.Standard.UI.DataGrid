@@ -29,7 +29,10 @@ function createGrid(): { caption: FakeElement; query: FakeElement } {
     root.append(FakeElement.of("ui-data-grid").append(query, FakeElement.of(names.tableScrollClass).append(FakeElement.of(names.tableHeaderClass).append(caption))));
     fakeDocument.body.replaceChildren(root);
 
-    new DataGridSortEngine(real<PluginEngineContext>({ root, names, observeComponents: () => null }));
+    // The core's plain key: no Ctrl, ⌘ or Alt, and Shift only where allowed.
+    const shortcuts = { isPlainKey: (event: KeyboardEvent, allow?: { shift?: boolean }) => !event.ctrlKey && !event.metaKey && !event.altKey && (allow?.shift === true || !event.shiftKey) };
+
+    new DataGridSortEngine(real<PluginEngineContext>({ root, names, shortcuts, observeComponents: () => null }));
 
     return { caption, query };
 }
@@ -48,6 +51,17 @@ test("Enter and Space on a sorting caption sort by its column, ascending then de
 
     fakeWindow.dispatch(caption, new FakeKeyboardEvent(" "));
     assert.deepEqual(sorts(query), [{ itemProperty: "Total", direction: "Descending" }]);
+});
+
+test("Enter with Ctrl or Alt on a caption is no press of it, while Shift adds its column", () => {
+    const { caption, query } = createGrid();
+
+    fakeWindow.dispatch(caption, Object.assign(new FakeKeyboardEvent("Enter"), { ctrlKey: true }));
+    fakeWindow.dispatch(caption, Object.assign(new FakeKeyboardEvent("Enter"), { altKey: true }));
+    assert.deepEqual(sorts(query), []);
+
+    fakeWindow.dispatch(caption, Object.assign(new FakeKeyboardEvent("Enter"), { shiftKey: true }));
+    assert.deepEqual(sorts(query), [{ itemProperty: "Total", direction: "Ascending" }]);
 });
 
 test("an arrow on a caption, the header's walk, sorts nothing", () => {

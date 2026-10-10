@@ -28,7 +28,7 @@ internal static class SubscriptionGrid
         UIGridUnit customer = UIGridUnit.Absolute(wide ? 320 : 240);
         UIGridUnit country = UIGridUnit.Absolute(wide ? 240 : 180);
         UIGridUnit plan = UIGridUnit.Absolute(wide ? 200 : 140);
-        UIGridUnit status = UIGridUnit.Absolute(wide ? 260 : 210);
+        UIGridUnit status = UIGridUnit.Absolute(wide ? 260 : 240);
         UIGridUnit usage = UIGridUnit.Absolute(wide ? 260 : 200);
         UIGridUnit started = UIGridUnit.Absolute(wide ? 240 : 200);
 

@@ -14,9 +14,6 @@ namespace NE.Standard.UI.Web.DataGrid;
 /// </summary>
 public static class DataGridCellFormatter
 {
-    // Just under decimal.MaxValue: a double at it may round past it and overflow the conversion.
-    private const double LargestDecimal = 7.9e28;
-
     /// <summary>
     /// A <see cref="UIDataGridCsvOptions.Format"/> writing cells as the grid shows them; without a translator a flag writes its
     /// plain value rather than one of the grid's keys.
@@ -47,65 +44,73 @@ public static class DataGridCellFormatter
 
         return kind switch
         {
-            UIDataGridColumnKind.Number or UIDataGridColumnKind.Money => TryToDecimal(value, out var number) ? FormatNumber(number, kind, format, currency, culture) : AsText(value, culture),
-            UIDataGridColumnKind.Date => TryToDateTime(value, out DateTime moment) ? WebTemporalFormat.Format(moment, format, WebTemporalCulturePack.FromCulture(culture)) : AsText(value, culture),
-            UIDataGridColumnKind.Boolean => FormatBoolean(value, choices, culture, translate),
-            UIDataGridColumnKind.Enum => FormatChoice(AsText(value, culture), choices, translate),
-            UIDataGridColumnKind.Text => AsText(value, culture),
-            _ => AsText(value, culture)
+            UIDataGridColumnKind.Number or UIDataGridColumnKind.Money => FormatNumber(value, kind, format, currency, culture) ?? AsText(value),
+            UIDataGridColumnKind.Date => TryToDateTime(value, out DateTime moment) ? WebTemporalFormat.Format(moment, format, WebTemporalCulturePack.FromCulture(culture)) : AsText(value),
+            UIDataGridColumnKind.Boolean => FormatBoolean(value, choices, translate),
+            UIDataGridColumnKind.Enum => FormatChoice(AsText(value), choices, translate),
+            UIDataGridColumnKind.Text => AsText(value),
+            _ => AsText(value)
         };
     }
 
-    /// <summary>A number, or an invariant numeric text, as a decimal; false where a decimal cannot hold it.</summary>
-    private static bool TryToDecimal(object value, out decimal number)
+    /// <summary>A number under the column's format, as the client's cell writes it; null for a value that is no finite number.</summary>
+    private static string? FormatNumber(object value, UIDataGridColumnKind kind, string? format, string? currency, CultureInfo culture)
     {
-        switch (value)
-        {
-            case decimal d:
-                number = d;
-                return true;
-            case double or float:
-                return TryFromReal(Convert.ToDouble(value, CultureInfo.InvariantCulture), out number);
-            case int or long or short or byte or sbyte or uint or ulong or ushort:
-                number = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-                return true;
-            case string text when double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed):
-                return TryFromReal(parsed, out number);
-            default:
-                number = 0;
-                return false;
-        }
-    }
+        if (!TryToNumber(value, out var exact, out var real))
+            return null;
 
-    private static bool TryFromReal(double real, out decimal number)
-    {
-        if (double.IsFinite(real) && Math.Abs(real) < LargestDecimal)
-        {
-            number = (decimal)real;
-            return true;
-        }
-
-        number = 0;
-        return false;
-    }
-
-    private static string FormatNumber(decimal number, UIDataGridColumnKind kind, string? format, string? currency, CultureInfo culture)
-    {
         WebNumberCulturePack pack = WebNumberCulturePack.FromCulture(culture);
 
         if (kind == UIDataGridColumnKind.Money && !string.IsNullOrEmpty(currency))
             pack = pack with { CurrencySymbol = currency };
 
-        return WebNumberFormat.Format(number, format, pack);
+        return exact is decimal number ? WebNumberFormat.Format(number, format, pack) : WebNumberFormat.Format(real, format, pack);
     }
 
-    /// <summary>A value as the client's cell writes it: a flag in the wire's own words rather than .NET's <c>True</c>.</summary>
-    private static string AsText(object value, CultureInfo culture)
+    /// <summary>
+    /// A number, or a numeric text as .NET's invariant float reads one: a decimal or an integer kept exact, any other as the double
+    /// the client holds (a float by its own shortest text, as the wire writes it); false for no number, or one past a double.
+    /// </summary>
+    private static bool TryToNumber(object value, out decimal? exact, out double real)
+    {
+        exact = null;
+
+        switch (value)
+        {
+            case decimal number:
+                exact = number;
+                real = (double)number;
+                return true;
+            case int or long or short or byte or sbyte or uint or ulong or ushort:
+                exact = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                real = (double)exact.Value;
+                return true;
+            case double number:
+                real = number;
+                return double.IsFinite(real);
+            case float number:
+                real = double.Parse(number.ToString("R", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+                return double.IsFinite(real);
+            case string text when double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed):
+                real = parsed;
+                return double.IsFinite(real);
+            default:
+                real = 0;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// A value as the client's cell writes it: a flag in the wire's own words rather than .NET's <c>True</c>, a number as the page's
+    /// <c>String()</c> writes it (<see cref="UIScriptNumber"/>), never in the page's culture (<c>12.5</c>, not <c>12,5</c>; <c>1e+21</c>).
+    /// </summary>
+    private static string AsText(object value)
         => value switch
         {
             string text => text,
             bool flag => flag ? "true" : "false",
-            _ => Convert.ToString(value, culture) ?? string.Empty
+            _ when UIScriptNumber.TryRead(value, out var number) => UIScriptNumber.Format(number),
+            _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty
         };
 
     /// <summary>A moment in any of its shapes; a text by the wall clock it is written with.</summary>
@@ -133,17 +138,17 @@ public static class DataGridCellFormatter
     }
 
     /// <summary>A flag by its caption: a text says true in any case, anything else is false, and the captions are keyed by the two words.</summary>
-    private static string FormatBoolean(object value, IReadOnlyList<UIChoice>? choices, CultureInfo culture, Func<string, string> translate)
+    private static string FormatBoolean(object value, IReadOnlyList<UIChoice>? choices, Func<string, string> translate)
     {
-        var flag = IsTrue(value, culture);
+        var flag = IsTrue(value);
 
         return FindChoice(choices, flag ? "true" : "false") is { } caption
             ? translate(caption)
             : translate(flag ? DataGridStrings.Yes : DataGridStrings.No);
     }
 
-    private static bool IsTrue(object value, CultureInfo culture)
-        => value is bool truth ? truth : string.Equals(AsText(value, culture), "true", StringComparison.OrdinalIgnoreCase);
+    private static bool IsTrue(object value)
+        => value is bool truth ? truth : string.Equals(AsText(value), "true", StringComparison.OrdinalIgnoreCase);
 
     private static string? FindChoice(IReadOnlyList<UIChoice>? choices, string value)
     {
@@ -163,22 +168,22 @@ public static class DataGridCellFormatter
         => FindChoice(choices, text) is { } caption ? translate(caption) : text;
 
     /// <summary>A flag's or a choice's value as its choices are keyed — <c>true</c>/<c>false</c>, or the value's text; null for any other kind.</summary>
-    internal static string? ChoiceValue(object? value, UIDataGridColumnKind kind, CultureInfo culture)
+    internal static string? ChoiceValue(object? value, UIDataGridColumnKind kind)
     {
         if (value is null)
             return null;
 
         return kind switch
         {
-            UIDataGridColumnKind.Boolean => IsTrue(value, culture) ? "true" : "false",
-            UIDataGridColumnKind.Enum => AsText(value, culture),
+            UIDataGridColumnKind.Boolean => IsTrue(value) ? "true" : "false",
+            UIDataGridColumnKind.Enum => AsText(value),
             _ => null
         };
     }
 
     /// <summary>A number cell's value as the invariant number a footer adds up — a numeric text's too, as the cell shows it; null for any other.</summary>
     internal static string? RawNumber(object? value)
-        => value is not null && TryToDecimal(value, out var number) ? number.ToString(CultureInfo.InvariantCulture) : null;
+        => value is not null && TryToNumber(value, out var exact, out var real) ? exact?.ToString(CultureInfo.InvariantCulture) ?? real.ToString("R", CultureInfo.InvariantCulture) : null;
 
     /// <summary>A date cell's value as the wire writes a moment — the wall clock the cell shows, to the millisecond; null for any other.</summary>
     internal static string? WrittenMoment(object? value)

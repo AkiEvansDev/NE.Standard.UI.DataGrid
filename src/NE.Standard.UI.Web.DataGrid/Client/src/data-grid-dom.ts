@@ -1,8 +1,8 @@
 // What every engine of the grid reads off the page: the grid's root, rows and host as the table's renderer lays them out, plus
 // small readings the engines share.
 
-import type { DomNames, ItemRows } from "ne-standard-ui";
-import { ClientNames, GridClasses } from "./data-grid-names.ts";
+import type { DomNames } from "ne-standard-ui";
+import { GridClasses } from "./data-grid-names.ts";
 
 export const RootSelector = `.${GridClasses.root}`;
 
@@ -41,13 +41,6 @@ export function ownFirst<T extends HTMLElement = HTMLElement>(grid: HTMLElement,
 /** The grid the element stands in, or null outside every grid. */
 export function gridOf(target: EventTarget | null): HTMLElement | null {
     return target instanceof Element ? target.closest<HTMLElement>(RootSelector) : null;
-}
-
-/** Whether a key landed where the row keyboard answers it (`rows.isKeyTarget`), less an open detail, whose keys are its own. */
-export function isRowKeyTarget(rows: ItemRows, target: Element): boolean {
-    const detail = target.closest(`.${ClientNames.detailClass}`);
-
-    return rows.isKeyTarget(target) && (detail === null || gridOf(detail) !== gridOf(target));
 }
 
 /** One of the grid's own rows — in its host, not a table's inside a row's detail. */

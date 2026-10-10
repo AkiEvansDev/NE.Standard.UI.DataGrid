@@ -4,9 +4,6 @@
 import type { ClientStrings, NumberCulturePack, NumberFormatting, TemporalCulturePack, TemporalFormatting } from "ne-standard-ui";
 import { GridAttributes, GridWords } from "./data-grid-names.ts";
 
-// What double.TryParse reads under NumberStyles.Float, the invariant culture, on the server's side.
-const DecimalText = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\s*$/;
-
 export type CellFormatting = {
     readonly numbers: NumberFormatting;
     readonly temporal: TemporalFormatting;
@@ -50,7 +47,7 @@ export function applyCellValue(cell: Element, value: unknown, formatting: CellFo
     if (cell.textContent !== text)
         cell.textContent = text;
 
-    const number = shape.kind === "number" || shape.kind === "money" ? toNumber(value) : null;
+    const number = shape.kind === "number" || shape.kind === "money" ? toNumber(value, formatting.numbers) : null;
 
     // On a number or money cell: the value as a number, a numeric text's too, for a footer to add up and a language switch to redraw.
     if (number !== null)
@@ -111,7 +108,7 @@ export function formatCellValue(value: unknown, shape: CellShape, numbers: Numbe
     switch (shape.kind) {
         case "number":
         case "money": {
-            const number = toNumber(value);
+            const number = toNumber(value, formatting.numbers);
 
             if (number === null)
                 return String(value);
@@ -149,16 +146,11 @@ function writtenMoment(value: unknown, temporal: TemporalFormatting): string | n
 }
 
 /** A number, or a text the server's cell reads as one; null for anything else or a value no finite number holds. */
-export function toNumber(value: unknown): number | null {
+export function toNumber(value: unknown, numbers: NumberFormatting): number | null {
     if (typeof value === "number")
         return Number.isFinite(value) ? value : null;
 
-    if (typeof value !== "string" || !DecimalText.test(value))
-        return null;
-
-    const parsed = Number(value);
-
-    return Number.isFinite(parsed) ? parsed : null;
+    return typeof value === "string" ? numbers.parseInvariant(value) : null;
 }
 
 /** A moment off the wire, read as the framework reads one: by the clock it is written with, never by `new Date(text)` and the reader's zone. */

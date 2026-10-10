@@ -44,10 +44,13 @@ export const GridClasses = {
 /** What the client alone writes, for its own engines and the stylesheet. */
 export const ClientNames = {
     sorted: "data-ui-grid-sorted",
+    /** On an editable cell whose text shows a description, the field's box holding both lines. */
+    twoLine: "data-ui-grid-two-line",
+    /** On the root of a row's or the header's checkbox turned off, which takes back the root's hand. */
+    boxOff: "data-ui-grid-box-off",
     sortPlace: "data-ui-grid-sort-place",
     expanded: "data-ui-grid-expanded",
     editorClass: "ui-data-grid__editor",
-    editorOpenClass: "ui-data-grid__editor--open",
     editingCellClass: "ui-data-grid__cell--editing",
     detailClass: "ui-data-grid__detail",
     verdictClass: "ui-data-grid__verdict"

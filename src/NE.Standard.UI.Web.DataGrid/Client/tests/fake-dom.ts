@@ -115,6 +115,14 @@ export class FakeElement {
         return this.parent;
     }
 
+    public get nextElementSibling(): FakeElement | null {
+        return this.parent?.children[this.parent.children.indexOf(this) + 1] ?? null;
+    }
+
+    public get previousElementSibling(): FakeElement | null {
+        return this.parent?.children[this.parent.children.indexOf(this) - 1] ?? null;
+    }
+
     public get isConnected(): boolean {
         const top = this.top();
 
@@ -219,6 +227,11 @@ export class FakeElement {
     }
 
     public scrollIntoView(): void {
+    }
+
+    /** A press, as `click()` raises one: heard here and above. */
+    public click(): void {
+        this.dispatchEvent(new FakeEvent("click"));
     }
 
     public get offsetWidth(): number {
@@ -337,6 +350,8 @@ export class FakeInput extends FakeElement {
     public readOnly = false;
     /** What it held as it took the focus. */
     public valueAtFocus = "";
+    /** Whether its text was selected whole, as `select()` does. */
+    public selected = false;
 
     public constructor(type = "text") {
         super("input");
@@ -349,6 +364,7 @@ export class FakeInput extends FakeElement {
     }
 
     public select(): void {
+        this.selected = true;
     }
 }
 

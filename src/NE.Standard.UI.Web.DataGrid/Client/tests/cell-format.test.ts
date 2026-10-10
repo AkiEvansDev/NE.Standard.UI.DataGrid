@@ -19,6 +19,7 @@ type CellCase = {
     readonly format?: string;
     readonly currency?: string;
     readonly choices?: Readonly<Record<string, string>>;
+    readonly culture?: string;
     readonly expected: string;
 };
 
@@ -26,6 +27,7 @@ const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..
 const corpus = JSON.parse(readFileSync(resolve(repository, "eng/Tests/Shared/datagrid-cell-corpus.json"), "utf8")) as {
     readonly numberCulture: NumberCulturePack;
     readonly temporalCulture: TemporalCulturePack;
+    readonly cultures: Readonly<Record<string, { readonly numberCulture: NumberCulturePack; readonly temporalCulture: TemporalCulturePack }>>;
     readonly cases: readonly CellCase[];
 };
 
@@ -46,7 +48,9 @@ for (const cellCase of corpus.cases) {
     test(cellCase.name, () => {
         const shape = { kind: cellCase.kind, format: cellCase.format ?? null, currency: cellCase.currency ?? null, choices: cellCase.choices ?? null };
 
-        assert.equal(formatCellValue(cellCase.value, shape, corpus.numberCulture, corpus.temporalCulture, formatting), cellCase.expected);
+        const packs = cellCase.culture === undefined ? corpus : corpus.cultures[cellCase.culture];
+
+        assert.equal(formatCellValue(cellCase.value, shape, packs.numberCulture, packs.temporalCulture, formatting), cellCase.expected);
     });
 }
 
