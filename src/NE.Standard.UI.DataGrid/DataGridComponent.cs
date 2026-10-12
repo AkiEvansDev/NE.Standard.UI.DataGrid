@@ -260,7 +260,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
         // A field of the page's own ground, not a ghost: the band is a row of controls, and the buttons beside it take the same
         // ground. Tonal, a toolbar's lone search beside its buttons, with no line the buttons would not have.
-        _searchField = new TextInputComponent().SetPlaceholder(_searchPlaceholder).SetAppearance(UIInputAppearance.Tonal).SetShowClearButton(true).SetDebounceMilliseconds(300);
+        _searchField = new TextInputComponent().SetSearch(_searchPlaceholder).SetAppearance(UIInputAppearance.Tonal).SetDebounceMilliseconds(300);
 
         _regions[SearchRegionName] = new DataGridFilterComponent().SetProperty(propertyPath).SetKind(UIDataGridColumnKind.Text).AddChild(_searchField);
 
@@ -453,7 +453,9 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
 
         return kind switch
         {
-            UIDataGridColumnKind.Number or UIDataGridColumnKind.Money => SetEditor(column, Configured(new NumberInputComponent(), configureEditor), propertyPath),
+            UIDataGridColumnKind.Number => SetEditor(column, Configured(new NumberInputComponent(), configureEditor), propertyPath),
+            // The editor carries no format of the column's, so it would group nothing: money is told to, as its cell does.
+            UIDataGridColumnKind.Money => SetEditor(column, Configured(new NumberInputComponent().SetAllowThousandsSeparator(), configureEditor), propertyPath),
             UIDataGridColumnKind.Date when HasTimeToken(format) => SetEditor(column, Configured(new DateTimeInputComponent(), configureEditor), propertyPath),
             UIDataGridColumnKind.Date => SetEditor(column, Configured(new DateInputComponent(), configureEditor), propertyPath),
             UIDataGridColumnKind.Boolean => SetEditor(column, Configured(new CheckboxComponent(), configureEditor), propertyPath),

@@ -33,14 +33,14 @@ internal sealed class ColumnsView : DataGridDemoView, IUIViewDefinition
                         // The grid carries no export button of its own: the writer is the application's to call.
                         .AddChild(new ButtonComponent()
                             .SetTitle("grid-demo.columns.download")
-                            .SetType(UIButtonType.Outline)
+                            .SetType(UIButtonType.Ghost)
                             .SetSize(UIButtonSize.Small)
                             .OnClick(nameof(ColumnsController.ExportAsync))
                         )
                         // What a choice turns on: the button is not there until a row is ticked.
                         .AddChild(new ButtonComponent()
                             .SetTitle("grid-demo.columns.delete-chosen")
-                            .SetType(UIButtonType.Outline)
+                            .SetType(UIButtonType.Ghost)
                             .SetSize(UIButtonSize.Small)
                             .SetTitleColor(UIThemeColor.FromStyle(UIColorStyle.Danger))
                             .BindVisibility(nameof(ColumnsController.DeleteVisibility))
