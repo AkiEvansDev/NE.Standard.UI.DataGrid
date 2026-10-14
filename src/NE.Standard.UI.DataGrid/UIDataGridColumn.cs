@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.Abstractions.Styling;
 using NE.Standard.UI.Primitives.Styling;
+using NE.Standard.UI.Primitives.Text;
 
 namespace NE.Standard.UI.DataGrid;
 
@@ -63,6 +64,12 @@ public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UI
     /// The property the column sorts, filters, totals and exports by; set even on a column that does not sort.
     /// </summary>
     public string? EffectiveSortPath => SortPath ?? PropertyPath;
+
+    /// <summary>
+    /// What a column with no caption is called — by the sort's name, the chooser and a CSV's header: the last step of
+    /// <see cref="EffectiveSortPath"/> in words, else its key.
+    /// </summary>
+    public string FallbackCaption => EffectiveSortPath is { } path ? UINaming.Humanize(path[(path.LastIndexOf('.') + 1)..]) : Key;
 
     /// <summary>The template-variant key an editable column's editor renders through.</summary>
     public string EditTemplateKey => $"{EditTemplatePrefix}:{Key}";

@@ -1,7 +1,7 @@
 // The filters: each field becomes a term of the viewer's query. The fields are unbound, so the engine asks the framework what each
 // holds, and writes a pushed query back into them so they say what filters.
 
-import type { Badges, ComponentStates, DomNames, PluginEngineContext, PropertyWriting, ValueReading } from "ne-standard-ui";
+import type { Badges, ComponentStates, DomNames, NumberFormatting, PluginEngineContext, PropertyWriting, ValueReading } from "ne-standard-ui";
 import { gridOf, ownDescendants, ownFirst, RootSelector } from "./data-grid-dom.ts";
 import { GridAttributes, GridClasses } from "./data-grid-names.ts";
 import { readQuery, readQueryText, writeQuery } from "./data-grid-query.ts";
@@ -16,12 +16,17 @@ const FiltersCountSelector = `.${GridClasses.filtersCount}`;
 const FiltersClearSelector = `.${GridClasses.filtersClear}`;
 const FilterPartSelector = `.${GridClasses.filterPart}`;
 
+/** A text read as a number as the server's invariant culture reads one — the framework's `numbers.parseInvariant`; a culture's "1,5" is no number. */
+type NumberReader = NumberFormatting["parseInvariant"];
+
 export class DataGridFilterEngine {
     private readonly values: ValueReading;
     private readonly badges: Badges;
     private readonly properties: PropertyWriting;
     private readonly states: ComponentStates;
     private readonly names: DomNames;
+    // The framework's reading of the invariant text a number field sends and a term's value travels in.
+    private readonly readNumber: NumberReader;
     // A part's one field: the framework component standing in it.
     private readonly fieldSelector: string;
 
@@ -34,6 +39,7 @@ export class DataGridFilterEngine {
         this.properties = context.properties;
         this.states = context.states;
         this.names = context.names;
+        this.readNumber = context.numbers.parseInvariant;
         this.fieldSelector = `[${context.names.componentId}]`;
 
         this.fillAll(context.root.querySelectorAll<HTMLElement>(RootSelector));
@@ -91,7 +97,7 @@ export class DataGridFilterEngine {
                 terms.push(...this.readFilterTermsOf(filter));
         }
 
-        writeQuery(grid, this.names, { ...query, filters: mergeFilterTerms(query.filters ?? [], filters.flatMap(fieldsOf), terms) });
+        writeQuery(grid, this.names, { ...query, filters: mergeFilterTerms(query.filters ?? [], filters.flatMap(fieldsOf), terms, this.readNumber) });
         this.written.set(grid, readQueryText(grid, this.names));
         this.syncFiltersCount(grid);
     }
@@ -122,7 +128,7 @@ export class DataGridFilterEngine {
                 if (field === null || field.contains(document.activeElement))
                     continue;
 
-                const value = fieldValueOf(terms, property, kind, part.getAttribute(FilterBoundAttribute));
+                const value = fieldValueOf(terms, property, kind, part.getAttribute(FilterBoundAttribute), this.readNumber);
 
                 if ((value === null ? null : String(value)) !== this.partValue(part, kind))
                     this.properties.set(field, "Value", value);
@@ -139,7 +145,7 @@ export class DataGridFilterEngine {
 
         for (const part of filter.querySelectorAll<HTMLElement>(`:scope > ${FilterPartSelector}`)) {
             const text = this.partValue(part, kind);
-            const term = text === null ? null : createTerm(property, kind, part.getAttribute(FilterBoundAttribute), text);
+            const term = text === null ? null : createTerm(property, kind, part.getAttribute(FilterBoundAttribute), text, this.readNumber);
 
             if (term !== null)
                 terms.push(term);
@@ -163,7 +169,7 @@ export class DataGridFilterEngine {
             return text;
 
         // Its number's own text, for a push of the same number ("1000.50" and 1000.5) to compare equal and write nothing.
-        const number = parseNumber(text);
+        const number = this.readNumber(text);
 
         return number === null ? null : String(number);
     }
@@ -179,7 +185,7 @@ export class DataGridFilterEngine {
         let inUse = 0;
 
         for (const filter of ownDescendants(grid, FilterSelector)) {
-            if (filter.closest(FilterPanelSelector) !== null && showsTerm(filter, terms))
+            if (filter.closest(FilterPanelSelector) !== null && showsTerm(filter, terms, this.readNumber))
                 inUse++;
         }
 
@@ -194,8 +200,8 @@ export class DataGridFilterEngine {
 }
 
 /** Whether any of a filter's fields has a term of the query to show. */
-function showsTerm(filter: HTMLElement, terms: readonly FilterTerm[]): boolean {
-    return fieldsOf(filter).some(field => fieldValueOf(terms, field.property, field.kind, field.bound) !== null);
+function showsTerm(filter: HTMLElement, terms: readonly FilterTerm[], readNumber: NumberReader): boolean {
+    return fieldsOf(filter).some(field => fieldValueOf(terms, field.property, field.kind, field.bound, readNumber) !== null);
 }
 
 /** One field of a filter as a term sees it: the property it filters, the kind of term it writes, and for a range which end it is. */
@@ -214,14 +220,14 @@ function fieldsOf(filter: HTMLElement): FilterField[] {
 }
 
 /** The query's terms after the fields spoke: a term a field could have written gives way to theirs; any other stays, since no field can take it back. */
-export function mergeFilterTerms(current: readonly FilterTerm[], fields: readonly FilterField[], fromFields: readonly FilterTerm[]): FilterTerm[] {
-    const kept = current.filter(term => !fields.some(field => field.property === term.itemProperty && fieldValueOf([term], field.property, field.kind, field.bound) !== null));
+export function mergeFilterTerms(current: readonly FilterTerm[], fields: readonly FilterField[], fromFields: readonly FilterTerm[], readNumber: NumberReader): FilterTerm[] {
+    const kept = current.filter(term => !fields.some(field => field.property === term.itemProperty && fieldValueOf([term], field.property, field.kind, field.bound, readNumber) !== null));
 
     return [...kept, ...fromFields];
 }
 
 /** What a filter field shows for its property's terms — `createTerm` reversed; null for a term the field would write back differently. */
-export function fieldValueOf(terms: readonly FilterTerm[], property: string, kind: string, bound: string | null): unknown {
+export function fieldValueOf(terms: readonly FilterTerm[], property: string, kind: string, bound: string | null, readNumber: NumberReader): unknown {
     const upper = bound === "to";
 
     for (const term of terms) {
@@ -232,7 +238,7 @@ export function fieldValueOf(terms: readonly FilterTerm[], property: string, kin
             case "number":
             case "money":
                 if (term.operator === (upper ? "LessOrEqual" : "GreaterOrEqual")) {
-                    const value = typeof term.value === "number" ? term.value : parseNumber(String(term.value));
+                    const value = typeof term.value === "number" ? term.value : readNumber(String(term.value));
 
                     if (value !== null)
                         return value;
@@ -287,13 +293,13 @@ function shiftDay(text: string, days: number): string | null {
 }
 
 /** One term by the field's kind and, for a range, its end; a number that does not read as one is no term. */
-export function createTerm(property: string, kind: string, bound: string | null, text: string): FilterTerm | null {
+export function createTerm(property: string, kind: string, bound: string | null, text: string, readNumber: NumberReader): FilterTerm | null {
     const operator = bound === "to" ? "LessOrEqual" : "GreaterOrEqual";
 
     switch (kind) {
         case "number":
         case "money": {
-            const value = parseNumber(text);
+            const value = readNumber(text);
 
             return value === null ? null : { itemProperty: property, operator, value };
         }
@@ -310,11 +316,4 @@ export function createTerm(property: string, kind: string, bound: string | null,
         default:
             return { itemProperty: property, operator: "LikeIgnoreCase", value: text };
     }
-}
-
-/** A number in the invariant text a term's value travels in; null for any other text — a culture's "1,5" is no number, not 15. */
-export function parseNumber(text: string): number | null {
-    const value = Number(text);
-
-    return text.trim().length === 0 || !Number.isFinite(value) ? null : value;
 }

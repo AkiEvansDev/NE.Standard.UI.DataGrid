@@ -75,21 +75,26 @@ public static class UIDataGridCsv
     }
 
     /// <summary>
-    /// The property a column's cells read; null for a column with no property behind it, which writes nothing.
+    /// The property a column exports, as it sorts, filters and totals by — the raw value behind a formatted one; null for a column with
+    /// no property behind it, which writes nothing.
     /// </summary>
     private static string? PropertyOf(UITableColumn column)
         => column switch
         {
             UIDataGridColumn { DetailToggle: true } => null,
-            UIDataGridColumn typed => typed.PropertyPath ?? typed.SortPath,
+            UIDataGridColumn typed => typed.EffectiveSortPath,
             _ => null
         };
 
+    /// <summary>The column's caption, else the name the grid calls a column with none by; a content caption stays as written.</summary>
     private static string Caption(UITableColumn column, UIDataGridCsvOptions settings)
     {
-        var caption = string.IsNullOrEmpty(column.Caption) ? column.Key : column.Caption;
+        if (!string.IsNullOrEmpty(column.Caption) && column.IsContent)
+            return column.Caption;
 
-        return settings.Translate is null || column.IsContent ? caption : settings.Translate(caption);
+        var caption = !string.IsNullOrEmpty(column.Caption) ? column.Caption : column is UIDataGridColumn typed ? typed.FallbackCaption : column.Key;
+
+        return settings.Translate is null ? caption : settings.Translate(caption);
     }
 
     /// <summary>
@@ -97,7 +102,7 @@ public static class UIDataGridCsv
     /// </summary>
     private static string Cell(UITableColumn column, object? row, UIDataGridCsvOptions settings)
     {
-        if (PropertyOf(column) is not string property || !ItemContext.TryReadProperty(row, property, out var value) || value is null)
+        if (PropertyOf(column) is not string property || !ItemContext.TryReadPath(row, property, out var value) || value is null)
             return string.Empty;
 
         var text = column is UIDataGridColumn typed && settings.Format is not null

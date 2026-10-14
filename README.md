@@ -192,8 +192,11 @@ hides the pager. The pager's words are the framework's (`UIStrings.Pager*`).
 ### CSV export
 
 The grid carries no export button: what leaves the screen as a file is the application's own command. `UIDataGridCsv` writes
-the rows over the grid's columns — the captions as the header line, a column that reads no property (a detail column, and a
-table column the grid did not add itself, whose key is a name rather than a property) left out.
+the rows over the grid's columns — the captions as the header line (a column with none named as its sort and its chooser entry
+name it: the last step of what it reads, in words), a column that reads no property (a detail column, and a table column the
+grid did not add itself, whose key is a name rather than a property) left out. A column exports the property it sorts, filters
+and totals by — its `SortPath`, the raw value behind a formatted one, else its `PropertyPath` — a dotted path read a step at a
+time (`ItemContext.TryReadPath`).
 The columns are the grid's `Columns`; build the grid in one factory method and take them from it, so the file has the grid's
 own columns — in the order they were authored, whatever the viewer hid or moved:
 

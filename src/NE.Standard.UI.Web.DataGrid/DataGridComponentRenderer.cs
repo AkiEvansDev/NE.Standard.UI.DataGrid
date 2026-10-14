@@ -12,7 +12,6 @@ using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Primitives.Constants;
 using NE.Standard.UI.Primitives.Localization;
 using NE.Standard.UI.Primitives.Styling;
-using NE.Standard.UI.Primitives.Text;
 using NE.Standard.UI.Web.Abstractions.Html;
 using NE.Standard.UI.Web.Abstractions.Rendering;
 using NE.Standard.UI.Web.Abstractions.Theming;
@@ -273,12 +272,12 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
         RenderCaption(context, cell, column);
 
-        if (column is UIDataGridColumn { Sortable: true, EffectiveSortPath: { } sortPath })
+        if (column is UIDataGridColumn { Sortable: true, EffectiveSortPath: { } sortPath } typed)
         {
             // The author's text, looked up as the caption beside it is — or, content, set in as it stands; a column with none is
             // named by what it sorts, in words.
             var caption = string.IsNullOrEmpty(column.Caption)
-                ? UIPhrase.Text(UINaming.Humanize(sortPath[(sortPath.LastIndexOf('.') + 1)..]))
+                ? UIPhrase.Text(typed.FallbackCaption)
                 : IsContentCaption(context, column) ? (object)column.Caption : UIPhrase.Text(column.Caption);
 
             _ = cell.Attribute(SortAttribute, sortPath);

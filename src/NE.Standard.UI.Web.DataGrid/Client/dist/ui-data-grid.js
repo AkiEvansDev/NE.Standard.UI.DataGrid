@@ -149,7 +149,10 @@ var h = `.${t.editableCell}`, ee = e.editor, g = e.kind, _ = e.column, v = e.rea
 			if (r instanceof Node && n.editor.contains(r)) return;
 			let i = r === null && e.target.isConnected && !ae(e.target);
 			window.setTimeout(() => this.followFocusOut(t, n, i), 0);
-		}, !0);
+		}, !0), e.observeComponents(n, "*", { childList: !0 }, () => this.prune());
+	}
+	prune() {
+		for (let [e, t] of this.open) e.isConnected || (this.open.delete(e), t.field !== null && this.values.release(t.field));
 	}
 	markTwoLine(e) {
 		let t = e.querySelector(`[${this.names.textDescription}]`) !== null;
@@ -549,12 +552,12 @@ function A(e, t) {
 //#endregion
 //#region src/data-grid-query.ts
 function j(e, t) {
-	return M(e, t)?.getAttribute(t.itemsQuery) ?? null;
+	return _e(e, t)?.getAttribute(t.itemsQuery) ?? null;
 }
-function M(e, t) {
+function _e(e, t) {
 	return e.querySelector(`:scope > [${t.valueKind}="${t.itemsQueryKind}"]`);
 }
-function N(e, t) {
+function M(e, t) {
 	let n = j(e, t);
 	if (n === null || n.length === 0) return {};
 	try {
@@ -563,8 +566,8 @@ function N(e, t) {
 		return {};
 	}
 }
-function _e(e, t, n) {
-	let i = M(e, t);
+function N(e, t, n) {
+	let i = _e(e, t);
 	if (i === null) return;
 	let a = n.filters ?? [], o = n.sorts ?? [], s = a.length === 0 && o.length === 0 ? null : JSON.stringify({
 		filters: a,
@@ -580,10 +583,11 @@ var P = e.filter, F = e.filterKind, I = e.filterBound, L = `[${P}]`, R = `.${t.f
 	properties;
 	states;
 	names;
+	readNumber;
 	fieldSelector;
 	written = /* @__PURE__ */ new WeakMap();
 	constructor(e) {
-		this.values = e.values, this.badges = e.badges, this.properties = e.properties, this.states = e.states, this.names = e.names, this.fieldSelector = `[${e.names.componentId}]`, this.fillAll(e.root.querySelectorAll(o)), e.observeComponents(e.root, o, {
+		this.values = e.values, this.badges = e.badges, this.properties = e.properties, this.states = e.states, this.names = e.names, this.readNumber = e.numbers.parseInvariant, this.fieldSelector = `[${e.names.componentId}]`, this.fillAll(e.root.querySelectorAll(o)), e.observeComponents(e.root, o, {
 			childList: !0,
 			attributeFilter: [e.names.itemsQuery]
 		}, (e) => this.fillAll(e)), e.root.addEventListener("click", (e) => {
@@ -606,11 +610,11 @@ var P = e.filter, F = e.filterKind, I = e.filterBound, L = `[${P}]`, R = `.${t.f
 		this.writeFilters(e, t);
 	}
 	writeFilters(e, t = /* @__PURE__ */ new Set()) {
-		let n = l(e, L), r = N(e, this.names), i = [];
+		let n = l(e, L), r = M(e, this.names), i = [];
 		for (let e of n) t.has(e) || i.push(...this.readFilterTermsOf(e));
-		_e(e, this.names, {
+		N(e, this.names, {
 			...r,
-			filters: xe(r.filters ?? [], n.flatMap(V), i)
+			filters: xe(r.filters ?? [], n.flatMap(V), i, this.readNumber)
 		}), this.written.set(e, j(e, this.names)), this.syncFiltersCount(e);
 	}
 	fillAll(e) {
@@ -620,13 +624,13 @@ var P = e.filter, F = e.filterKind, I = e.filterBound, L = `[${P}]`, R = `.${t.f
 		}
 	}
 	fillFields(e) {
-		let t = N(e, this.names).filters ?? [];
+		let t = M(e, this.names).filters ?? [];
 		for (let n of l(e, L)) {
 			let e = n.getAttribute(P) ?? "", r = n.getAttribute(F) ?? "text";
 			for (let i of n.querySelectorAll(`:scope > ${B}`)) {
 				let n = i.querySelector(this.fieldSelector);
 				if (n === null || n.contains(document.activeElement)) continue;
-				let a = H(t, e, r, i.getAttribute(I));
+				let a = H(t, e, r, i.getAttribute(I), this.readNumber);
 				(a === null ? null : String(a)) !== this.partValue(i, r) && this.properties.set(n, "Value", a);
 			}
 		}
@@ -635,7 +639,7 @@ var P = e.filter, F = e.filterKind, I = e.filterBound, L = `[${P}]`, R = `.${t.f
 	readFilterTermsOf(e) {
 		let t = e.getAttribute(P) ?? "", n = e.getAttribute(F) ?? "text", r = [];
 		for (let i of e.querySelectorAll(`:scope > ${B}`)) {
-			let e = this.partValue(i, n), a = e === null ? null : Ce(t, n, i.getAttribute(I), e);
+			let e = this.partValue(i, n), a = e === null ? null : Ce(t, n, i.getAttribute(I), e, this.readNumber);
 			a !== null && r.push(a);
 		}
 		return r;
@@ -644,21 +648,21 @@ var P = e.filter, F = e.filterKind, I = e.filterBound, L = `[${P}]`, R = `.${t.f
 		let n = this.values.read(e), r = n == null || typeof n == "boolean" ? "" : String(n).trim();
 		if (r.length === 0) return null;
 		if (t !== "number" && t !== "money") return r;
-		let i = W(r);
+		let i = this.readNumber(r);
 		return i === null ? null : String(i);
 	}
 	syncFiltersCount(e) {
 		let t = u(e, ve);
 		if (t === null) return;
-		let n = N(e, this.names).filters ?? [], r = 0;
-		for (let t of l(e, L)) t.closest(R) !== null && be(t, n) && r++;
+		let n = M(e, this.names).filters ?? [], r = 0;
+		for (let t of l(e, L)) t.closest(R) !== null && be(t, n, this.readNumber) && r++;
 		this.badges.writeCount(t, r), t.hidden = r === 0;
 		let i = u(e, z);
 		i !== null && this.states.setDisabled(i, r === 0);
 	}
 };
-function be(e, t) {
-	return V(e).some((e) => H(t, e.property, e.kind, e.bound) !== null);
+function be(e, t, n) {
+	return V(e).some((e) => H(t, e.property, e.kind, e.bound, n) !== null);
 }
 function V(e) {
 	let t = e.getAttribute(P) ?? "", n = e.getAttribute(F) ?? "text";
@@ -668,21 +672,21 @@ function V(e) {
 		bound: e.getAttribute(I)
 	}));
 }
-function xe(e, t, n) {
-	return [...e.filter((e) => !t.some((t) => t.property === e.itemProperty && H([e], t.property, t.kind, t.bound) !== null)), ...n];
+function xe(e, t, n, r) {
+	return [...e.filter((e) => !t.some((t) => t.property === e.itemProperty && H([e], t.property, t.kind, t.bound, r) !== null)), ...n];
 }
-function H(e, t, n, r) {
-	let i = r === "to";
+function H(e, t, n, r, i) {
+	let a = r === "to";
 	for (let r of e) if (r.itemProperty === t && r.value !== null && r.value !== void 0) switch (n) {
 		case "number":
 		case "money":
-			if (r.operator === (i ? "LessOrEqual" : "GreaterOrEqual")) {
-				let e = typeof r.value == "number" ? r.value : W(String(r.value));
+			if (r.operator === (a ? "LessOrEqual" : "GreaterOrEqual")) {
+				let e = typeof r.value == "number" ? r.value : i(String(r.value));
 				if (e !== null) return e;
 			}
 			break;
 		case "date": {
-			let e = r.operator === (i ? "Less" : "GreaterOrEqual") ? Se(String(r.value)) : null, t = e !== null && i ? U(e, -1) : e;
+			let e = r.operator === (a ? "Less" : "GreaterOrEqual") ? Se(String(r.value)) : null, t = e !== null && a ? U(e, -1) : e;
 			if (t !== null) return t;
 			break;
 		}
@@ -703,15 +707,15 @@ function U(e, t) {
 	let r = /* @__PURE__ */ new Date(0);
 	return r.setUTCFullYear(Number(n[1]), Number(n[2]) - 1, Number(n[3]) + t), r.toISOString().slice(0, 10);
 }
-function Ce(e, t, n, r) {
-	let i = n === "to" ? "LessOrEqual" : "GreaterOrEqual";
+function Ce(e, t, n, r, i) {
+	let a = n === "to" ? "LessOrEqual" : "GreaterOrEqual";
 	switch (t) {
 		case "number":
 		case "money": {
-			let t = W(r);
+			let t = i(r);
 			return t === null ? null : {
 				itemProperty: e,
-				operator: i,
+				operator: a,
 				value: t
 			};
 		}
@@ -719,7 +723,7 @@ function Ce(e, t, n, r) {
 			let t = n === "to" ? U(r, 1) : null;
 			return t === null ? {
 				itemProperty: e,
-				operator: i,
+				operator: a,
 				value: r
 			} : {
 				itemProperty: e,
@@ -740,13 +744,9 @@ function Ce(e, t, n, r) {
 		};
 	}
 }
-function W(e) {
-	let t = Number(e);
-	return e.trim().length === 0 || !Number.isFinite(t) ? null : t;
-}
 //#endregion
 //#region src/data-grid-selection-engine.ts
-var G = `[${e.select}]`, K = `[${e.selectAll}]`, q = "input[type='checkbox']", we = /* @__PURE__ */ new Set(["SelectedKeys", "SelectedKey"]), Te = class {
+var W = `[${e.select}]`, G = `[${e.selectAll}]`, K = "input[type='checkbox']", we = /* @__PURE__ */ new Set(["SelectedKeys", "SelectedKey"]), Te = class {
 	selection;
 	states;
 	names;
@@ -756,13 +756,13 @@ var G = `[${e.select}]`, K = `[${e.selectAll}]`, q = "input[type='checkbox']", w
 	said = /* @__PURE__ */ new WeakMap();
 	constructor(e) {
 		this.selection = e.selection, this.states = e.states, this.names = e.names, this.hostSelector = c(e.names), this.rowSelector = s(e.names), this.ownRowSelector = `[${e.names.itemsHost}] > ${this.rowSelector}`, e.root.addEventListener("change", (e) => {
-			let t = e.target instanceof Element ? e.target.closest(q) : null, n = d(t);
+			let t = e.target instanceof Element ? e.target.closest(K) : null, n = d(t);
 			if (t === null || n === null) return;
-			if (t.closest(K) !== null) {
+			if (t.closest(G) !== null) {
 				this.selection.setSelected(n, l(n, this.ownRowSelector).filter((e) => this.canChoose(e)), t.checked), this.sync(n);
 				return;
 			}
-			let r = t.closest(G) === null ? null : t.closest(this.rowSelector);
+			let r = t.closest(W) === null ? null : t.closest(this.rowSelector);
 			r !== null && (this.selection.toggle(r), this.sync(n));
 		}, !0), e.root.addEventListener(e.names.cellKey, (e) => this.handleCellKey(e)), e.propertyPatchEngine.addValueChangeHandler((t) => this.notePushed(e.root, t)), this.syncAll(e.root.querySelectorAll(o)), e.observeComponents(e.root, o, {
 			childList: !0,
@@ -777,20 +777,20 @@ var G = `[${e.select}]`, K = `[${e.selectAll}]`, q = "input[type='checkbox']", w
 	}
 	handleCellKey(e) {
 		if (e.defaultPrevented || !(e instanceof CustomEvent)) return;
-		let { cell: t, key: n, keyboard: r } = e.detail, i = n === "Enter" && t.matches(G) ? t.closest(this.rowSelector) : null, a = d(i);
+		let { cell: t, key: n, keyboard: r } = e.detail, i = n === "Enter" && t.matches(W) ? t.closest(this.rowSelector) : null, a = d(i);
 		i !== null && a !== null && this.canChoose(i) && (e.preventDefault(), r.preventDefault(), this.selection.toggle(i), this.sync(a));
 	}
 	canChoose(e) {
 		return !e.hasAttribute(this.names.unselectable) && !this.states.isInert(e);
 	}
 	sync(e) {
-		let t = u(e, `${K} ${q}`);
-		(t !== null || u(e, G) !== null) && this.syncBoxes(e, t), this.sayChange(e);
+		let t = u(e, `${G} ${K}`);
+		(t !== null || u(e, W) !== null) && this.syncBoxes(e, t), this.sayChange(e);
 	}
 	syncBoxes(e, t) {
 		let n = 0, r = 0;
 		for (let t of l(e, this.ownRowSelector)) {
-			let i = this.selection.isSelected(t), a = u(e, `${G} ${q}`, t), o = this.canChoose(t);
+			let i = this.selection.isSelected(t), a = u(e, `${W} ${K}`, t), o = this.canChoose(t);
 			o && !t.classList.contains(this.names.hiddenClass) && (n++, i && r++), a !== null && (a.checked !== i && (a.checked = i), this.turnOff(a, !o));
 		}
 		t !== null && (t.checked = r > 0 && r === n, t.indeterminate = r > 0 && r < n, this.turnOff(t, n === 0));
@@ -847,40 +847,40 @@ function De(e, t) {
 }
 //#endregion
 //#region src/data-grid-sort-engine.ts
-var J = e.sort, Oe = `.${t.sortMark}`, ke = class {
+var q = e.sort, Oe = `.${t.sortMark}`, ke = class {
 	names;
 	headerCellSelector;
 	constructor(e) {
 		let t = e.root;
-		this.names = e.names, this.headerCellSelector = `:scope > .${e.names.tableScrollClass} > .${e.names.tableHeaderClass} > [${J}]`, this.syncAll(t.querySelectorAll(o)), e.observeComponents(t, o, {
+		this.names = e.names, this.headerCellSelector = `:scope > .${e.names.tableScrollClass} > .${e.names.tableHeaderClass} > [${q}]`, this.syncAll(t.querySelectorAll(o)), e.observeComponents(t, o, {
 			childList: !0,
 			attributeFilter: [e.names.itemsQuery]
 		}, (e) => this.syncAll(e)), t.addEventListener("click", (e) => this.handleHeaderPress(e, e instanceof MouseEvent && e.shiftKey), !0), t.addEventListener("keydown", (t) => {
-			t instanceof KeyboardEvent && (t.key === "Enter" || t.key === " ") && e.shortcuts.isPlainKey(t, { shift: !0 }) && t.target instanceof Element && t.target.hasAttribute(J) && this.handleHeaderPress(t, t.shiftKey);
+			t instanceof KeyboardEvent && (t.key === "Enter" || t.key === " ") && e.shortcuts.isPlainKey(t, { shift: !0 }) && t.target instanceof Element && t.target.hasAttribute(q) && this.handleHeaderPress(t, t.shiftKey);
 		}, !0);
 	}
 	syncAll(e) {
 		for (let t of e) this.syncSortMarks(t);
 	}
 	syncSortMarks(e) {
-		let t = N(e, this.names).sorts ?? [];
+		let t = M(e, this.names).sorts ?? [];
 		for (let r of e.querySelectorAll(this.headerCellSelector)) {
-			let e = De(t, r.getAttribute(J) ?? ""), i = r.querySelector(Oe);
+			let e = De(t, r.getAttribute(q) ?? ""), i = r.querySelector(Oe);
 			m(r, "aria-sort", e === null ? "none" : e.direction === "Ascending" ? "ascending" : "descending"), m(r, n.sorted, e === null ? null : e.direction === "Ascending" ? "asc" : "desc"), i !== null && m(i, n.sortPlace, e !== null && t.length > 1 ? String(e.place) : null);
 		}
 	}
 	handleHeaderPress(e, t) {
 		if (e.defaultPrevented || !(e.target instanceof Element) || e.target.closest(`.${this.names.tableResizerClass}`) !== null) return;
-		let n = e.target.closest(`[${J}]`), r = d(n), i = n?.getAttribute(J) ?? null;
+		let n = e.target.closest(`[${q}]`), r = d(n), i = n?.getAttribute(q) ?? null;
 		if (n === null || r === null || i === null || i.length === 0) return;
 		e.preventDefault();
-		let a = N(r, this.names);
-		_e(r, this.names, {
+		let a = M(r, this.names);
+		N(r, this.names, {
 			...a,
 			sorts: Ee(a.sorts ?? [], i, t)
 		});
 	}
-}, Y = e.aggregate, Ae = e.column, X = e.raw, je = class {
+}, J = e.aggregate, Y = e.column, X = e.raw, Ae = class {
 	formatting;
 	rows;
 	names;
@@ -890,7 +890,7 @@ var J = e.sort, Oe = `.${t.sortMark}`, ke = class {
 	pending = /* @__PURE__ */ new Set();
 	scheduled = !1;
 	constructor(e, n) {
-		this.formatting = n, this.rows = e.rows, this.names = e.names, this.hostSelector = c(e.names), this.totalSelector = `:scope > .${e.names.tableScrollClass} > .${t.footer} > .${t.total}[${Y}]`, this.shownRowSelector = `:scope > ${s(e.names)}:not(.${e.names.hiddenClass})`, this.syncAll(e.root.querySelectorAll(o)), e.observeComponents(e.root, o, {
+		this.formatting = n, this.rows = e.rows, this.names = e.names, this.hostSelector = c(e.names), this.totalSelector = `:scope > .${e.names.tableScrollClass} > .${t.footer} > .${t.total}[${J}]`, this.shownRowSelector = `:scope > ${s(e.names)}:not(.${e.names.hiddenClass})`, this.syncAll(e.root.querySelectorAll(o)), e.observeComponents(e.root, o, {
 			childList: !0,
 			attributeFilter: [
 				"class",
@@ -907,9 +907,9 @@ var J = e.sort, Oe = `.${t.sortMark}`, ke = class {
 		if (n.length === 0) return;
 		let r = t.querySelector(this.hostSelector);
 		if (r === null) return;
-		let i = r.getAttribute(this.names.hostMode) === "windowed", a = i ? Me(r, this.names) : null, o = i ? null : this.rows.itemsOf(r), s = this.formatting.numbers.readCulture(t), c = this.formatting.temporal.readCulture(t);
+		let i = r.getAttribute(this.names.hostMode) === "windowed", a = i ? je(r, this.names) : null, o = i ? null : this.rows.itemsOf(r), s = this.formatting.numbers.readCulture(t), c = this.formatting.temporal.readCulture(t);
 		for (let t of n) {
-			let n = t.getAttribute(Ae) ?? "", l = t.getAttribute(e.property) ?? n, u = t.getAttribute(Y) ?? "", d = i ? a?.[l] ?? null : o === null ? u === "count" ? r.querySelectorAll(this.shownRowSelector).length : Fe(u, Pe(r, n, this.shownRowSelector)) : u === "count" ? o.length : Fe(u, Ne(o, l, this.rows, this.formatting.numbers)), f = d === null ? "" : C(d, b(t), s, c, this.formatting);
+			let n = t.getAttribute(Y) ?? "", l = t.getAttribute(e.property) ?? n, u = t.getAttribute(J) ?? "", d = i ? a?.[l] ?? null : o === null ? u === "count" ? r.querySelectorAll(this.shownRowSelector).length : Pe(u, Ne(r, n, this.shownRowSelector)) : u === "count" ? o.length : Pe(u, Me(o, l, this.rows, this.formatting.numbers)), f = d === null ? "" : C(d, b(t), s, c, this.formatting);
 			t.textContent !== f && (t.textContent = f);
 		}
 	}
@@ -922,7 +922,7 @@ var J = e.sort, Oe = `.${t.sortMark}`, ke = class {
 		}));
 	}
 };
-function Me(e, t) {
+function je(e, t) {
 	let n = e.getAttribute(t.windowAggregates);
 	if (n === null || n.length === 0) return null;
 	try {
@@ -931,7 +931,7 @@ function Me(e, t) {
 		return null;
 	}
 }
-function Ne(e, t, n, r) {
+function Me(e, t, n, r) {
 	let i = [];
 	for (let a of e) {
 		let e = w(n.readPath(a, t), r);
@@ -939,33 +939,33 @@ function Ne(e, t, n, r) {
 	}
 	return i;
 }
-function Pe(e, t, n) {
+function Ne(e, t, n) {
 	let r = [];
 	for (let i of e.querySelectorAll(n)) {
-		let e = i.querySelector(`:scope > [${Ae}="${CSS.escape(t)}"] [${X}]`), n = e === null ? NaN : Number(e.getAttribute(X));
+		let e = i.querySelector(`:scope > [${Y}="${CSS.escape(t)}"] [${X}]`), n = e === null ? NaN : Number(e.getAttribute(X));
 		Number.isFinite(n) && r.push(n);
 	}
 	return r;
 }
-function Fe(e, t) {
+function Pe(e, t) {
 	if (e === "count") return t.length;
 	if (t.length === 0) return null;
 	switch (e) {
 		case "sum": return t.reduce((e, t) => e + t, 0);
 		case "average": return t.reduce((e, t) => e + t, 0) / t.length;
-		case "min": return Ie(t, -1);
-		case "max": return Ie(t, 1);
+		case "min": return Fe(t, -1);
+		case "max": return Fe(t, 1);
 		default: return null;
 	}
 }
-function Ie(e, t) {
+function Fe(e, t) {
 	let n = e[0];
 	for (let r = 1; r < e.length; r++) (e[r] - n) * t > 0 && (n = e[r]);
 	return n;
 }
 //#endregion
 //#region src/data-grid-verdict-engine.ts
-var Le = /* @__PURE__ */ new Map(), Re = class {
+var Ie = /* @__PURE__ */ new Map(), Le = class {
 	rows;
 	validation;
 	names;
@@ -1016,11 +1016,11 @@ var Le = /* @__PURE__ */ new Map(), Re = class {
 	}
 	rulesOf(t) {
 		let n = this.rulesByGrid.get(t);
-		return n === void 0 && (n = ze(t.getAttribute(e.rules)), this.rulesByGrid.set(t, n)), n;
+		return n === void 0 && (n = Re(t.getAttribute(e.rules)), this.rulesByGrid.set(t, n)), n;
 	}
 };
-function ze(e) {
-	if (e === null || e.length === 0) return Le;
+function Re(e) {
+	if (e === null || e.length === 0) return Ie;
 	try {
 		let t = JSON.parse(e), n = /* @__PURE__ */ new Map();
 		for (let [e, r] of Object.entries(t)) typeof r.editor == "number" && typeof r.path == "string" && n.set(e, {
@@ -1029,39 +1029,39 @@ function ze(e) {
 		});
 		return n;
 	} catch {
-		return Le;
+		return Ie;
 	}
 }
 //#endregion
 //#region src/data-grid-engine.ts
-var Be = class {
+var ze = class {
 	formatting;
 	constructor(e, t) {
 		this.formatting = {
 			numbers: e.numbers,
 			temporal: e.temporal,
 			strings: e.strings
-		}, new ke(e), new re(e, t), new ye(e), new je(e, this.formatting), new fe(e), new ge(e), new Te(e), new Re(e), e.strings.onChange(() => ce(e.root, this.formatting));
+		}, new ke(e), new re(e, t), new ye(e), new Ae(e, this.formatting), new fe(e), new ge(e), new Te(e), new Le(e), e.strings.onChange(() => ce(e.root, this.formatting));
 	}
 	applyCellValue(e, t) {
 		x(e, t, this.formatting);
 	}
-}, Ve = 4;
-function He() {
+}, Be = 4;
+function Ve() {
 	let e = window.NEStandardUI;
 	if (e === void 0 || typeof e.registerEngine != "function") throw Error("NE.Standard.UI.Web.DataGrid needs the framework's client (ui.js) on the page before it.");
-	if (e.contractVersion !== Ve) throw Error(`NE.Standard.UI.Web.DataGrid was built for plugin contract ${Ve}, but the framework's client on the page implements ${String(e.contractVersion ?? "an older one")}; install the package version that matches the framework.`);
+	if (e.contractVersion !== Be) throw Error(`NE.Standard.UI.Web.DataGrid was built for plugin contract ${Be}, but the framework's client on the page implements ${String(e.contractVersion ?? "an older one")}; install the package version that matches the framework.`);
 	return e;
 }
 //#endregion
 //#region src/data-grid.ts
-var Z = He(), Q = new ne(), $;
+var Z = Ve(), Q = new ne(), $;
 Z.registerEvent(r.queryChange, { settlesValue: !0 }), Z.registerEvent(r.cellEdit, {
 	settlesValue: !0,
 	started: (e) => Q.start(e.domEvent),
 	completed: (e) => Q.finish(e.domEvent)
 }), Z.registerEvent(r.selectionChange, { settlesValue: !0 }), Z.registerEngine((e) => {
-	$ = new Be(e, Q);
+	$ = new ze(e, Q);
 }), Z.registerDomOperation({
 	kind: a,
 	handler: (e) => $?.applyCellValue(e.target, e.value)

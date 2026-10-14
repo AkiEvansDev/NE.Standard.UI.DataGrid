@@ -36,6 +36,9 @@ let refused: (value: string) => boolean = () => false;
 // What a sent value waits for (`values.whenSettled`): answered at once unless a test holds it.
 let settled: () => Promise<void> = () => Promise.resolve();
 
+// The fields the engine let go of (`values.release`), counted.
+let released = 0;
+
 /** The answers the page waits on, given their turn. */
 async function answered(): Promise<void> {
     await new Promise(resolve => setImmediate(resolve));
@@ -65,6 +68,7 @@ function createGrid(draw: (variant: string) => FakeElement, answers = new CellEd
     fakeWindow.timers.length = 0;
     refused = () => false;
     settled = () => Promise.resolve();
+    released = 0;
     if (rows > 1)
         host.append(FakeElement.of(names.tableRowClass, { [names.key]: "r2" }).append(editableCell("Seats"), editableCell("Plan")));
 
@@ -92,7 +96,9 @@ function createGrid(draw: (variant: string) => FakeElement, answers = new CellEd
         values: {
             read: (element: FakeElement) => element instanceof FakeInput ? element.value : null,
             hold: () => undefined,
-            release: () => undefined,
+            release: () => {
+                released++;
+            },
             write: (element: FakeElement, value: unknown) => {
                 if (element instanceof FakeInput)
                     element.value = String(value);
@@ -701,4 +707,16 @@ test("a value the row already held closes the editor though the rules fail it: n
 
     assert.ok(!isOpen(cell));
     assert.equal(heard.edits, 0);
+});
+
+test("a grid that left the page with its editor open lets the editor go, once", () => {
+    const { grid, cell } = createGrid(() => new FakeElement().append(numberField()));
+    const field = open(cell);
+
+    field.value = "12";
+    grid.remove();
+    observers.get("*")?.([]);
+    observers.get("*")?.([]);
+
+    assert.equal(released, 1);
 });

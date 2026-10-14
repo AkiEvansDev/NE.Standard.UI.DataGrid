@@ -76,33 +76,15 @@ public abstract class DataGridDemoView : UIViewBase
             .SetPadding(UIThickness.All(24, 4, 24, 24))
             .AddChildren(CreateSections());
 
-    /// <summary>The page's own content: one <see cref="UIPage.Section"/> per thing it shows.</summary>
+    /// <summary>The page's own content: one <see cref="UIPage.Section(string, string?, IVisualComponent[])"/> per thing it shows.</summary>
     protected abstract IVisualComponent[] CreateSections();
 
     /// <summary>
-    /// <see cref="UIPage.Section"/>'s shape with the <c>&lt;/&gt;</c> button beside the title, showing the source of
-    /// <paramref name="content"/>.
+    /// A section whose heading carries the <c>&lt;/&gt;</c> button at its far end, showing the source of <paramref name="content"/>.
     /// </summary>
-    /// <remarks>Not the preset itself: it has no place for a control beside its title.</remarks>
     protected static StackPanelComponent Example(string title, string? description, IVisualComponent content, [CallerArgumentExpression(nameof(content))] string code = "")
-    {
-        // The heading and its note sit closer to each other than to the content, as the preset's do.
-        StackPanelComponent heading = UILayout.Stack(4).AddChild(UIText.Title(title).SetTitleWrap(true));
-
-        if (description is not null)
-            _ = heading.AddChild(UIText.Note(description));
-
         // A section's title, note and sample are the author's prose and data, shown as written: content for the unkeyed report.
-        return UILayout.Stack(16)
-            .AsContentTree()
-            .AddChild(new ContainerComponent()
-                .SetRow(1, UIGridUnit.Auto())
-                .SetColumn(24, UIGridUnit.Auto())
-                .AddChild(heading.SetPlacement(1, 1, 23, 1))
-                .AddChild(CreateCodeFlyout(code).SetPlacement(24, 1, 1, 1))
-            )
-            .AddChild(content);
-    }
+        => UIPage.Section(UIPage.Heading(title, description, CreateCodeFlyout(code)), content).AsContentTree();
 
     /// <summary>
     /// The <c>&lt;/&gt;</c> button and the popup it opens: the sample's source, read-only, with a copy button.
@@ -117,7 +99,7 @@ public abstract class DataGridDemoView : UIViewBase
         var rows = Math.Clamp(CountLines(view) + 1, 3, 24);
 
         return new FlyoutComponent()
-            .SetFlyoutPlacement(UIPopupPlacement.BottomEnd)
+            .SetPopupPlacement(UIPopupPlacement.BottomEnd)
             .SetHorizontalAlignment(UIAlignment.End)
             .SetVerticalAlignment(UIAlignment.Center)
             // Smaller than a small button's 28px, to fit the title row a group without the button has.

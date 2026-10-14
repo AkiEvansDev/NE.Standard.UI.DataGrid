@@ -175,13 +175,21 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
         _regions[ColumnsRegionName] = new MenuComponent().SetOrientation(UIOrientation.Vertical).SetItems(entries);
     }
 
-    /// <summary>A column's name in the chooser: its caption, the grid's own word for the detail chevron's column, else its key.</summary>
+    /// <summary>
+    /// A column's name in the chooser: its caption, the grid's own word for the detail chevron's column, else the name the sort and a
+    /// CSV call it by.
+    /// </summary>
     private static string ChooserTitleOf(UITableColumn column)
     {
         if (!string.IsNullOrEmpty(column.Caption))
             return column.Caption;
 
-        return column is UIDataGridColumn { DetailToggle: true } ? UIDataGridWords.Details : column.Key;
+        return column switch
+        {
+            UIDataGridColumn { DetailToggle: true } => UIDataGridWords.Details,
+            UIDataGridColumn typed => typed.FallbackCaption,
+            _ => column.Key
+        };
     }
 
     /// <summary>Whether a column's caption is shown as written: the column says so, or the grid said it of all its columns.</summary>

@@ -197,6 +197,22 @@ export class DataGridEditEngine {
             // After the blur's own change has been dispatched, which the browser does before the focus moves on.
             window.setTimeout(() => this.followFocusOut(grid, state, hid), 0);
         }, true);
+
+        // A grid that left the page takes its open editor with it; a removal is a childList change above every selector.
+        context.observeComponents(root, "*", { childList: true }, () => this.prune());
+    }
+
+    /** Drops the editor of a grid that left the page, as `followRow` drops one whose cell went: a commit would reach nobody. */
+    private prune(): void {
+        for (const [grid, state] of this.open) {
+            if (grid.isConnected)
+                continue;
+
+            this.open.delete(grid);
+
+            if (state.field !== null)
+                this.values.release(state.field);
+        }
     }
 
     private markTwoLine(cell: HTMLElement): void {
