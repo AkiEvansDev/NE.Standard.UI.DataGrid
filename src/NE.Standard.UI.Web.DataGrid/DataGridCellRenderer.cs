@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.DataGrid;
@@ -41,6 +43,13 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
 
     private static readonly JsonSerializerOptions ChoicesJsonOptions = WebWireJson.CreateOptions();
 
+    // By name: a page's culture is the read-only one `CultureInfo.GetCultureInfo` keeps for it (`WebCultures.Resolve`).
+    private static readonly ConcurrentDictionary<string, DataGridCulturePacks> PacksByCulture = new(StringComparer.Ordinal);
+
+    // By the list itself, held weakly: every cell of a column carries its one list — the cell's own copy, which nothing changes
+    // after, as its editor's options are fixed.
+    private static readonly ConditionalWeakTable<IReadOnlyList<UIChoice>, string> ChoicesJsonByList = [];
+
     public override string ComponentTypeKey => DataGridCellComponent.ComponentTypeKey;
 
     protected override string ClassName => "ui-data-grid-cell";
@@ -66,14 +75,14 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
             _ = root.Attribute(CurrencyAttribute, currency);
 
         if (choices is { Count: > 0 })
-            _ = root.Attribute(ChoicesAttribute, JsonSerializer.Serialize(CaptionsByValue(choices), ChoicesJsonOptions));
+            _ = root.Attribute(ChoicesAttribute, ChoicesJson(choices));
 
         // The page's culture, the same one the grid wrote its packs from; a cell painted here and one the client builds agree.
-        CultureInfo culture = ResolveCulture(context);
+        DataGridCulturePacks packs = PacksOf(ResolveCulture(context));
 
         _ = RenderProperty<object?>(context, root, DataGridCellComponent.ValueProperty, (target, value) =>
         {
-            _ = target.Text(DataGridCellFormatter.Format(value, kind, format, currency, choices, culture, context.Translate));
+            _ = target.Text(DataGridCellFormatter.Format(value, kind, format, currency, choices, packs, context.Translate));
 
             if (kind is UIDataGridColumnKind.Number or UIDataGridColumnKind.Money && DataGridCellFormatter.RawNumber(value) is { } raw)
                 _ = target.Attribute(RawValueAttribute, raw);
@@ -90,6 +99,10 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
     public static string KindName(UIDataGridColumnKind kind)
         => kind.ToString().ToLowerInvariant();
 
+    /// <summary>A column's choices as the attribute writes them, serialized once for every cell of the column.</summary>
+    internal static string ChoicesJson(IReadOnlyList<UIChoice> choices)
+        => ChoicesJsonByList.GetValue(choices, static list => JsonSerializer.Serialize(CaptionsByValue(list), ChoicesJsonOptions));
+
     private static Dictionary<string, string> CaptionsByValue(IReadOnlyList<UIChoice> choices)
     {
         Dictionary<string, string> captions = new(choices.Count, StringComparer.Ordinal);
@@ -99,4 +112,8 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
 
         return captions;
     }
+
+    /// <summary>The packs a culture's cells format over, built once for every cell painted in it.</summary>
+    internal static DataGridCulturePacks PacksOf(CultureInfo culture)
+        => PacksByCulture.GetOrAdd(culture.Name, static (_, named) => new DataGridCulturePacks(named), culture);
 }

@@ -13,6 +13,12 @@ const RawValueAttribute = GridAttributes.raw;
 
 export type Aggregate = "sum" | "average" | "count" | "min" | "max";
 
+/** What a grid's totals were last read from, where they stand on what the page holds rather than on the rows drawn. */
+type TotalsBasis = {
+    readonly host: Element;
+    readonly basis: string;
+};
+
 export class DataGridTotalsEngine {
     private readonly formatting: CellFormatting;
     private readonly rows: ItemRows;
@@ -23,6 +29,9 @@ export class DataGridTotalsEngine {
     private readonly shownRowSelector: string;
     private readonly pending = new Set<HTMLElement>();
     private scheduled = false;
+    // A virtualized host's totals, and a window's, are read again only when what they stand on moved (`movedSince`): a scroll swaps the
+    // rows drawn batch after batch, and a hundred thousand items read per batch is the cost this spares.
+    private readonly bases = new WeakMap<HTMLElement, TotalsBasis>();
 
     public constructor(context: PluginEngineContext, formatting: CellFormatting) {
         this.formatting = formatting;
@@ -34,20 +43,20 @@ export class DataGridTotalsEngine {
         this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector));
 
         // Rows come and go, a filter hides one (its class), an edit changes a cell's value (its raw attribute), a window brings its
-        // answer (the host's attribute).
-        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, context.names.windowAggregates] }, grids => this.queue(grids));
+        // answer (the host's attribute), a column is hidden or shown (the root's).
+        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, context.names.windowAggregates, context.names.tableHidden] }, grids => this.queue(grids));
 
-        // A language switch wrote the grid's packs again: a total is a number or a date in them too.
-        context.strings.onChange(() => this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector)));
+        // A language switch wrote the grid's packs again: a total is a number or a date in them too, whatever it was read from.
+        context.strings.onChange(() => this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector), true));
     }
 
-    private syncAll(grids: Iterable<HTMLElement>): void {
+    private syncAll(grids: Iterable<HTMLElement>, rewrite = false): void {
         for (const grid of grids)
-            this.syncTotals(grid);
+            this.syncTotals(grid, rewrite);
     }
 
     /** Every total the footer asks for, from the window's answer or from the rows the page holds. */
-    private syncTotals(grid: HTMLElement): void {
+    private syncTotals(grid: HTMLElement, rewrite: boolean): void {
         const totals = grid.querySelectorAll<HTMLElement>(this.totalSelector);
 
         if (totals.length === 0)
@@ -59,6 +68,10 @@ export class DataGridTotalsEngine {
             return;
 
         const windowed = host.getAttribute(this.names.hostMode) === "windowed";
+
+        if (!this.movedSince(grid, host, windowed, totals.length) && !rewrite)
+            return;
+
         const answered = windowed ? readAggregates(host, this.names) : null;
         // A virtualized host draws only the rows in view: the reading is over the items it holds, not over the page.
         const held = windowed ? null : this.rows.itemsOf(host);
@@ -80,6 +93,27 @@ export class DataGridTotalsEngine {
             if (total.textContent !== text)
                 total.textContent = text;
         }
+    }
+
+    /**
+     * Whether a grid's totals stand on something other than the last pass read — a virtualized host's items' version, a window's
+     * answer, the columns hidden, how many totals; always for a host whose drawn rows are its items, which are the totals' reading.
+     */
+    private movedSince(grid: HTMLElement, host: Element, windowed: boolean, count: number): boolean {
+        const version = windowed ? null : this.rows.itemsVersion(host);
+
+        if (!windowed && version === null)
+            return true;
+
+        const basis = `${version ?? ""}|${host.getAttribute(this.names.windowAggregates) ?? ""}|${grid.getAttribute(this.names.tableHidden) ?? ""}|${count}`;
+        const last = this.bases.get(grid);
+
+        if (last?.host === host && last.basis === basis)
+            return false;
+
+        this.bases.set(grid, { host, basis });
+
+        return true;
     }
 
     /** Totals once a frame at most: a virtualized scroll swaps rows batch after batch, and the footer's own writes come back as one more. */

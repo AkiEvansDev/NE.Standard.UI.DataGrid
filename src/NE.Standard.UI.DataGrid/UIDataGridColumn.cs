@@ -57,8 +57,11 @@ public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UI
     /// <summary>A money column's symbol when it is not the page's own.</summary>
     public string? Currency { get; init; }
 
-    /// <summary>The values an enum or boolean column may hold, each with the caption its cells show.</summary>
-    public IReadOnlyList<UIChoice>? Choices { get; init; }
+    /// <summary>
+    /// The values an enum or boolean column may hold, each with the caption its cells show; copied when given, so a list the caller
+    /// goes on changing changes no column.
+    /// </summary>
+    public IReadOnlyList<UIChoice>? Choices { get; init => field = value is null ? null : [.. value]; }
 
     /// <summary>
     /// The property the column sorts, filters, totals and exports by; set even on a column that does not sort.

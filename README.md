@@ -63,12 +63,15 @@ for a window over a `UIItemSourceBase<T>`, `Virtualized()`, `FilterBy`/`SortBy` 
 | `AddMoneyColumn` | an amount | the currency format `C`, the page's symbol or the one given | end |
 | `AddDateColumn` | a date or a moment | a pattern of the shared token subset — `yyyy-MM-dd` unless given (`dd MMM yyyy HH:mm`, `d MMMM yyyy`, …) | start |
 | `AddBooleanColumn` | a flag | the two words given, or the page's yes and no (`ui.grid.yes`, `ui.grid.no`) | centre |
-| `AddEnumColumn` | one of a set | the caption of the `UIChoice` it matches — `AddEnumColumn<TEnum>` reads them off the type (`UIChoices.FromEnum`), a member's `[Description]` or its name as words | start |
+| `AddEnumColumn` | one of a set | the caption of the `UIChoice` it matches — `AddEnumColumn<TEnum>` reads them off the type (`UIChoices.FromEnum`), a member's `[Description]` or its name as words; the list is copied, so changing it later changes no column | start |
 
 A typed cell is formatted **in the page's culture** — the session's language — on the server when the row is
 painted there, and on the client when a row is built or a value patched there, through the same formatters, so
 the two read the same. A language switch draws every such cell, a footer's total and the pager's figures again in the new
-language's culture at once. The row keeps its typed property; nobody formats by hand.
+language's culture at once. The row keeps its typed property; nobody formats by hand. A number is painted as the page holds it:
+past fifteen significant digits, a decimal or a long in the digits of the double it reads as (`9.000000000000001` as
+`9.000000000000002`), so a patch or a switch never changes a cell no one changed; a NaN or an infinity, which travels as null, is
+an empty cell.
 
 The grid's own words — the band, the chooser, yes and no — ship in Russian and Simplified Chinese as well as English
 (`DataGridStrings.Translations`), turned on with `application.AddFrameworkWords("ru", "zh-Hans")` and outranked by any word of the
@@ -216,11 +219,15 @@ public async Task ExportAsync(CancellationToken cancellationToken)
 
 By default the file carries **values**, not the cells' text: a number plain, a moment to the second without a zone (a
 `DateTimeOffset` as its UTC moment — a spreadsheet keeps neither a zone nor an offset), a flag as `true` or `false`, so a
-spreadsheet reads them back as numbers and dates. Text that opens with `=`, `+`, `-`, `@`, a tab or a carriage return is
-written behind a quote, so a spreadsheet opens it as the words it is rather than running it as a formula; a number, a date, a
-flag and a number column's numeric text are never touched, and `EscapeFormulas = false` turns it off. `new UIDataGridCsvOptions
+spreadsheet reads them back as numbers and dates. Every text the file carries — a header, a cell's words, a flag's or a
+choice's caption — is disarmed: a `=`, `+`, `-`, `@`, a tab or a carriage return at its start, or after a comma, a semicolon or
+a tab inside it (where a spreadsheet splitting at another list separator than the file's starts a cell), goes behind a quote, so
+a spreadsheet opens it as the words it is rather than running it as a formula. Only a number's own minus is left bare, a
+number column's numeric text too; a NaN or an infinity is an empty cell, as the grid shows it. `EscapeFormulas = false` turns it
+off. `new UIDataGridCsvOptions
 { Format = DataGridCellFormatter.AsCsvFormat(culture, translate), Translate = … }` writes what the cells show instead, through
-the same formatter they use — the writer is the component package's, so a controller can call it, and the formatter is the web
+the same formatter they use, but for a number's digits: the file keeps its own where a cell past fifteen shows the page's double
+— the writer is the component package's, so a controller can call it, and the formatter is the web
 package's. `Translate` turns the captions into the page's words (a content column's stays as written) and the formatter's own translator the choices; without one, a
 boolean that would write one of the grid's keys writes `true` or `false`. `Separator` is a comma unless set — a semicolon suits
 a culture that writes its decimals with a comma. `WriteBytes` puts a byte-order mark
@@ -308,7 +315,8 @@ not sort. What the server writes — a CSV export — is in the order the column
 ### Wide grids and pinned columns
 
 A grid wider than its box scrolls sideways as a whole, as the framework's table does by default — the header moves with the
-rows, the band and the pager keep their place at the start edge, the footer of totals stays over the pager, and the keyboard's cell
+rows, the band and the pager keep their place at the start edge, the footer of totals stays over the pager and over the table's
+shade at an edge it can still scroll toward, and the keyboard's cell
 past either edge — and the editor opened on it — is scrolled into the box, clear of the pinned columns — and a column that
 says `pinned: true` stays in place while the rest slide under it. Pinned columns lead the grid; one after an unpinned
 column is refused.
@@ -332,7 +340,8 @@ of them draws the edge the rest scroll under. Resizing a pinned column moves the
 A column that says `aggregate: UIDataGridAggregate.Sum` (or `Average`, `Count`, `Min`, `Max`) gets a footer under the
 rows with the number under it, formatted as the column's cells are — a count as a plain number; a numeric text in a number
 column counts as the number it reads as, as its cell shows it. Over rows the page
-holds it is computed in the browser, over the rows the filters leave. Over a windowed source the source answers it
+holds it is computed in the browser, over the rows the filters leave — on a virtualized grid over the items it holds rather than the
+rows drawn, read again only when they change, never for a scroll. Over a windowed source the source answers it
 beside its window, over every row the query leaves and not only the window:
 
 ```csharp
@@ -393,15 +402,18 @@ An editor carries the field's rules (`Validate`, `Required`, `Regex`) and bounds
 `configureEditor`, typed by its editor; a template column's editor is the author's own:
 
 ```csharp
-.AddNumberColumn("Quantity", nameof(Order.Quantity), "N0", editable: true, configureEditor: editor => editor.SetMax(100).Validate(UIValidationTrigger.Change, UIComparisonOperator.Greater, 0, "At least one."))
+.AddNumberColumn("Quantity", nameof(Order.Quantity), "N0", editable: true, configureEditor: editor => editor.SetMax(100).Required("At least one.").Validate(UIValidationTrigger.Change, UIComparisonOperator.Greater, 0, "At least one."))
 .AddTextColumn("Note", nameof(Order.Note), sortable: true, editable: true, configureEditor: editor => editor.Required("No note.", severity: UIValidationSeverity.Info))
 ```
+
+A rule other than `Required` passes an empty value, as a field's does, so a cell that must not be cleared says `Required` too.
 
 While the editor is open, its field's mark speaks as the value is typed. An error or a bound holds the value back: Enter, Tab, a
 double click on another cell or a click elsewhere leaves the editor open over it, the focus back in its field, until it is put
 right or Escape takes it back; a warning or a note commits. A closed cell is judged by its editor's rules whenever its row is
 shown — drawn, after a commit, after the server writes it — and a value that fails wears the strongest severity's edge in the box
-the editor's field takes, its words in the mark's tooltip.
+the editor's field takes, its words in the mark's tooltip. On a virtualized grid the open editor's row stays drawn while the focus
+is in it, however far the reader scrolls and through a refill of its item, so the editor and its draft wait for the reader.
 
 An editable cell answers the pointer with the field's faint ground in that same box, so a reader sees what opens before it does;
 nothing while `Editable` is off, nor while the keyboard's frame shows, the frame alone being the cursor.

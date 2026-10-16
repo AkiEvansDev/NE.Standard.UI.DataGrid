@@ -889,29 +889,42 @@ var q = e.sort, Oe = `.${t.sortMark}`, ke = class {
 	shownRowSelector;
 	pending = /* @__PURE__ */ new Set();
 	scheduled = !1;
+	bases = /* @__PURE__ */ new WeakMap();
 	constructor(e, n) {
 		this.formatting = n, this.rows = e.rows, this.names = e.names, this.hostSelector = c(e.names), this.totalSelector = `:scope > .${e.names.tableScrollClass} > .${t.footer} > .${t.total}[${J}]`, this.shownRowSelector = `:scope > ${s(e.names)}:not(.${e.names.hiddenClass})`, this.syncAll(e.root.querySelectorAll(o)), e.observeComponents(e.root, o, {
 			childList: !0,
 			attributeFilter: [
 				"class",
 				X,
-				e.names.windowAggregates
+				e.names.windowAggregates,
+				e.names.tableHidden
 			]
-		}, (e) => this.queue(e)), e.strings.onChange(() => this.syncAll(e.root.querySelectorAll(o)));
+		}, (e) => this.queue(e)), e.strings.onChange(() => this.syncAll(e.root.querySelectorAll(o), !0));
 	}
-	syncAll(e) {
-		for (let t of e) this.syncTotals(t);
+	syncAll(e, t = !1) {
+		for (let n of e) this.syncTotals(n, t);
 	}
-	syncTotals(t) {
-		let n = t.querySelectorAll(this.totalSelector);
-		if (n.length === 0) return;
-		let r = t.querySelector(this.hostSelector);
-		if (r === null) return;
-		let i = r.getAttribute(this.names.hostMode) === "windowed", a = i ? je(r, this.names) : null, o = i ? null : this.rows.itemsOf(r), s = this.formatting.numbers.readCulture(t), c = this.formatting.temporal.readCulture(t);
-		for (let t of n) {
-			let n = t.getAttribute(Y) ?? "", l = t.getAttribute(e.property) ?? n, u = t.getAttribute(J) ?? "", d = i ? a?.[l] ?? null : o === null ? u === "count" ? r.querySelectorAll(this.shownRowSelector).length : Pe(u, Ne(r, n, this.shownRowSelector)) : u === "count" ? o.length : Pe(u, Me(o, l, this.rows, this.formatting.numbers)), f = d === null ? "" : C(d, b(t), s, c, this.formatting);
+	syncTotals(t, n) {
+		let r = t.querySelectorAll(this.totalSelector);
+		if (r.length === 0) return;
+		let i = t.querySelector(this.hostSelector);
+		if (i === null) return;
+		let a = i.getAttribute(this.names.hostMode) === "windowed";
+		if (!this.movedSince(t, i, a, r.length) && !n) return;
+		let o = a ? je(i, this.names) : null, s = a ? null : this.rows.itemsOf(i), c = this.formatting.numbers.readCulture(t), l = this.formatting.temporal.readCulture(t);
+		for (let t of r) {
+			let n = t.getAttribute(Y) ?? "", r = t.getAttribute(e.property) ?? n, u = t.getAttribute(J) ?? "", d = a ? o?.[r] ?? null : s === null ? u === "count" ? i.querySelectorAll(this.shownRowSelector).length : Pe(u, Ne(i, n, this.shownRowSelector)) : u === "count" ? s.length : Pe(u, Me(s, r, this.rows, this.formatting.numbers)), f = d === null ? "" : C(d, b(t), c, l, this.formatting);
 			t.textContent !== f && (t.textContent = f);
 		}
+	}
+	movedSince(e, t, n, r) {
+		let i = n ? null : this.rows.itemsVersion(t);
+		if (!n && i === null) return !0;
+		let a = `${i ?? ""}|${t.getAttribute(this.names.windowAggregates) ?? ""}|${e.getAttribute(this.names.tableHidden) ?? ""}|${r}`, o = this.bases.get(e);
+		return o?.host === t && o.basis === a ? !1 : (this.bases.set(e, {
+			host: t,
+			basis: a
+		}), !0);
 	}
 	queue(e) {
 		for (let t of e) this.pending.add(t);

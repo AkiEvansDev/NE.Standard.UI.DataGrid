@@ -14,6 +14,12 @@
     <ProjectReference Include="..\NE.Standard.UI.DataGrid\NE.Standard.UI.DataGrid.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>NE.Test.Standard.UI.DataGrid</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <!-- The framework is a sibling in the monorepo and a package in this slice's mirror. Either way the produced nupkg depends on
        the framework's renderers at $(CoreVersion): the grid renders through the table's renderer, not a copy of it, so it needs
        the built-in renderers rather than the foundation alone. -->

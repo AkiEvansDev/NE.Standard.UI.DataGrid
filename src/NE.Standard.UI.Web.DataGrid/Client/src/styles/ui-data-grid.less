@@ -246,10 +246,11 @@
     font-variant-numeric: tabular-nums;
 }
 
+    // Over the table's edge shades (3), which span the rows it sticks over: the totals keep their own ground, as the shades leave them.
     .ui-data-grid:is(.ui-scroll-x--auto, .ui-scroll-x--always) > .ui-table__scroll > .ui-data-grid__footer {
         position: sticky;
         bottom: 0;
-        z-index: 2;
+        z-index: 4;
         background-color: var(--ui-ground, var(--ui-color-background));
         background-image: linear-gradient(var(--ui-row-wash), var(--ui-row-wash));
     }

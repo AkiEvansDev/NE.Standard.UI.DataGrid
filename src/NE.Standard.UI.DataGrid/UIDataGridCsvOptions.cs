@@ -25,7 +25,9 @@ public sealed record UIDataGridCsvOptions
     public char Separator { get; init; } = ',';
 
     /// <summary>
-    /// Whether text a spreadsheet would run as a formula is written behind a quote; a number, a date or a flag is never touched.
+    /// Whether text a spreadsheet would run as a formula — a caption, a cell's words, a flag's or a choice's caption — is written
+    /// behind a quote, as is a would-be formula after a comma, a semicolon or a tab inside it, where a spreadsheet splitting at another
+    /// separator than <see cref="Separator"/> starts a cell; a finite negative number's own minus is never touched.
     /// </summary>
     public bool EscapeFormulas { get; init; } = true;
 }

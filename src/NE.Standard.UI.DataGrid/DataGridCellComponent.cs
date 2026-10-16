@@ -45,10 +45,11 @@ public abstract partial class DataGridCellComponent<T> : VisualComponentBase<T>
     public string? Currency { get; set; }
 
     /// <summary>
-    /// Gets or sets the captions an enum or boolean cell shows for its values.
+    /// Gets or sets the captions an enum or boolean cell shows for its values; copied when set, so the list the cells carry is the
+    /// cell's own and a caller's list changing later changes neither their text nor the captions written beside it.
     /// </summary>
     [UIComponentProperty(DefaultValue = null, IsBindable = false)]
-    public IReadOnlyList<UIChoice>? Choices { get; set; }
+    public IReadOnlyList<UIChoice>? Choices { get; set => field = value is null ? null : [.. value]; }
 }
 
 /// <summary>

@@ -720,3 +720,22 @@ test("a grid that left the page with its editor open lets the editor go, once", 
 
     assert.equal(released, 1);
 });
+
+test("an editor whose row a virtualized host keeps drawn out of range, for the focus it holds, stays open on its draft, sending nothing", () => {
+    const { grid, cell, heard } = createGrid(() => new FakeElement().append(numberField()), new CellEditAnswers(), 2);
+    const field = open(cell);
+    const host = cell.parentElement!.parentElement!;
+
+    field.value = "12";
+
+    // The reader scrolls far: the other rows go, rows far below are drawn after a spacer, the editor's row stays where it stood.
+    host.children[1].remove();
+    host.append(FakeElement.of("", { "data-ui-window-spacer": "focus" }), FakeElement.of(names.tableRowClass, { [names.key]: "r90" }).append(editableCell("Seats"), editableCell("Plan")));
+    observers.get(".ui-data-grid")!([grid]);
+
+    assert.ok(isOpen(cell));
+    assert.equal(fakeDocument.activeElement, field);
+    assert.equal(field.value, "12");
+    assert.equal(heard.sent, 0);
+    assert.equal(released, 0);
+});

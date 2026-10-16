@@ -82,6 +82,8 @@ internal sealed class ColumnsView : DataGridDemoView, IUIViewDefinition
                         .AddNumberColumn("grid-demo.column.servers", nameof(QuoteLine.Servers), "N0", UIGridUnit.Absolute(120), editable: true, configureEditor: editor => editor
                             .SetAllowDecimals(false)
                             .SetMax(100)
+                            // Required too: every other rule passes an empty value, so a cleared cell would commit.
+                            .Required("grid-demo.quote.servers-rule")
                             .Validate(UIValidationTrigger.Change, UIComparisonOperator.Greater, 0, "grid-demo.quote.servers-rule")
                         )
                         .AddMoneyColumn("grid-demo.column.price", nameof(QuoteLine.Price), "€", width: UIGridUnit.Absolute(160), editable: true, configureEditor: editor => editor
