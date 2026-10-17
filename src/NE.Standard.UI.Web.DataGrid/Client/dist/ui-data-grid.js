@@ -195,11 +195,7 @@ var h = `.${t.editableCell}`, ee = e.editor, g = e.kind, _ = e.column, v = e.rea
 	}
 	holdWindowChange(e) {
 		let t = e.target;
-		if (e.isTrusted && this.leaving !== null && t instanceof Node && this.leaving.contains(t)) {
-			e.stopPropagation();
-			return;
-		}
-		if (!this.restoring && t instanceof Element && this.refusedHere(t)) {
+		if (e.isTrusted && this.leaving !== null && t instanceof Node && this.leaving.contains(t) || !this.restoring && t instanceof Element && this.refusedHere(t)) {
 			e.stopPropagation();
 			return;
 		}
@@ -802,11 +798,7 @@ var W = `[${e.select}]`, G = `[${e.selectAll}]`, K = "input[type='checkbox']", w
 	}
 	sayChange(e) {
 		let t = this.keysOf(e);
-		if (!this.said.has(e)) {
-			this.said.set(e, t);
-			return;
-		}
-		this.said.get(e) !== t && (this.said.set(e, t), e.dispatchEvent(new Event(r.selectionChange, { bubbles: !0 })));
+		this.said.has(e) ? this.said.get(e) !== t && (this.said.set(e, t), e.dispatchEvent(new Event(r.selectionChange, { bubbles: !0 }))) : this.said.set(e, t);
 	}
 	keysOf(e) {
 		return e.querySelector(this.hostSelector)?.getAttribute(this.names.selectedKeys) ?? e.getAttribute(this.names.selectedKey);
