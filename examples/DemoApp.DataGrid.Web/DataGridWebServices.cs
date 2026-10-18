@@ -21,6 +21,6 @@ internal static class DataGridWebServices
         _ = services.AddCodeInput();
         _ = services.AddDataGrid();
         // Only the glyphs the shell wears: registering a whole Material style costs over half a megabyte of stylesheet.
-        _ = services.AddMaterialWebIcons(MaterialIconStyle.Outlined, DataGridDemoView.LightIcon, DataGridDemoView.DarkIcon, DataGridDemoView.CodeIcon, DataGridDemoView.CopyIcon);
+        _ = services.AddMaterialWebIcons(MaterialIconStyle.Outlined, [DataGridDemoView.LightIcon, DataGridDemoView.DarkIcon, DataGridDemoView.CodeIcon, DataGridDemoView.CopyIcon, .. DataGridDemoView.PageIcons]);
     }
 }

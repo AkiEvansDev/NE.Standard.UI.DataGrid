@@ -85,8 +85,6 @@ public class DataGridComponentRenderer : TableComponentRenderer
     protected const string EditableCellClassName = "ui-data-grid__cell--editable";
     protected const string DetailCellClassName = "ui-data-grid__cell--detail";
 
-    private static readonly JsonSerializerOptions RulesJsonOptions = WebWireJson.CreateOptions();
-
     public override string ComponentTypeKey => DataGridComponent.ComponentTypeKey;
 
     protected override void RenderComponent(WebRenderContext context, IHtmlElementBuilder root)
@@ -136,7 +134,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
         }
 
         if (rules is not null)
-            _ = root.Attribute(RulesAttribute, JsonSerializer.Serialize(rules, RulesJsonOptions));
+            _ = root.Attribute(RulesAttribute, JsonSerializer.Serialize(rules, WebWireJson.Options));
     }
 
     /// <summary>An editable column's editor, by its component, and the row property it writes.</summary>

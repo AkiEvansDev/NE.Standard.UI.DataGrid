@@ -56,7 +56,7 @@
     }
 
     .ui-data-grid__sort-idle {
-        opacity: 0.35;
+        opacity: @ui-offer-opacity;
         transition: opacity @ui-motion-fast @ui-motion-ease;
     }
 
@@ -70,7 +70,7 @@
 
     @media @{ui-can-hover} {
         .ui-table__header-cell[data-ui-grid-sort]@{ui-data-grid-sort-hover} > .ui-data-grid__sort-idle {
-            opacity: 0.7;
+            opacity: @ui-offer-opacity-hover;
         }
     }
 
@@ -205,17 +205,8 @@
 // A word in the primary ink, as a date picker's Clear is; disabled while nothing is set, easing into it as its wash eases out.
 .ui-data-grid__filters-clear {
     align-self: flex-end;
-    min-height: @ui-list-row-height;
-    padding: 0 @ui-space-2;
-    border: none;
-    border-radius: @ui-list-entry-radius;
-    background: transparent;
-    color: var(--ui-color-primary-ink);
-    font: inherit;
-    font-size: var(--ui-text-caption-font-size);
-    cursor: pointer;
+    .ui-word-action();
     transition: background-color @ui-motion-fast @ui-motion-ease, opacity @ui-motion-fast @ui-motion-ease;
-    .ui-interactive-base();
 }
 
     .ui-data-grid__filters-clear@{ui-button-live} {

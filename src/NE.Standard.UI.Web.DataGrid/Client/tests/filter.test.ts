@@ -6,10 +6,10 @@ import { createTerm, DataGridFilterEngine, fieldValueOf, mergeFilterTerms } from
 import type { FilterField } from "../src/data-grid-filter-engine.ts";
 import { GridAttributes, GridClasses } from "../src/data-grid-names.ts";
 import type { FilterTerm } from "../src/data-grid-query.ts";
-import { FakeElement, FakeEvent, FakeInput, fakeDocument, fakeWindow, installFakeDom, real } from "./fake-dom.ts";
+import { FakeElement, FakeEvent, FakeInput, fakeDocument, fakeWindow, fakeWindowGlobals, installFakeDom, real } from "./fake-dom.ts";
 import { readNumber } from "./framework-numbers.ts";
 
-installFakeDom();
+installFakeDom(fakeWindowGlobals);
 
 const customer: FilterField = { property: "Customer", kind: "text", bound: null };
 const region: FilterField = { property: "Region", kind: "enum", bound: null };

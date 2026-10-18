@@ -26,12 +26,15 @@ public abstract class DataGridDemoView : UIViewBase
     /// <summary>The sidebar's authored id, stable across renders.</summary>
     private const string SidebarId = "datagrid-sidebar";
 
-    private static readonly (string Route, string Label)[] Pages =
+    private static readonly (string Route, string Label, string Icon)[] Pages =
     [
-        (ColumnsRoute, "grid-demo.page.columns"),
-        (FiltersRoute, "grid-demo.page.filters"),
-        (SourceRoute, "grid-demo.page.source")
+        (ColumnsRoute, "grid-demo.page.columns", MaterialIcons.TableChart),
+        (FiltersRoute, "grid-demo.page.filters", MaterialIcons.FilterAlt),
+        (SourceRoute, "grid-demo.page.source", MaterialIcons.Database)
     ];
+
+    /// <summary>The pages' glyphs, which the host registers with the pack.</summary>
+    public static string[] PageIcons => [.. Pages.Select(static page => page.Icon)];
 
     /// <summary>The title band and the sidebar stand, the sidebar from the top of the page; the content scrolls by itself.</summary>
     public override UIViewOptions Options { get; } = new() { StickyHeader = true, ScrollContentOnly = true, ShellLayout = UIShellLayout.FullHeightSides };
@@ -55,7 +58,7 @@ public abstract class DataGridDemoView : UIViewBase
         MenuItem[] entries = new MenuItem[Pages.Length];
 
         for (var i = 0; i < Pages.Length; i++)
-            entries[i] = new MenuItem { Id = Pages[i].Route, Title = Pages[i].Label, Url = Pages[i].Route, Selected = Pages[i].Route == Route };
+            entries[i] = new MenuItem { Id = Pages[i].Route, Title = Pages[i].Label, Icon = MaterialIcons.Outlined(Pages[i].Icon), Url = Pages[i].Route, Selected = Pages[i].Route == Route };
 
         // The width sits on the menu, not the container.
         return new ContainerComponent()

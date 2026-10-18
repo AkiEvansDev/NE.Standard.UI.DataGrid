@@ -5,10 +5,10 @@ import type { PluginEngineContext } from "ne-standard-ui";
 import type { CellFormatting } from "../src/data-grid-cell.ts";
 import { aggregateOf, DataGridTotalsEngine } from "../src/data-grid-totals-engine.ts";
 import { GridAttributes, GridClasses } from "../src/data-grid-names.ts";
-import { FakeElement, fakeDocument, installFakeDom, real } from "./fake-dom.ts";
+import { FakeElement, fakeDocument, fakeWindowGlobals, installFakeDom, real } from "./fake-dom.ts";
 
 // A pass is run as soon as it is asked for, where the page would wait for the next frame.
-installFakeDom({ CSS: { escape: (text: string): string => text }, requestAnimationFrame: (callback: () => void) => callback() });
+installFakeDom({ ...fakeWindowGlobals, CSS: { escape: (text: string): string => text }, requestAnimationFrame: (callback: () => void) => callback() });
 
 test("a total is one number over the values, and a count stands even over none", () => {
     assert.equal(aggregateOf("sum", [1, 2, 3.5]), 6.5);

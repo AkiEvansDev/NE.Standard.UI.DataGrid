@@ -72,7 +72,7 @@ test("a sortable caption's wash and an off box's pointer read the engines' marks
 });
 
 test("a committed editor standing over its cell wears the cursor's frame the hidden cell would", () => {
-    assert.match(css, /\.ui-data-grid__cell--editing\[data-ui-cell-focus\] \+ \.ui-data-grid__editor \{\s*outline: 2px solid var\(--ui-color-primary-ink\);/);
+    assert.match(css, /\.ui-data-grid__cell--editing\[data-ui-cell-focus\] \+ \.ui-data-grid__editor \{\s*outline: 2px solid var\(--ui-mark-keyboard\);/);
 });
 
 test("a verdict's edge outranks the box's own transparent edge, in the severity's ink", () => {

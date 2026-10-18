@@ -4,7 +4,7 @@ import test from "node:test";
 import type { PluginEngineContext } from "ne-standard-ui";
 import { DataGridDetailEngine } from "../src/data-grid-detail-engine.ts";
 import { ClientNames, GridAttributes, GridClasses } from "../src/data-grid-names.ts";
-import { FakeElement, FakeEvent, FakeKeyboardEvent, fakeDocument, fakeWindow, installFakeDom, real } from "./fake-dom.ts";
+import { FakeElement, FakeEvent, FakeKeyboardEvent, fakeDocument, fakeWindow, fakeWindowGlobals, installFakeDom, real } from "./fake-dom.ts";
 
 /** A click as the browser counts it: the first of a double click is 1, the second 2. */
 class FakeMouseEvent extends FakeEvent {
@@ -16,7 +16,7 @@ class FakeMouseEvent extends FakeEvent {
     }
 }
 
-installFakeDom({ MouseEvent: FakeMouseEvent });
+installFakeDom({ ...fakeWindowGlobals, MouseEvent: FakeMouseEvent });
 
 const names = {
     componentId: "data-ui-id",

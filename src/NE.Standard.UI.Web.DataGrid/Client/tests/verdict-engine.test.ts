@@ -8,9 +8,9 @@ import test from "node:test";
 import type { PluginEngineContext } from "ne-standard-ui";
 import { DataGridVerdictEngine, readRules } from "../src/data-grid-verdict-engine.ts";
 import { ClientNames } from "../src/data-grid-names.ts";
-import { FakeElement, fakeDocument, installFakeDom, real } from "./fake-dom.ts";
+import { FakeElement, fakeDocument, fakeWindowGlobals, installFakeDom, real } from "./fake-dom.ts";
 
-installFakeDom();
+installFakeDom(fakeWindowGlobals);
 
 const names = {
     itemsHost: "data-ui-items-host",

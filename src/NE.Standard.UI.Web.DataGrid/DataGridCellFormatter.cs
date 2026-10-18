@@ -116,15 +116,11 @@ public static class DataGridCellFormatter
     /// </summary>
     private static void ReadAsThePage(decimal number, bool exactDigits, out decimal? exact, out double real)
     {
-        var trimmed = WithoutTrailingZeros(number);
+        var trimmed = WebNumberFormat.WithoutTrailingZeros(number);
 
         exact = exactDigits || HasFewDigits(trimmed) ? trimmed : null;
         real = exact is null ? UIScriptNumber.Read(trimmed) : 0;
     }
-
-    /// <summary>A decimal at the least scale that holds it, divided by one written at the widest scale: 1.500 is 1.5, as the page reads it.</summary>
-    private static decimal WithoutTrailingZeros(decimal number)
-        => number / 1.0000000000000000000000000000m;
 
     /// <summary>Whether a decimal has at most fifteen significant digits: its unscaled integer under 10^15.</summary>
     private static bool HasFewDigits(decimal number)
@@ -136,19 +132,16 @@ public static class DataGridCellFormatter
     }
 
     /// <summary>
-    /// A value as the client's cell writes it: a flag in the wire's own words rather than .NET's <c>True</c>, a number as the page's
-    /// <c>String()</c> writes it (<see cref="UIScriptNumber"/>), never in the page's culture (<c>12.5</c>, not <c>12,5</c>; <c>1e+21</c>);
-    /// a decimal or an integer in its own digits where <paramref name="exactDigits"/> asks for them.
+    /// A value as the client's cell writes it, the page's <c>String()</c> (<see cref="UIScriptText"/>): a flag in the wire's own words
+    /// rather than .NET's <c>True</c>, a number never in the page's culture (<c>12.5</c>, not <c>12,5</c>; <c>1e+21</c>); a decimal or
+    /// an integer in its own digits where <paramref name="exactDigits"/> asks for them.
     /// </summary>
     private static string AsText(object value, bool exactDigits)
         => value switch
         {
-            string text => text,
-            bool flag => flag ? "true" : "false",
-            decimal number when exactDigits => WithoutTrailingZeros(number).ToString(CultureInfo.InvariantCulture),
+            decimal number when exactDigits => WebNumberFormat.WithoutTrailingZeros(number).ToString(CultureInfo.InvariantCulture),
             int or long or short or byte or sbyte or uint or ulong or ushort when exactDigits => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
-            _ when UIScriptNumber.TryRead(value, out var number) => UIScriptNumber.Format(number),
-            _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty
+            _ => UIScriptText.Of(value)
         };
 
     /// <summary>A moment in any of its shapes; a text by the wall clock it is written with.</summary>

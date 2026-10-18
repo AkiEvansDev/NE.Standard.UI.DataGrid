@@ -7,9 +7,9 @@ import test from "node:test";
 import type { PluginEngineContext } from "ne-standard-ui";
 import { DataGridSortEngine } from "../src/data-grid-sort-engine.ts";
 import { GridAttributes } from "../src/data-grid-names.ts";
-import { FakeElement, FakeKeyboardEvent, fakeDocument, fakeWindow, installFakeDom, real } from "./fake-dom.ts";
+import { FakeElement, FakeKeyboardEvent, fakeDocument, fakeWindow, fakeWindowGlobals, installFakeDom, real } from "./fake-dom.ts";
 
-installFakeDom();
+installFakeDom(fakeWindowGlobals);
 
 const names = {
     itemsQuery: "data-ui-items-query",

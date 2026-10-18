@@ -41,9 +41,7 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
     /// <summary>On a date cell: the moment as the wire writes it, so a language switch writes the date again in the page's new names.</summary>
     public const string MomentAttribute = "data-ui-grid-moment";
 
-    private static readonly JsonSerializerOptions ChoicesJsonOptions = WebWireJson.CreateOptions();
-
-    // By name: a page's culture is the read-only one `CultureInfo.GetCultureInfo` keeps for it (`WebCultures.Resolve`).
+    // By name: a page's culture is the read-only one `CultureInfo.GetCultureInfo` keeps for it (`UICultures.Resolve`).
     private static readonly ConcurrentDictionary<string, DataGridCulturePacks> PacksByCulture = new(StringComparer.Ordinal);
 
     // By the list itself, held weakly: every cell of a column carries its one list — the cell's own copy, which nothing changes
@@ -101,7 +99,7 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
 
     /// <summary>A column's choices as the attribute writes them, serialized once for every cell of the column.</summary>
     internal static string ChoicesJson(IReadOnlyList<UIChoice> choices)
-        => ChoicesJsonByList.GetValue(choices, static list => JsonSerializer.Serialize(CaptionsByValue(list), ChoicesJsonOptions));
+        => ChoicesJsonByList.GetValue(choices, static list => JsonSerializer.Serialize(CaptionsByValue(list), WebWireJson.Options));
 
     private static Dictionary<string, string> CaptionsByValue(IReadOnlyList<UIChoice> choices)
     {

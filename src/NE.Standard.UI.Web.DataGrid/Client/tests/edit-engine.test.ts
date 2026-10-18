@@ -4,9 +4,9 @@ import test from "node:test";
 import type { PluginEngineContext } from "ne-standard-ui";
 import { CellEditAnswers, DataGridEditEngine } from "../src/data-grid-edit-engine.ts";
 import { ClientNames, GridEvents } from "../src/data-grid-names.ts";
-import { FakeElement, FakeEvent, FakeInput, FakeKeyboardEvent, fakeDocument, fakeWindow, installFakeDom, real } from "./fake-dom.ts";
+import { FakeElement, FakeEvent, FakeInput, FakeKeyboardEvent, fakeDocument, fakeWindow, fakeWindowGlobals, installFakeDom, real } from "./fake-dom.ts";
 
-installFakeDom({ CSS: { escape: (text: string): string => text } });
+installFakeDom({ ...fakeWindowGlobals, CSS: { escape: (text: string): string => text } });
 
 const names = {
     componentId: "data-ui-id",
