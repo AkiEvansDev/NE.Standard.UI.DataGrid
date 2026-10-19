@@ -90,8 +90,9 @@ short one (`AP`, `SPD`) still says what the icon shows:
 A caption is a word, looked up like any other and judged by the Development unkeyed report once, at its column — the chooser's
 entry and the filter's caption repeat it and are not reported again. A caption that is a name in every language (`AP`, `SPD`) is
 content: `content: true` on its helper (`UITableColumn.IsContent`), or `AsContent(DataGridComponent.ColumnsProperty)` on the grid
-for all of them. It is then shown as written in the header, the sort name, the chooser and its filter, and never reported; the
-cells' templates are still inspected, as `AsContentTree()` would not leave them. A CSV's header row keeps a column's own
+for all of them. A caption written as text is then shown as written in the header, the sort name, the chooser and its filter, and
+never reported; one given as a key (`UIPhrase.Of`) stays a key and is translated all the same, since content marks words that are
+no key. The cells' templates are still inspected, as `AsContentTree()` would not leave them. A CSV's header row keeps a column's own
 `IsContent` caption as written; the writer is handed the columns, not the grid, so the grid-wide mark does not reach it.
 
 ### Template columns
@@ -143,8 +144,8 @@ choices)`, by the property its `sortPath` names. The filters stand behind a **Fi
 header — a flyout with a captioned filter per column, a **Clear filters** button under them that empties them all, and
 a count of the ones in use on the button.
 `SetSearch(propertyPath)` adds a search box to the band that matches one property as text, its placeholder the page's
-"Search" (`ui.grid.search`) unless `SetSearchPlaceholder(text)` names another — a key or a text, before or after
-`SetSearch`. The band is a row of
+"Search" (`ui.grid.search`) unless `SetSearchPlaceholder(text)` names another — a phrase, a key with its arguments or a text,
+before or after `SetSearch`. The band is a row of
 controls: the box is a field of the page's own shape and the two buttons take the same ground, height and corner, and the
 field's states — the edge under the pointer, and the active edge while the keyboard is on one or its flyout is open. A key
 pressed in the band, a flyout or the header is that control's own: the grid's cell cursor, and the Enter, F2 or character that
@@ -228,7 +229,9 @@ off. `new UIDataGridCsvOptions
 { Format = DataGridCellFormatter.AsCsvFormat(culture, translate), Translate = … }` writes what the cells show instead, through
 the same formatter they use, but for a number's digits: the file keeps its own where a cell past fifteen shows the page's double
 — the writer is the component package's, so a controller can call it, and the formatter is the web
-package's. `Translate` turns the captions into the page's words (a content column's stays as written) and the formatter's own translator the choices; without one, a
+package's. `Translate` (a `Func<UIPhrase, string>`, a controller's `Context.Translate`) turns the captions into the page's words (a
+content column's text stays as written, a key without a translator is written as its key) and the formatter's own translator the
+choices; without one, a
 boolean that would write one of the grid's keys writes `true` or `false`. `Separator` is a comma unless set — a semicolon suits
 a culture that writes its decimals with a comma. `WriteBytes` puts a byte-order mark
 in front, which is what a spreadsheet needs to read the file as UTF-8.

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using NE.Standard.UI.Components.BuiltIns.Templates;
 
 namespace DemoApp.DataGrid;
 
@@ -157,7 +156,7 @@ internal static class SubscriptionGrid
             _ => Convert.ToString(subscription.ValueOf(column), culture)
         };
 
-        return UIPhrase.Of("grid-demo.edited", ("number", subscription.Number), ("column", shown?.Caption is { } caption ? new UIPhrase(caption) : UIPhrase.Text(column)), ("value", value));
+        return UIPhrase.Of("grid-demo.edited", ("number", subscription.Number), ("column", shown?.Caption is { } caption ? caption : UIPhrase.Text(column)), ("value", value));
     }
 
     internal static CultureInfo CultureOf(string language)
@@ -173,5 +172,5 @@ internal static class SubscriptionGrid
     }
 
     private static UIPhrase? CaptionOf(IReadOnlyList<UIChoice> choices, string value)
-        => choices.FirstOrDefault(choice => choice.Value == value) is { } choice ? new UIPhrase(choice.Caption) : null;
+        => choices.FirstOrDefault(choice => choice.Value == value)?.Caption;
 }

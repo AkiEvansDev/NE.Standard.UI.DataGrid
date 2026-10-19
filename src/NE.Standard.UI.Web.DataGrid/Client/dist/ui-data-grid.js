@@ -430,11 +430,11 @@ function C(e, t, n, r, a) {
 		}
 		case "boolean": {
 			let n = S(e), r = t.choices?.[n ? "true" : "false"];
-			return r === void 0 ? a.strings.text(n ? i.yes : i.no) : a.strings.resolveText(r);
+			return r === void 0 ? a.strings.text(n ? i.yes : i.no) : a.strings.resolve(r);
 		}
 		case "enum": {
 			let n = String(e), r = t.choices?.[n];
-			return r === void 0 ? n : a.strings.resolveText(r);
+			return r === void 0 ? n : a.strings.resolve(r);
 		}
 		default: return String(e);
 	}

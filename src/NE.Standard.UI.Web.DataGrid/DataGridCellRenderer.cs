@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.DataGrid;
+using NE.Standard.UI.Primitives.Localization;
 using NE.Standard.UI.Web.Abstractions.Html;
 using NE.Standard.UI.Web.Abstractions.Rendering;
 using NE.Standard.UI.Web.Renderers.Foundation;
@@ -101,12 +102,13 @@ public sealed class DataGridCellRenderer : WebComponentRendererBase
     internal static string ChoicesJson(IReadOnlyList<UIChoice> choices)
         => ChoicesJsonByList.GetValue(choices, static list => JsonSerializer.Serialize(CaptionsByValue(list), WebWireJson.Options));
 
-    private static Dictionary<string, string> CaptionsByValue(IReadOnlyList<UIChoice> choices)
+    /// <summary>Each caption by its value: an author's text as the plain string the page looks up, a key as its phrase, arguments and all.</summary>
+    private static Dictionary<string, object> CaptionsByValue(IReadOnlyList<UIChoice> choices)
     {
-        Dictionary<string, string> captions = new(choices.Count, StringComparer.Ordinal);
+        Dictionary<string, object> captions = new(choices.Count, StringComparer.Ordinal);
 
         for (var i = 0; i < choices.Count; i++)
-            captions[choices[i].Value] = choices[i].Caption;
+            captions[choices[i].Value] = UIPhrase.AsValue(choices[i].Caption)!;
 
         return captions;
     }

@@ -39,7 +39,14 @@ const { temporalFormatting } = await import(pathToFileURL(resolve(frameworkRende
 const formatting: CellFormatting = {
     numbers: numberFormatting,
     temporal: temporalFormatting,
-    strings: { text: key => key, format: key => key, resolveText: text => text, write: () => undefined, onChange: () => () => undefined }
+    strings: {
+        text: key => key,
+        format: key => key,
+        resolveText: text => text,
+        resolve: words => (typeof words === "string" ? words : "text" in words ? words.text : words.key),
+        write: () => undefined,
+        onChange: () => () => undefined
+    }
 };
 
 assert.ok(corpus.cases.length > 0, "The data grid cell corpus is empty.");
@@ -58,7 +65,7 @@ test("a flag's or a choice's caption comes as the author wrote it and shows in t
     const words: Readonly<Record<string, string>> = { Paid: "已付", "ui.grid.no": "否" };
     const translated: CellFormatting = {
         ...formatting,
-        strings: { ...formatting.strings, text: key => words[key] ?? key, resolveText: text => words[text] ?? text }
+        strings: { ...formatting.strings, text: key => words[key] ?? key, resolve: value => (typeof value === "string" ? words[value] ?? value : "") }
     };
     const flag = { kind: "boolean", format: null, currency: null, choices: { true: "Paid" } };
     const choice = { kind: "enum", format: null, currency: null, choices: { Paid: "Paid", Open: "Open" } };
@@ -68,6 +75,20 @@ test("a flag's or a choice's caption comes as the author wrote it and shows in t
     assert.equal(formatCellValue("Paid", choice, corpus.numberCulture, corpus.temporalCulture, translated), "已付");
     assert.equal(formatCellValue("Open", choice, corpus.numberCulture, corpus.temporalCulture, translated), "Open");
     assert.equal(formatCellValue("Closed", choice, corpus.numberCulture, corpus.temporalCulture, translated), "Closed");
+});
+
+test("a choice's caption reaches the page's words as the server wrote it: a key with its arguments, an author's text in either shape", () => {
+    const seen: string[] = [];
+    const translated: CellFormatting = {
+        ...formatting,
+        strings: { ...formatting.strings, resolve: words => { seen.push(JSON.stringify(words)); return "words"; } }
+    };
+    const choice = { kind: "enum", format: null, currency: null, choices: { Late: { key: "orders.late", args: { days: 3 } }, Open: { text: "Open" }, Paid: "Paid" } };
+
+    assert.equal(formatCellValue("Late", choice, corpus.numberCulture, corpus.temporalCulture, translated), "words");
+    assert.equal(formatCellValue("Open", choice, corpus.numberCulture, corpus.temporalCulture, translated), "words");
+    assert.equal(formatCellValue("Paid", choice, corpus.numberCulture, corpus.temporalCulture, translated), "words");
+    assert.deepEqual(seen, ["{\"key\":\"orders.late\",\"args\":{\"days\":3}}", "{\"text\":\"Open\"}", "\"Paid\""]);
 });
 
 test("a language switch draws a number and a date cell again in the packs written on the grid, from the value each keeps", () => {

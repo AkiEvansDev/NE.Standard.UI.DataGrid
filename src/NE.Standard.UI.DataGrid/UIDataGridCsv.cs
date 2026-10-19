@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.Compiled.Resolution;
+using NE.Standard.UI.Primitives.Localization;
 using NE.Standard.UI.Primitives.Text;
 
 namespace NE.Standard.UI.DataGrid;
@@ -85,15 +86,18 @@ public static class UIDataGridCsv
             _ => null
         };
 
-    /// <summary>The column's caption, else the name the grid calls a column with none by; a content caption stays as written.</summary>
+    /// <summary>
+    /// The column's caption, else the name the grid calls a column with none by; a content caption stays as written, and a key with no
+    /// translator is written as the key.
+    /// </summary>
     private static string Caption(UITableColumn column, UIDataGridCsvOptions settings)
     {
-        if (!string.IsNullOrEmpty(column.Caption) && column.IsContent)
-            return column.Caption;
+        if (column.HasCaption && column.Caption is { IsText: true } content && column.IsContent)
+            return content.Key;
 
-        var caption = !string.IsNullOrEmpty(column.Caption) ? column.Caption : column is UIDataGridColumn typed ? typed.FallbackCaption : column.Key;
+        UIPhrase caption = column.HasCaption && column.Caption is { } words ? words : UIPhrase.Text(column is UIDataGridColumn typed ? typed.FallbackCaption : column.Key);
 
-        return settings.Translate is null ? caption : settings.Translate(caption);
+        return settings.Translate is null ? caption.Key : settings.Translate(caption);
     }
 
     /// <summary>

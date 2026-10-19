@@ -70,7 +70,7 @@ internal sealed partial class ColumnsController : UIControllerBase
     [UICommand]
     public async Task ExportAsync(CancellationToken cancellationToken)
     {
-        var content = UIDataGridCsv.WriteBytes(SubscriptionGrid.ExportColumns, Subscriptions, new UIDataGridCsvOptions { Translate = caption => Context.Translate(caption) ?? caption });
+        var content = UIDataGridCsv.WriteBytes(SubscriptionGrid.ExportColumns, Subscriptions, new UIDataGridCsvOptions { Translate = Context.Translate });
 
         _ = await Context.Downloads
             .DownloadAsync(Context.Handle, "subscriptions.csv", "text/csv", content, cancellationToken)

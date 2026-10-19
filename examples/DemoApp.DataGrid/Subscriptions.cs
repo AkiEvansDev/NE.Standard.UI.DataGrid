@@ -58,7 +58,7 @@ internal sealed partial class PlanPrice : RecursiveObservable, IBindableItem
     public string Id { get; init; } = string.Empty;
 
     [RecursiveMember]
-    public partial string Plan { get; set; } = string.Empty;
+    public partial UIPhrase? Plan { get; set; }
 
     /// <summary>The price as the list writes it, the euro sign before the number: the same in every language.</summary>
     [RecursiveMember]
@@ -175,7 +175,7 @@ internal sealed partial class Subscription(SubscriptionRecord record) : Recursiv
 
     /// <summary>The status as a badge reads it: its caption's key and its colour, kept in step with <see cref="Status"/> by <see cref="Refresh"/>.</summary>
     [RecursiveMember]
-    public partial string StatusCaption { get; set; } = CaptionOf(record.Status);
+    public partial UIPhrase StatusCaption { get; set; } = CaptionOf(record.Status);
 
     [RecursiveMember]
     public partial UIBadgeType StatusStyle { get; set; } = StyleOf(record.Status);
@@ -205,8 +205,8 @@ internal sealed partial class Subscription(SubscriptionRecord record) : Recursiv
         SearchText = ToRecord().SearchText;
     }
 
-    private static string CaptionOf(SubscriptionStatus status)
-        => SubscriptionChoices.Statuses.FirstOrDefault(choice => choice.Value == status.ToString())?.Caption ?? status.ToString();
+    private static UIPhrase CaptionOf(SubscriptionStatus status)
+        => SubscriptionChoices.Statuses.FirstOrDefault(choice => choice.Value == status.ToString())?.Caption ?? UIPhrase.Text(status.ToString());
 
     private static UIBadgeType StyleOf(SubscriptionStatus status)
         => status switch

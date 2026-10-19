@@ -1,7 +1,7 @@
 // A typed cell's value as text: the client half of DataGridCellFormatter, over the framework's formatters, so a row built here
 // reads like one painted on the server.
 
-import type { ClientStrings, NumberCulturePack, NumberFormatting, TemporalCulturePack, TemporalFormatting } from "ne-standard-ui";
+import type { ClientStrings, NumberCulturePack, NumberFormatting, TemporalCulturePack, TemporalFormatting, WrittenWords } from "ne-standard-ui";
 import { GridAttributes, GridWords } from "./data-grid-names.ts";
 
 export type CellFormatting = {
@@ -15,7 +15,8 @@ export type CellShape = {
     readonly kind: string;
     readonly format: string | null;
     readonly currency: string | null;
-    readonly choices: Readonly<Record<string, string>> | null;
+    /** Each choice's caption by its value, as the server writes it: an author's text as a plain string, a key as its phrase. */
+    readonly choices: Readonly<Record<string, WrittenWords>> | null;
 };
 
 export function readCellShape(cell: Element): CellShape {
@@ -27,12 +28,12 @@ export function readCellShape(cell: Element): CellShape {
     };
 }
 
-function parseChoices(text: string | null): Readonly<Record<string, string>> | null {
+function parseChoices(text: string | null): Readonly<Record<string, WrittenWords>> | null {
     if (text === null || text.length === 0)
         return null;
 
     try {
-        return JSON.parse(text) as Record<string, string>;
+        return JSON.parse(text) as Record<string, WrittenWords>;
     }
     catch {
         return null;
@@ -123,17 +124,17 @@ export function formatCellValue(value: unknown, shape: CellShape, numbers: Numbe
             return moment === null ? String(value) : formatting.temporal.format(moment, shape.format, dates);
         }
         case "boolean": {
-            // The captions are keyed by the two words; they come as the author wrote them, and are the page's words once looked up.
+            // The captions are keyed by the two words; they come as the author wrote them, and are the page's words once looked up or filled.
             const flag = isTrue(value);
             const caption = shape.choices?.[flag ? "true" : "false"];
 
-            return caption === undefined ? formatting.strings.text(flag ? GridWords.yes : GridWords.no) : formatting.strings.resolveText(caption);
+            return caption === undefined ? formatting.strings.text(flag ? GridWords.yes : GridWords.no) : formatting.strings.resolve(caption);
         }
         case "enum": {
             const text = String(value);
             const caption = shape.choices?.[text];
 
-            return caption === undefined ? text : formatting.strings.resolveText(caption);
+            return caption === undefined ? text : formatting.strings.resolve(caption);
         }
         default:
             return String(value);

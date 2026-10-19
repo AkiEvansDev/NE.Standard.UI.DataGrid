@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.DataGrid;
+using NE.Standard.UI.Primitives.Localization;
 using NE.Standard.UI.Primitives.Text;
 using NE.Standard.UI.Web.Abstractions.Theming;
 
@@ -14,11 +15,15 @@ namespace NE.Standard.UI.Web.DataGrid;
 /// </summary>
 public static class DataGridCellFormatter
 {
+    // A flag's two words, made once rather than once a cell.
+    private static readonly UIPhrase YesPhrase = UIPhrase.Of(DataGridStrings.Yes);
+    private static readonly UIPhrase NoPhrase = UIPhrase.Of(DataGridStrings.No);
+
     /// <summary>
     /// A <see cref="UIDataGridCsvOptions.Format"/> writing cells as the grid shows them, a number in the server's own digits — the page's
     /// double would round an id past 2^53; without a translator a flag writes its plain value rather than one of the grid's keys.
     /// </summary>
-    public static Func<object, UIDataGridColumn, string?> AsCsvFormat(CultureInfo culture, Func<string, string>? translate)
+    public static Func<object, UIDataGridColumn, string?> AsCsvFormat(CultureInfo culture, Func<UIPhrase, string>? translate)
     {
         ArgumentNullException.ThrowIfNull(culture);
 
@@ -30,14 +35,14 @@ public static class DataGridCellFormatter
 
         return (value, column) =>
         {
-            var text = Format(value, column.Kind, column.Format, column.Currency, column.Choices, packs, static text => text, exactDigits: true);
+            var text = Format(value, column.Kind, column.Format, column.Currency, column.Choices, packs, static words => words.Key, exactDigits: true);
 
             return column.Kind == UIDataGridColumnKind.Boolean && text is DataGridStrings.Yes or DataGridStrings.No ? null : text;
         };
     }
 
     /// <summary>A cell's value as the text its column's kind writes: a number under its format, a date under its pattern, a flag or a choice by its caption.</summary>
-    public static string Format(object? value, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, CultureInfo culture, Func<string, string> translate)
+    public static string Format(object? value, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, CultureInfo culture, Func<UIPhrase, string> translate)
     {
         ArgumentNullException.ThrowIfNull(culture);
 
@@ -45,14 +50,14 @@ public static class DataGridCellFormatter
     }
 
     /// <summary>A cell's text over its culture's packs as they were built for many cells — a page's culture, a file's.</summary>
-    internal static string Format(object? value, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, DataGridCulturePacks packs, Func<string, string> translate)
+    internal static string Format(object? value, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, DataGridCulturePacks packs, Func<UIPhrase, string> translate)
         => Format(value, kind, format, currency, choices, packs, translate, exactDigits: false);
 
     /// <summary>
     /// A cell's text, a decimal or an integer in its own digits where <paramref name="exactDigits"/> asks for them, as a file keeps
     /// them, else in those of the double the page holds.
     /// </summary>
-    private static string Format(object? value, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, DataGridCulturePacks packs, Func<string, string> translate, bool exactDigits)
+    private static string Format(object? value, UIDataGridColumnKind kind, string? format, string? currency, IReadOnlyList<UIChoice>? choices, DataGridCulturePacks packs, Func<UIPhrase, string> translate, bool exactDigits)
     {
         ArgumentNullException.ThrowIfNull(packs);
         ArgumentNullException.ThrowIfNull(translate);
@@ -169,19 +174,19 @@ public static class DataGridCellFormatter
     }
 
     /// <summary>A flag by its caption: a text says true in any case, anything else is false, and the captions are keyed by the two words.</summary>
-    private static string FormatBoolean(object value, IReadOnlyList<UIChoice>? choices, Func<string, string> translate)
+    private static string FormatBoolean(object value, IReadOnlyList<UIChoice>? choices, Func<UIPhrase, string> translate)
     {
         var flag = IsTrue(value);
 
         return FindChoice(choices, flag ? "true" : "false") is { } caption
             ? translate(caption)
-            : translate(flag ? DataGridStrings.Yes : DataGridStrings.No);
+            : translate(flag ? YesPhrase : NoPhrase);
     }
 
     private static bool IsTrue(object value)
         => value is bool truth ? truth : string.Equals(AsText(value, exactDigits: false), "true", StringComparison.OrdinalIgnoreCase);
 
-    private static string? FindChoice(IReadOnlyList<UIChoice>? choices, string value)
+    private static UIPhrase? FindChoice(IReadOnlyList<UIChoice>? choices, string value)
     {
         if (choices is null)
             return null;
@@ -195,7 +200,7 @@ public static class DataGridCellFormatter
         return null;
     }
 
-    private static string FormatChoice(string text, IReadOnlyList<UIChoice>? choices, Func<string, string> translate)
+    private static string FormatChoice(string text, IReadOnlyList<UIChoice>? choices, Func<UIPhrase, string> translate)
         => FindChoice(choices, text) is { } caption ? translate(caption) : text;
 
     /// <summary>A flag's or a choice's value as its choices are keyed — <c>true</c>/<c>false</c>, or the value's text; null for any other kind.</summary>

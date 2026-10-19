@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.Abstractions.Styling;
+using NE.Standard.UI.Primitives.Localization;
 using NE.Standard.UI.Primitives.Styling;
 using NE.Standard.UI.Primitives.Text;
 
@@ -10,7 +11,7 @@ namespace NE.Standard.UI.DataGrid;
 /// A grid's column: the table's key, caption, track and alignment, plus the value's kind and format, the row properties it reads
 /// and sorts by, and whether its cells edit.
 /// </summary>
-public record UIDataGridColumn(string Key, string? Caption, UIGridUnit Width, UITextAlignment? Alignment = null) : UITableColumn(Key, Caption, Width, Alignment)
+public record UIDataGridColumn(string Key, UIPhrase? Caption, UIGridUnit Width, UITextAlignment? Alignment = null) : UITableColumn(Key, Caption, Width, Alignment)
 {
     /// <summary>The prefix an editable column's editor variant is keyed under.</summary>
     public const string EditTemplatePrefix = "edit";

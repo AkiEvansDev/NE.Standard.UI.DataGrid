@@ -272,11 +272,11 @@ public class DataGridComponentRenderer : TableComponentRenderer
 
         if (column is UIDataGridColumn { Sortable: true, EffectiveSortPath: { } sortPath } typed)
         {
-            // The author's text, looked up as the caption beside it is — or, content, set in as it stands; a column with none is
-            // named by what it sorts, in words.
-            var caption = string.IsNullOrEmpty(column.Caption)
+            // The caption, looked up as the one beside it is — or, an author's text that is content, set in as it stands; a column with
+            // none is named by what it sorts, in words.
+            var caption = !column.HasCaption || column.Caption is not { } words
                 ? UIPhrase.Text(typed.FallbackCaption)
-                : IsContentCaption(context, column) ? (object)column.Caption : UIPhrase.Text(column.Caption);
+                : words.IsText && IsContentCaption(context, column) ? (object)words.Key : words;
 
             _ = cell.Attribute(SortAttribute, sortPath);
             // Focusable, but no stop of the Tab order: the grid is the one stop, and its header is reached by Up from the first row.
