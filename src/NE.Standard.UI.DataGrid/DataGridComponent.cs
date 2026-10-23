@@ -374,23 +374,24 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IRegionC
         if (IsContentCaption(column))
             _ = filter.AsContent(DataGridFilterComponent.CaptionProperty);
 
+        // Every filter field clears by its own cross; a date's placeholder is the format it is typed in, so it takes no word.
         _ = column.FilterKind switch
         {
             UIDataGridColumnKind.Number or UIDataGridColumnKind.Money => filter
-                .AddChild(new NumberInputComponent().SetPlaceholder(UIDataGridWords.From))
-                .AddChild(new NumberInputComponent().SetPlaceholder(UIDataGridWords.To)),
-            UIDataGridColumnKind.Date => filter.AddChild(new DateInputComponent()).AddChild(new DateInputComponent()),
+                .AddChild(new NumberInputComponent().SetPlaceholder(UIDataGridWords.From).SetShowClearButton())
+                .AddChild(new NumberInputComponent().SetPlaceholder(UIDataGridWords.To).SetShowClearButton()),
+            UIDataGridColumnKind.Date => filter.AddChild(new DateInputComponent().SetShowClearButton()).AddChild(new DateInputComponent().SetShowClearButton()),
             UIDataGridColumnKind.Boolean => filter.AddChild(new SelectComponent()
                 .SetOptions(CreateOptions(column.Choices ?? UIChoices.Boolean(UIDataGridWords.Yes, UIDataGridWords.No)))
                 .SetPlaceholder(UIDataGridWords.Any)
-                .SetShowClearButton(true)
+                .SetShowClearButton()
             ),
             UIDataGridColumnKind.Enum => filter.AddChild(new SelectComponent()
                 .SetOptions(CreateOptions(column.Choices))
                 .SetPlaceholder(UIDataGridWords.Any)
-                .SetShowClearButton(true)
+                .SetShowClearButton()
             ),
-            _ => filter.AddChild(new TextInputComponent().SetPlaceholder(UIDataGridWords.Filter).SetShowClearButton(true).SetDebounceMilliseconds(300))
+            _ => filter.AddChild(new TextInputComponent().SetPlaceholder(UIDataGridWords.Filter).SetShowClearButton().SetDebounceMilliseconds(300))
         };
 
         _regions[column.FilterRegionName] = filter;
