@@ -20,7 +20,7 @@ internal static class SubscriptionGrid
     /// over the header, <paramref name="totals"/> puts a footer of totals under the rows, and <paramref name="prices"/> gives a
     /// row's detail a table of its own, the plans' price list. With the band, the start date starts hidden, for the chooser to show.
     /// </summary>
-    public static DataGridComponent Create(string? id = null, bool wide = false, bool band = false, bool totals = false, bool prices = false)
+    public static DataGridComponent Create(string? id = null, bool wide = false, bool band = false, bool chooser = false, bool totals = false, bool prices = false)
     {
         // A column's width is its floor and its share (TableComponentRenderer): the floors add up to the width a grid needs, the wide
         // grid's past the page and the others' past a phone or a half-width column. A box narrower than that sum scrolls sideways.
@@ -35,55 +35,54 @@ internal static class SubscriptionGrid
             // The chevron that opens a row's detail, first in the row and pinned with the columns that are.
             .AddDetailColumn(pinned: wide)
             // A code-like caption, the same in every language: content, shown as written in the header, the chooser, the filter and a CSV.
-            .AddTextColumn("ID", nameof(Subscription.Number), sortable: true, UIGridUnit.Absolute(140), filterable: band, aggregate: Count(totals), pinned: wide, content: true)
+            .AddTextColumn<Subscription>("ID", s => s.Number, sortable: true, UIGridUnit.Absolute(140), filterable: band, aggregate: Count(totals), pinned: wide, content: true)
             // A template column: two lines of text bound to the row, sorted by the customer's name, edited in a search the author bound —
             // any input is an editor, and a search over the known customers is what a cell like this wants.
             .AddEditableColumn("grid-demo.column.customer", new DefaultTextTemplate()
-                .BindTitle(nameof(Subscription.Customer), UIBindingScope.Relative)
-                .BindDescription(nameof(Subscription.Country), UIBindingScope.Relative),
+                .BindTitle<Subscription>(s => s.Customer, UIBindingScope.Relative)
+                .BindDescription<Subscription>(s => s.Country, UIBindingScope.Relative),
                 new SearchComponent()
                     .SetOptions(SubscriptionCatalogue.Customers.Select(static name => new OptionItem { Id = name, Title = name, IsContent = true }).ToList())
-                    .BindValue(nameof(Subscription.Customer), UIBindingScope.Relative),
+                    .BindValue<Subscription>(s => s.Customer, UIBindingScope.Relative),
                 sortPath: nameof(Subscription.Customer), width: customer, pinned: wide, icon: UIGlyphs.Person
             )
-            .AddTextColumn("grid-demo.column.country", nameof(Subscription.Country), sortable: true, country, filterable: band)
+            .AddTextColumn<Subscription>("grid-demo.column.country", s => s.Country, sortable: true, country, filterable: band)
             // A typed enum column: the plan by its caption, edited in a select over the same choices, and the price follows it.
-            .AddEnumColumn("grid-demo.column.plan", nameof(Subscription.Plan), SubscriptionChoices.Plans, plan, editable: true, filterable: band)
+            .AddEnumColumn<Subscription>("grid-demo.column.plan", s => s.Plan, SubscriptionChoices.Plans, plan, editable: true, filterable: band)
             // A badge for the status, its words and its colour the row's own, edited in a select over the enum's choices.
             .AddEditableColumn("grid-demo.column.status", new TextComponent()
-                .BindBadgeText(nameof(Subscription.StatusCaption), UIBindingScope.Relative)
-                .BindBadgeStyle(nameof(Subscription.StatusStyle), UIBindingScope.Relative),
+                .BindBadgeTitle<Subscription>(s => s.StatusCaption, UIBindingScope.Relative)
+                .BindBadgeVariant<Subscription>(s => s.StatusVariant, UIBindingScope.Relative),
                 new SelectComponent()
                     .SetOptions(SubscriptionChoices.Statuses.Select(static choice => new OptionItem { Id = choice.Value, Title = choice.Caption }).ToList())
-                    .BindValue(nameof(Subscription.Status), UIBindingScope.Relative),
+                    .BindValue<Subscription>(s => s.Status, UIBindingScope.Relative),
                 sortPath: nameof(Subscription.Status), width: status
             )
             // A template column that is not text at all: a bar, sorted by the number behind it.
             .AddColumn("grid-demo.column.usage", new ProgressComponent()
-                .BindValue(nameof(Subscription.Usage), UIBindingScope.Relative)
+                .BindValue<Subscription>(s => s.Usage, UIBindingScope.Relative)
                 .SetShowValue(true)
                 .SetValueUnit("%"),
                 nameof(Subscription.Usage), usage
             )
-            .AddNumberColumn("grid-demo.column.servers", nameof(Subscription.Seats), "N0", UIGridUnit.Absolute(130), editable: true, filterable: band, aggregate: Sum(totals), icon: UIGlyphs.Storage)
+            .AddNumberColumn<Subscription>("grid-demo.column.servers", s => s.Seats, "N0", UIGridUnit.Absolute(130), editable: true, filterable: band, aggregate: Sum(totals), icon: UIGlyphs.Storage, configureEditor: static editor => editor.SetAllowDecimals(false).SetMin(SubscriptionRecord.MinSeats).SetMax(SubscriptionRecord.MaxSeats))
             // Not editable: what a month costs is the plan's price times the servers, and changes with either.
-            .AddMoneyColumn("grid-demo.column.monthly", nameof(Subscription.Monthly), "€", width: UIGridUnit.Absolute(170), filterable: band, aggregate: Sum(totals))
+            .AddMoneyColumn<Subscription>("grid-demo.column.monthly", s => s.Monthly, "€", width: UIGridUnit.Absolute(170), filterable: band, aggregate: Sum(totals))
             // Hidden where a chooser can show it again: the viewer's own choice, kept in the browser, wins over the author's.
-            .AddDateColumn("grid-demo.column.started", nameof(Subscription.Started), "dd MMM yyyy", started, editable: true, filterable: band, icon: UIGlyphs.Calendar, hidden: band)
-            .AddBooleanColumn("grid-demo.column.paid", nameof(Subscription.Paid), width: UIGridUnit.Absolute(120), editable: true, filterable: band)
+            .AddDateColumn<Subscription>("grid-demo.column.started", s => s.Started, "dd MMM yyyy", started, editable: true, filterable: band, icon: UIGlyphs.Calendar, hidden: band)
+            .AddBooleanColumn<Subscription>("grid-demo.column.paid", s => s.Paid, width: UIGridUnit.Absolute(120), editable: true, filterable: band)
             .SetDetailTemplate(CreateDetail(prices))
             .SetStriped(true)
             .SetRowHoverable(true);
 
+        if (band || chooser)
+            _ = grid.SetColumnChooser(true);
+
         if (band)
         {
-            // The search box matches one text the row composes — the number, the customer, the country — since a query's terms are all required.
             _ = grid
                 // A template column filters too: the status by its choices, read through the sort path the column names.
                 .AddFilter(nameof(Subscription.Status), UIDataGridColumnKind.Enum, SubscriptionChoices.Statuses)
-                .SetSearch(nameof(Subscription.SearchText))
-                // The chooser shows and hides columns; the country and the payment give way on their own below the tiers named here.
-                .SetColumnChooser(true)
                 .HideColumnBelow(nameof(Subscription.Country), UIResponsiveTier.Xxl)
                 .HideColumnBelow(nameof(Subscription.Paid), UIResponsiveTier.Xl);
         }
@@ -109,14 +108,14 @@ internal static class SubscriptionGrid
             )
             .AddChild(new DefaultTextTemplate()
                 .SetTitle("grid-demo.column.country")
-                .BindDescription(nameof(Subscription.Country), UIBindingScope.Relative)
+                .BindDescription<Subscription>(s => s.Country, UIBindingScope.Relative)
             )
             .AddChild(new DefaultTextTemplate()
                 .SetTitle("grid-demo.column.status")
-                .BindDescription(nameof(Subscription.StatusCaption), UIBindingScope.Relative)
+                .BindDescription<Subscription>(s => s.StatusCaption, UIBindingScope.Relative)
             )
             .AddChild(new ProgressComponent()
-                .BindValue(nameof(Subscription.Usage), UIBindingScope.Relative)
+                .BindValue<Subscription>(s => s.Usage, UIBindingScope.Relative)
                 .SetShowValue(true)
                 .SetValueUnit("%")
                 .SetWidth(UILayoutLength.Absolute(240))
@@ -127,8 +126,8 @@ internal static class SubscriptionGrid
         {
             _ = detail.AddChild(new TableComponent()
                 .SetItems(PlanPrice.List())
-                .AddTextColumn("grid-demo.column.plan", nameof(PlanPrice.Plan))
-                .AddTextColumn("grid-demo.detail.per-server", nameof(PlanPrice.Price), UIGridUnit.Absolute(160), UITextAlignment.End)
+                .AddTextColumn<PlanPrice>("grid-demo.column.plan", p => p.Plan)
+                .AddTextColumn<PlanPrice>("grid-demo.detail.per-server", p => p.Price, UIGridUnit.Absolute(160), UITextAlignment.End)
                 .SetWidth(UILayoutLength.Absolute(320))
             );
         }

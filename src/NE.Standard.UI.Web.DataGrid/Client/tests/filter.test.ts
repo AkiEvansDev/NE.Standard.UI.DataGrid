@@ -155,6 +155,7 @@ function createFilteredGrid(from: NumberField, to: NumberField, query: readonly 
         numbers: { parseInvariant: readNumber },
         states: { isInert: () => false, setDisabled: () => undefined },
         names: { componentId: "data-ui-id", itemsQuery: "data-ui-items-query", valueKind: "data-ui-value-kind", itemsQueryKind: "items-query" },
+        ownDescendants: (owner: FakeElement, selector: string, boundarySelector: string) => [...owner.querySelectorAll(selector)].filter(element => element.closest(boundarySelector) === owner),
         observeComponents: () => null
     };
 
@@ -193,4 +194,73 @@ test("a pushed query a field already shows in its culture is not written into it
     const grid = createFilteredGrid(numberField("1.000,50", "1000.50"), numberField("", ""), [{ itemProperty: "Total", operator: "GreaterOrEqual", value: 1000.5 }]);
 
     assert.deepEqual(grid.sets, []);
+});
+
+test("the built-in search box writes query.search without adding a property term or counting as a panel filter", () => {
+    const root = new FakeElement();
+    const grid = FakeElement.of(GridClasses.root);
+    const queryElement = FakeElement.of("", { "data-ui-value-kind": "items-query" });
+    const searchInput = Object.assign(new FakeInput(), { value: "bramble", invariant: "bramble" });
+    const searchFilter = FakeElement.of("", { [GridAttributes.filter]: "", [GridAttributes.filterKind]: "text" });
+    const countBadge = FakeElement.of(GridClasses.filtersCount);
+    const panel = FakeElement.of(GridClasses.filterPanel);
+    const clearButton = FakeElement.of(GridClasses.filtersClear);
+    const statusInput = Object.assign(new FakeInput(), { value: "Active", invariant: "Active" });
+    const statusFilter = FakeElement.of("", { [GridAttributes.filter]: "Status", [GridAttributes.filterKind]: "enum" });
+    const sets: unknown[] = [];
+    let counted = -1;
+
+    searchInput.attributes.set("data-ui-id", "1");
+    statusInput.attributes.set("data-ui-id", "2");
+
+    fakeDocument.body.replaceChildren(root);
+    fakeDocument.activeElement = fakeDocument.body;
+    root.append(grid.append(
+        queryElement,
+        searchFilter.append(FakeElement.of(GridClasses.filterPart).append(searchInput)),
+        countBadge,
+        panel.append(
+            statusFilter.append(FakeElement.of(GridClasses.filterPart).append(statusInput)),
+            clearButton
+        )
+    ));
+
+    const context = {
+        root,
+        values: { read: (element: FakeElement) => (element.querySelector("input") as NumberField | null)?.invariant ?? null },
+        properties: {
+            set: (element: FakeElement, _name: string, value: unknown) => {
+                sets.push([element.getAttribute("data-ui-id"), value]);
+                const input = element.tagName === "INPUT" ? (element as unknown as NumberField) : null;
+                if (input !== null)
+                    input.invariant = value === null ? "" : String(value);
+
+                return true;
+            }
+        },
+        badges: { writeCount: (_badge: FakeElement, value: number) => { counted = value; } },
+        numbers: { parseInvariant: readNumber },
+        states: { isInert: () => false, setDisabled: () => undefined },
+        names: { componentId: "data-ui-id", itemsQuery: "data-ui-items-query", valueKind: "data-ui-value-kind", itemsQueryKind: "items-query" },
+        ownDescendants: (owner: FakeElement, selector: string, boundarySelector: string) => [...owner.querySelectorAll(selector)].filter(element => element.closest(boundarySelector) === owner),
+        observeComponents: () => null
+    };
+
+    new DataGridFilterEngine(real<PluginEngineContext>(context));
+    fakeWindow.dispatch(searchInput, new FakeEvent("change"));
+
+    const written = JSON.parse(queryElement.getAttribute("data-ui-items-query") ?? "{}") as { search?: string; filters?: FilterTerm[] };
+
+    assert.equal(written.search, "bramble");
+    assert.deepEqual(written.filters, [{ itemProperty: "Status", operator: "Equal", value: "Active" }]);
+    assert.equal(counted, 1);
+
+    // Clearing the flyout panel clears Status while preserving the search text.
+    fakeWindow.dispatch(clearButton, new FakeEvent("click"));
+
+    const afterClear = JSON.parse(queryElement.getAttribute("data-ui-items-query") ?? "{}") as { search?: string; filters?: FilterTerm[] };
+
+    assert.equal(afterClear.search, "bramble");
+    assert.deepEqual(afterClear.filters, []);
+    assert.equal(counted, 0);
 });

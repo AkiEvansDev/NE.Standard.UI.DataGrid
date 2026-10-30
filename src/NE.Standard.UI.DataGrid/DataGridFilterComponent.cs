@@ -22,14 +22,14 @@ public abstract partial class DataGridFilterComponent<T>(string? id = null) : Co
     /// Gets or sets what the term compares: a text match, a number's or a date's range, a chosen value.
     /// </summary>
     [UIComponentProperty(DefaultValue = UIDataGridColumnKind.Text, IsBindable = false)]
-    public UIDataGridColumnKind Kind { get; set; }
+    public UIDataGridColumnKind? Kind { get; set; }
 
     /// <summary>
-    /// Gets or sets the caption over the field — the column's — where the filter stands apart from its column.
+    /// Gets or sets the title over the field — the column's caption — where the filter stands apart from its column.
     /// </summary>
     [Translatable]
     [UIComponentProperty(DefaultValue = null, IsBindable = false)]
-    public UIPhrase? Caption { get; set; }
+    public UIPhrase? Title { get; set; }
 }
 
 /// <summary>

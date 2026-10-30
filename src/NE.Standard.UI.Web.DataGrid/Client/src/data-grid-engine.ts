@@ -15,26 +15,38 @@ import { DataGridVerdictEngine } from "./data-grid-verdict-engine.ts";
 
 export class DataGridEngine {
     private readonly formatting: CellFormatting;
+    private readonly subEngines: readonly { dispose(): void }[];
+    private readonly stopStrings: (() => void) | void;
 
     public constructor(context: PluginEngineContext, cellEditAnswers: CellEditAnswers) {
         this.formatting = { numbers: context.numbers, temporal: context.temporal, strings: context.strings };
 
-        new DataGridSortEngine(context);
-        new DataGridEditEngine(context, cellEditAnswers);
-        new DataGridFilterEngine(context);
-        new DataGridTotalsEngine(context, this.formatting);
-        new DataGridChooserEngine(context);
-        new DataGridDetailEngine(context);
-        new DataGridSelectionEngine(context);
-        new DataGridVerdictEngine(context);
+        this.subEngines = [
+            new DataGridSortEngine(context),
+            new DataGridEditEngine(context, cellEditAnswers),
+            new DataGridFilterEngine(context),
+            new DataGridTotalsEngine(context, this.formatting),
+            new DataGridChooserEngine(context),
+            new DataGridDetailEngine(context),
+            new DataGridSelectionEngine(context),
+            new DataGridVerdictEngine(context)
+        ];
 
         // A cell's words and culture are drawn here, not marked: a language switch writes each cell that keeps its value again from it,
         // after the framework wrote the grid's packs in the new language.
-        context.strings.onChange(() => rewriteKeptCells(context.root, this.formatting));
+        this.stopStrings = context.strings.onChange(() => rewriteKeptCells(context.root, this.formatting));
     }
 
     /** A typed cell's value, on a row the client builds or a value it patches: formatted by the attributes the renderer left on the cell. */
     public applyCellValue(target: Element, value: unknown): void {
         applyCellValue(target, value, this.formatting);
+    }
+
+    public dispose(): void {
+        if (typeof this.stopStrings === "function")
+            this.stopStrings();
+
+        for (const subEngine of this.subEngines)
+            subEngine.dispose();
     }
 }

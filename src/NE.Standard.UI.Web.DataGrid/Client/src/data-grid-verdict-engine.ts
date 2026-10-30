@@ -18,6 +18,7 @@ export class DataGridVerdictEngine {
     private readonly rows: ItemRows;
     private readonly validation: FieldValidation;
     private readonly names: DomNames;
+    private readonly observer: MutationObserver | null;
     // Read once per grid: the columns and their editors are the page's and do not change.
     private readonly rulesByGrid = new WeakMap<Element, ReadonlyMap<string, CellRules>>();
     // The verdict boxes standing in cells, which a verdict that passes takes off.
@@ -33,10 +34,14 @@ export class DataGridVerdictEngine {
 
         // A row drawn, a cell written anew, an editor taken off: the row is judged again, before the page paints. The verdict's own
         // box and words are no change of the row's.
-        context.observeComponents(context.root, rowSelector(context.names), { childList: true, characterData: true, relevant: mutation => !this.isVerdictWrite(mutation) }, rows => {
+        this.observer = context.observeComponents(context.root, rowSelector(context.names), { childList: true, characterData: true, relevant: mutation => !this.isVerdictWrite(mutation) }, rows => {
             for (const row of rows)
                 this.judgeRow(row);
         });
+    }
+
+    public dispose(): void {
+        this.observer?.disconnect();
     }
 
     private judgeGrid(grid: HTMLElement): void {

@@ -5,11 +5,14 @@ export default defineConfig({
     build: {
         emptyOutDir: true,
         outDir: "dist",
-        lib: {
-            entry: resolve(__dirname, "src/data-grid.ts"),
-            formats: ["es"],
-            fileName: () => "ui-data-grid.js",
-            cssFileName: "ui-data-grid"
+        modulePreload: false,
+        cssCodeSplit: false,
+        rolldownOptions: {
+            input: resolve(import.meta.dirname, "src/data-grid.ts"),
+            output: {
+                entryFileNames: "ui-data-grid.js",
+                assetFileNames: "ui-data-grid[extname]"
+            }
         }
     }
 });

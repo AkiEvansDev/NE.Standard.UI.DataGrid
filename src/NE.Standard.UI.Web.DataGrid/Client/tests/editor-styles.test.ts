@@ -34,6 +34,10 @@ test("a two-line cell's ghost field stands on the cell's first line, lifted by i
 });
 
 test("an editor centres its field in the cell's height, padded only at the sides, so a one-line row keeps its height", () => {
+    const cell = declarations(".ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-table__cell") ?? "";
+
+    assert.match(cell, /padding-block: 0\.5rem;/);
+    assert.doesNotMatch(cell, /padding:/);
     assert.match(declarations(".ui-data-grid__editor") ?? "", /align-items: center;/);
     assert.match(declarations(".ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-data-grid__editor") ?? "", /padding-block: 0;/);
 });
@@ -65,14 +69,13 @@ test("the ground shows under the pointer alone, only while the grid edits; the k
     assert.doesNotMatch(declarations(".ui-data-grid__cell--editable") ?? "", /cursor/);
 });
 
-test("a sortable caption's wash and an off box's pointer read the engines' marks, a caption's off while its column edge has the pointer", () => {
+test("a sortable caption's wash reads the engine's mark, off while its column edge has the pointer", () => {
     assert.match(css, /\.ui-table__header-cell\[data-ui-grid-sort\]:hover:not\(\[data-ui-inner-pointer~='hover'\]\) \{\s*box-shadow: inset 0 0 0 100vmax var\(--ui-wash-hover\);/);
     assert.match(css, /\.ui-table__header-cell\[data-ui-grid-sort\]:active:not\(\[data-ui-inner-pointer~='press'\]\) \{\s*box-shadow: inset 0 0 0 100vmax var\(--ui-wash-active\);/);
-    assert.match(declarations(".ui-checkbox[data-ui-grid-box-off]") ?? "", /cursor: default;/);
 });
 
-test("a committed editor standing over its cell wears the cursor's frame the hidden cell would", () => {
-    assert.match(css, /\.ui-data-grid__cell--editing\[data-ui-cell-focus\] \+ \.ui-data-grid__editor \{\s*outline: 2px solid var\(--ui-mark-keyboard\);/);
+test("a committed editor standing over its cell wears the cursor's wash the hidden cell would", () => {
+    assert.match(css, /\.ui-data-grid__cell--editing\[data-ui-cell-focus\] \+ \.ui-data-grid__editor \{\s*background-image: linear-gradient\(var\(--ui-wash-hover\), var\(--ui-wash-hover\)\);\s*outline: none;/);
 });
 
 test("a verdict's edge outranks the box's own transparent edge, in the severity's ink", () => {

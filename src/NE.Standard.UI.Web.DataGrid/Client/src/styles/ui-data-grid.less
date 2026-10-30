@@ -15,7 +15,7 @@
 }
 
 .ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-table__cell {
-    padding: @ui-space-2 @ui-space-3;
+    padding-block: @ui-space-2;
 }
 
 // A sorting header cell's wash is an inset shadow over its ground: a pinned caption's ground is opaque, and a translucent ground
@@ -74,6 +74,12 @@
         }
     }
 
+    @media (forced-colors: none) {
+        .ui-table__header-cell[data-ui-grid-sort]@{ui-keyboard-focus} > .ui-data-grid__sort-idle {
+            opacity: @ui-offer-opacity-hover;
+        }
+    }
+
     // The arrow turns rather than flips, so a second press reads as the same column the other way.
     .ui-data-grid__sort-mark::before {
         transition: transform @ui-motion-fast @ui-motion-ease;
@@ -121,36 +127,66 @@
         justify-self: end;
     }
 
-// The band and the pager stand outside the table's framed, scrolling box; the totals footer stays inside and scrolls with the tracks.
+// The search bar and the pager stand outside the table's framed, scrolling box; the totals footer stays inside and scrolls with the tracks.
+// The band itself wears the search field's box, with the Filters and Columns flyout buttons sitting inside its trailing end.
 .ui-data-grid__band {
     display: flex;
     align-items: center;
-    gap: @ui-space-2;
-    padding-bottom: @ui-space-2;
+    gap: @ui-space-1;
+    min-height: @ui-control-height;
+    margin-block-end: @ui-space-2;
+    padding-inline-end: @ui-space-2;
+    .ui-field-ground();
+
+    &[data-ui-grid-search-focus] {
+        .ui-field-edge-active();
+    }
 }
 
-    // The search box takes the width the buttons leave.
+    // The search box takes the width the trailing buttons leave; its inner row sheds its own border and fill inside the band's box.
     .ui-data-grid__band > .ui-data-grid__filter {
         flex: 1 1 auto;
+    }
+
+    .ui-data-grid__band > .ui-data-grid__filter .ui-text-input__row {
+        min-height: calc(@ui-control-height - 2 * var(--ui-border-width, 1px));
+        padding-inline: @ui-space-3 @ui-space-1;
+        border: none;
+        background: none;
+        box-shadow: none;
     }
 
     .ui-data-grid__band > .ui-flyout {
         flex: 0 0 auto;
     }
 
-// The band's buttons wear the field's material, not an outline, since the band is a row of controls beside the search field.
+// Trailing action buttons inside the search bar (`UIButtonVariant.Ghost`, `UISize.Small`), square when alone and widened when the filter count shows.
 .ui-data-grid__band-button {
-    .ui-input-field();
-    .ui-field-states();
-    color: inherit;
-    font: inherit;
-    font-size: var(--ui-text-body-font-size);
-    cursor: pointer;
+    min-width: @ui-button-height-sm;
+    min-height: @ui-button-height-sm;
+    gap: @ui-space-1;
+    padding: @ui-space-1;
+    color: @ui-text-muted;
+
+    &[data-ui-grid-has-count] {
+        padding-inline: @ui-space-1 @ui-space-2;
+    }
+
+    @media @{ui-can-hover} {
+        &@{ui-button-live}:hover:not([aria-expanded="true"]) {
+            background: none;
+            color: @ui-text-ink;
+        }
+    }
+
+    &[aria-expanded="true"] {
+        background-color: var(--ui-wash-active);
+        color: @ui-text-ink;
+    }
 }
 
     .ui-data-grid__band-button > .ui-icon {
         font-size: @ui-glyph-md;
-        color: var(--ui-text-muted);
     }
 
     // Sized to the caption so the badge stays on whole pixels; hidden at none by the `[hidden]` rule, which a class would not outweigh.
@@ -196,28 +232,27 @@
         flex-wrap: wrap;
     }
 
-    .ui-data-grid__filter-caption {
+    .ui-data-grid__filter-title {
         flex: 0 0 100%;
         font-size: var(--ui-text-caption-font-size);
         color: var(--ui-text-muted);
     }
 
-// A word in the primary ink, as a date picker's Clear is; disabled while nothing is set, easing into it as its wash eases out.
+// A small ghost button at the panel's foot; disabled while nothing is set, easing into it as its wash eases out.
 .ui-data-grid__filters-clear {
     align-self: flex-end;
-    .ui-word-action();
-    transition: background-color @ui-motion-fast @ui-motion-ease, opacity @ui-motion-fast @ui-motion-ease;
+    font-size: var(--ui-text-caption-font-size);
+    line-height: var(--ui-text-caption-line-height);
 }
 
-    .ui-data-grid__filters-clear@{ui-button-live} {
-        .ui-reveal-hover(@transition: false);
-    }
-
-// The chooser's panel holds the framework's own menu; the panel spans the placement host the flyout is, and the menu fills it.
-.ui-data-grid__columns-panel {
-    display: grid;
-    grid-column: 1 / -1;
+// A column chooser is a menu popup: its flyout uses a list popup's 4 px padding rather than a form flyout's 12 px, and the menu spans the placement host.
+.ui-flyout__content.ui-data-grid__columns-panel {
+    .ui-popup-scroll(@ui-space-1);
     min-width: 11rem;
+
+    > [data-ui-id] {
+        grid-column: 1 / -1;
+    }
 }
 
 // The footer of totals: the header's tracks, on its ground so both ends of the rows share a tint, as an implicit row of the scroll
@@ -366,6 +401,7 @@
 
     // A committed editor stands over its hidden cell until the answer comes: it wears the cursor's frame the cell would.
     .ui-data-grid@{ui-row-cursor-focus} > .ui-table__scroll > [data-ui-items-host] > .ui-table__row[data-ui-row-focus] > .ui-data-grid__cell--editing[data-ui-cell-focus] + .ui-data-grid__editor {
+        background-image: linear-gradient(var(--ui-wash-hover), var(--ui-wash-hover));
         .ui-keyboard-frame();
     }
 
@@ -421,31 +457,6 @@
     // rows only: a grid in a row's detail says so for itself.
     .ui-data-grid[data-ui-grid-expand-click] > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-table__cell:not([data-ui-no-row-open]) {
         cursor: pointer;
-    }
-
-// The checkbox column, as narrow as the box: the row's air is cut here, or it would sit around the box twice and misalign the header's.
-.ui-data-grid > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-data-grid__cell--select,
-.ui-data-grid > .ui-table__scroll > .ui-table__header > .ui-table__header-cell[data-ui-grid-select-all] {
-    padding-inline: @ui-space-1;
-}
-
-    // The box takes its own width so the cell's centring places it, not the start of whatever the padding left.
-    .ui-data-grid__cell--select > [data-ui-id],
-    .ui-table__header-cell[data-ui-grid-select-all] > [data-ui-id] {
-        flex: 0 0 auto;
-    }
-
-    // A box that takes nothing is marked on its input, not on the checkbox's root: a disabled root makes the input inert, which
-    // drops a focus it holds, and would read as a disabled row to the row keyboard.
-    .ui-data-grid__cell--select .ui-checkbox__input.ui-disabled ~ .ui-checkbox__box,
-    .ui-table__header-cell[data-ui-grid-select-all] .ui-checkbox__input.ui-disabled ~ .ui-checkbox__box {
-        .ui-disabled-state();
-    }
-
-    // Nor a hand beside it: the root, the box and its gap, keeps the checkbox's pointer, which only a disabled root takes back; the
-    // selection engine marks the root of a box it turned off.
-    .ui-checkbox[data-ui-grid-box-off] {
-        cursor: default;
     }
 
 // A typed cell is one line of the row's own text, cut with an ellipsis where the column is narrower than the value.

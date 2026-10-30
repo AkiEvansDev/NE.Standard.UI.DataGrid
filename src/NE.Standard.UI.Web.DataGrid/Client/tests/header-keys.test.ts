@@ -21,7 +21,7 @@ const names = {
 };
 
 /** A grid with one sorting caption, out of the Tab order as the renderer writes it, and the element its query lives on. */
-function createGrid(): { caption: FakeElement; query: FakeElement } {
+function createGrid(inert = () => false): { caption: FakeElement; query: FakeElement; engine: DataGridSortEngine } {
     const root = new FakeElement();
     const caption = FakeElement.of("ui-table__header-cell", { role: "columnheader", tabindex: "-1", [GridAttributes.sort]: "Total", "aria-sort": "none" });
     const query = FakeElement.of("", { [names.valueKind]: names.itemsQueryKind });
@@ -31,10 +31,9 @@ function createGrid(): { caption: FakeElement; query: FakeElement } {
 
     // The core's plain key: no Ctrl, ⌘ or Alt, and Shift only where allowed.
     const shortcuts = { isPlainKey: (event: KeyboardEvent, allow?: { shift?: boolean }) => !event.ctrlKey && !event.metaKey && !event.altKey && (allow?.shift === true || !event.shiftKey) };
+    const engine = new DataGridSortEngine(real<PluginEngineContext>({ root, names, shortcuts, states: { isInert: inert }, observeComponents: () => null }));
 
-    new DataGridSortEngine(real<PluginEngineContext>({ root, names, shortcuts, observeComponents: () => null }));
-
-    return { caption, query };
+    return { caption, query, engine };
 }
 
 function sorts(query: FakeElement): unknown {
@@ -71,4 +70,20 @@ test("an arrow on a caption, the header's walk, sorts nothing", () => {
         fakeWindow.dispatch(caption, new FakeKeyboardEvent(key));
 
     assert.deepEqual(sorts(query), []);
+});
+
+test("an inert or disposed grid ignores sorting caption presses", () => {
+    let inert = true;
+    const { caption, query, engine } = createGrid(() => inert);
+
+    fakeWindow.dispatch(caption, new FakeKeyboardEvent("Enter"));
+    assert.deepEqual(sorts(query), []);
+
+    inert = false;
+    fakeWindow.dispatch(caption, new FakeKeyboardEvent("Enter"));
+    assert.deepEqual(sorts(query), [{ itemProperty: "Total", direction: "Ascending" }]);
+
+    engine.dispose();
+    fakeWindow.dispatch(caption, new FakeKeyboardEvent("Enter"));
+    assert.deepEqual(sorts(query), [{ itemProperty: "Total", direction: "Ascending" }]);
 });

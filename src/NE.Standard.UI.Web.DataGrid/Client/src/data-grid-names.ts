@@ -14,8 +14,6 @@ export const GridAttributes = {
     filter: "data-ui-grid-filter",
     filterKind: "data-ui-grid-filter-kind",
     filterBound: "data-ui-grid-filter-bound",
-    select: "data-ui-grid-select",
-    selectAll: "data-ui-grid-select-all",
     kind: "data-ui-grid-kind",
     format: "data-ui-grid-format",
     currency: "data-ui-grid-currency",
@@ -29,6 +27,7 @@ export const GridAttributes = {
 /** The classes the grid's renderers write and its engines read. */
 export const GridClasses = {
     root: "ui-data-grid",
+    band: "ui-data-grid__band",
     footer: "ui-data-grid__footer",
     total: "ui-data-grid__total",
     filtersCount: "ui-data-grid__filters-count",
@@ -46,14 +45,16 @@ export const ClientNames = {
     sorted: "data-ui-grid-sorted",
     /** On an editable cell whose text shows a description, the field's box holding both lines. */
     twoLine: "data-ui-grid-two-line",
-    /** On the root of a row's or the header's checkbox turned off, which takes back the root's hand. */
-    boxOff: "data-ui-grid-box-off",
     sortPlace: "data-ui-grid-sort-place",
     expanded: "data-ui-grid-expanded",
+    searchFocus: "data-ui-grid-search-focus",
+    hasCount: "data-ui-grid-has-count",
     editorClass: "ui-data-grid__editor",
     editingCellClass: "ui-data-grid__cell--editing",
     detailClass: "ui-data-grid__detail",
-    verdictClass: "ui-data-grid__verdict"
+    verdictClass: "ui-data-grid__verdict",
+    /** The id prefix a row's chevron and its header cell are given to be named by (`aria-labelledby`) through `context.dom.ensureId`. */
+    nameIdPrefix: "ui-data-grid-name-"
 } as const;
 
 /** The events the grid raises, by the names `DataGridEvents` hangs a command on. */
@@ -68,6 +69,9 @@ export const GridWords = {
     yes: "ui.grid.yes",
     no: "ui.grid.no"
 } as const;
+
+/** The template variant a row's detail renders through, and the key of the detail column (`DataGridComponent.DetailTemplateKey`). */
+export const DetailColumnKey = "detail";
 
 /** The DOM operation a typed cell's value travels through (`DataGridCellRenderer.ValueOperationKind`). */
 export const CellOperationKind = "data-grid-cell";

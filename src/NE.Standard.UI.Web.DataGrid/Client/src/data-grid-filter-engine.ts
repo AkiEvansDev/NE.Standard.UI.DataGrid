@@ -2,8 +2,8 @@
 // holds, and writes a pushed query back into them so they say what filters.
 
 import type { Badges, ComponentStates, DomNames, NumberFormatting, PluginEngineContext, PropertyWriting, ValueReading } from "ne-standard-ui";
-import { gridOf, ownDescendants, ownFirst, RootSelector } from "./data-grid-dom.ts";
-import { GridAttributes, GridClasses } from "./data-grid-names.ts";
+import { gridOf, RootSelector } from "./data-grid-dom.ts";
+import { GridAttributes, GridClasses, ClientNames } from "./data-grid-names.ts";
 import { readQuery, readQueryText, writeQuery } from "./data-grid-query.ts";
 import type { FilterTerm } from "./data-grid-query.ts";
 
@@ -15,6 +15,7 @@ const FilterPanelSelector = `.${GridClasses.filterPanel}`;
 const FiltersCountSelector = `.${GridClasses.filtersCount}`;
 const FiltersClearSelector = `.${GridClasses.filtersClear}`;
 const FilterPartSelector = `.${GridClasses.filterPart}`;
+const BandSearchSelector = `.${GridClasses.band} > ${FilterSelector}`;
 
 /** A text read as a number as the server's invariant culture reads one — the framework's `numbers.parseInvariant`; a culture's "1,5" is no number. */
 type NumberReader = NumberFormatting["parseInvariant"];
@@ -25,35 +26,41 @@ export class DataGridFilterEngine {
     private readonly properties: PropertyWriting;
     private readonly states: ComponentStates;
     private readonly names: DomNames;
+    private readonly ownDescendants: PluginEngineContext["ownDescendants"];
     // The framework's reading of the invariant text a number field sends and a term's value travels in.
     private readonly readNumber: NumberReader;
     // A part's one field: the framework component standing in it.
     private readonly fieldSelector: string;
+    private readonly observer: MutationObserver | null;
+    private readonly cleanups: (() => void)[] = [];
 
     // The query text this engine last wrote on each grid; one that differs is the controller's push, written back into the fields.
     private readonly written = new WeakMap<HTMLElement, string | null>();
 
     public constructor(context: PluginEngineContext) {
+        const root = context.root;
+
         this.values = context.values;
         this.badges = context.badges;
         this.properties = context.properties;
         this.states = context.states;
         this.names = context.names;
+        this.ownDescendants = context.ownDescendants;
         this.readNumber = context.numbers.parseInvariant;
         this.fieldSelector = `[${context.names.componentId}]`;
 
-        this.fillAll(context.root.querySelectorAll<HTMLElement>(RootSelector));
-        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: [context.names.itemsQuery] }, grids => this.fillAll(grids));
+        this.fillAll(root.querySelectorAll<HTMLElement>(RootSelector));
+        this.observer = context.observeComponents(root, RootSelector, { childList: true, attributeFilter: [context.names.itemsQuery] }, grids => this.fillAll(grids));
 
-        context.root.addEventListener("click", domEvent => {
+        const onClick = (domEvent: Event): void => {
             const clear = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(FiltersClearSelector) : null;
             const grid = gridOf(clear);
 
             if (clear !== null && grid !== null && !this.states.isInert(clear))
                 this.clearPanel(grid);
-        });
+        };
 
-        context.root.addEventListener("change", domEvent => {
+        const onChange = (domEvent: Event): void => {
             const filter = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(FilterSelector) : null;
             const grid = gridOf(filter);
 
@@ -61,14 +68,42 @@ export class DataGridFilterEngine {
                 return;
 
             this.writeFilters(grid);
-        }, true);
+        };
+
+        const onFocus = (domEvent: Event): void => {
+            const searchFilter = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(BandSearchSelector) : null;
+            const band = searchFilter?.parentElement ?? null;
+
+            if (searchFilter !== null && band !== null)
+                band.toggleAttribute(ClientNames.searchFocus, domEvent.type === "focusin" || (domEvent instanceof FocusEvent && domEvent.relatedTarget instanceof Node && searchFilter.contains(domEvent.relatedTarget)));
+        };
+
+        root.addEventListener("click", onClick);
+        root.addEventListener("change", onChange, true);
+        root.addEventListener("focusin", onFocus);
+        root.addEventListener("focusout", onFocus);
+        this.cleanups.push(
+            () => root.removeEventListener("click", onClick),
+            () => root.removeEventListener("change", onChange, true),
+            () => root.removeEventListener("focusin", onFocus),
+            () => root.removeEventListener("focusout", onFocus)
+        );
+    }
+
+    public dispose(): void {
+        this.observer?.disconnect();
+
+        for (const cleanup of this.cleanups)
+            cleanup();
+
+        this.cleanups.length = 0;
     }
 
     /** Empties the panel's filters as a push would; the query drops their terms itself, since a select takes its emptied value a moment later. */
     private clearPanel(grid: HTMLElement): void {
         const cleared = new Set<HTMLElement>();
 
-        for (const filter of ownDescendants(grid, FilterSelector)) {
+        for (const filter of this.ownDescendants(grid, FilterSelector, RootSelector)) {
             if (filter.closest(FilterPanelSelector) === null)
                 continue;
 
@@ -87,19 +122,35 @@ export class DataGridFilterEngine {
 
     /** The query's filters read again from the fields — but for those just emptied, which say nothing — and the count after them. */
     private writeFilters(grid: HTMLElement, cleared: ReadonlySet<HTMLElement> = new Set()): void {
-        const filters = ownDescendants(grid, FilterSelector);
+        const filters = this.ownDescendants(grid, FilterSelector, RootSelector);
         const query = readQuery(grid, this.names);
         const terms: FilterTerm[] = [];
+        let search = query.search ?? null;
 
-        // Every filter's terms, in column order — the search box and the flyout's panel; a filter with nothing in it says nothing.
+        // Every filter's terms, in column order — the search box (free-text or single-property) and the flyout's panel.
         for (const filter of filters) {
+            const property = filter.getAttribute(FilterAttribute) ?? "";
+
+            if (property.length === 0) {
+                search = cleared.has(filter) ? null : this.readSearchOf(filter);
+                continue;
+            }
+
             if (!cleared.has(filter))
                 terms.push(...this.readFilterTermsOf(filter));
         }
 
-        writeQuery(grid, this.names, { ...query, filters: mergeFilterTerms(query.filters ?? [], filters.flatMap(fieldsOf), terms, this.readNumber) });
+        const propertyFilters = filters.filter(filter => (filter.getAttribute(FilterAttribute) ?? "").length > 0);
+
+        writeQuery(grid, this.names, { ...query, search, filters: mergeFilterTerms(query.filters ?? [], propertyFilters.flatMap(fieldsOf), terms, this.readNumber) });
         this.written.set(grid, readQueryText(grid, this.names));
         this.syncFiltersCount(grid);
+    }
+
+    private readSearchOf(filter: HTMLElement): string | null {
+        const part = filter.querySelector<HTMLElement>(`:scope > ${FilterPartSelector}`);
+
+        return part === null ? null : this.partValue(part, "text");
     }
 
     private fillAll(grids: Iterable<HTMLElement>): void {
@@ -116,9 +167,10 @@ export class DataGridFilterEngine {
 
     /** Every filter's fields made to say what the query holds for them — the controller's push; the field being typed in is left alone. */
     private fillFields(grid: HTMLElement): void {
-        const terms = readQuery(grid, this.names).filters ?? [];
+        const query = readQuery(grid, this.names);
+        const terms = query.filters ?? [];
 
-        for (const filter of ownDescendants(grid, FilterSelector)) {
+        for (const filter of this.ownDescendants(grid, FilterSelector, RootSelector)) {
             const property = filter.getAttribute(FilterAttribute) ?? "";
             const kind = filter.getAttribute(FilterKindAttribute) ?? "text";
 
@@ -128,7 +180,9 @@ export class DataGridFilterEngine {
                 if (field === null || field.contains(document.activeElement))
                     continue;
 
-                const value = fieldValueOf(terms, property, kind, part.getAttribute(FilterBoundAttribute), this.readNumber);
+                const value = property.length === 0
+                    ? (query.search?.trim() || null)
+                    : fieldValueOf(terms, property, kind, part.getAttribute(FilterBoundAttribute), this.readNumber);
 
                 if ((value === null ? null : String(value)) !== this.partValue(part, kind))
                     this.properties.set(field, "Value", value);
@@ -176,7 +230,7 @@ export class DataGridFilterEngine {
 
     /** The count on the filters button, hidden at none, with Clear filters live beside it — off the query, since a select just written reads its old value. */
     private syncFiltersCount(grid: HTMLElement): void {
-        const count = ownFirst(grid, FiltersCountSelector);
+        const count = this.ownDescendants(grid, FiltersCountSelector, RootSelector)[0] ?? null;
 
         if (count === null)
             return;
@@ -184,15 +238,16 @@ export class DataGridFilterEngine {
         const terms = readQuery(grid, this.names).filters ?? [];
         let inUse = 0;
 
-        for (const filter of ownDescendants(grid, FilterSelector)) {
+        for (const filter of this.ownDescendants(grid, FilterSelector, RootSelector)) {
             if (filter.closest(FilterPanelSelector) !== null && showsTerm(filter, terms, this.readNumber))
                 inUse++;
         }
 
         this.badges.writeCount(count, inUse);
         count.hidden = inUse === 0;
+        count.parentElement?.toggleAttribute(ClientNames.hasCount, inUse > 0);
 
-        const clear = ownFirst(grid, FiltersClearSelector);
+        const clear = this.ownDescendants(grid, FiltersClearSelector, RootSelector)[0] ?? null;
 
         if (clear !== null)
             this.states.setDisabled(clear, inUse === 0);

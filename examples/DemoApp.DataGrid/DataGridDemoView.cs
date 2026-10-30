@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -26,7 +28,7 @@ public abstract class DataGridDemoView : UIViewBase
     /// <summary>The sidebar's authored id, stable across renders.</summary>
     private const string SidebarId = "datagrid-sidebar";
 
-    private static readonly (string Route, string Label, string Icon)[] Pages =
+    private static readonly (string Route, string Title, string Icon)[] Pages =
     [
         (ColumnsRoute, "grid-demo.page.columns", MaterialIcons.TableChart),
         (FiltersRoute, "grid-demo.page.filters", MaterialIcons.FilterAlt),
@@ -37,15 +39,22 @@ public abstract class DataGridDemoView : UIViewBase
     public static string[] PageIcons => [.. Pages.Select(static page => page.Icon)];
 
     /// <summary>The title band and the sidebar stand, the sidebar from the top of the page; the content scrolls by itself.</summary>
-    public override UIViewOptions Options { get; } = new() { StickyHeader = true, ScrollContentOnly = true, ShellLayout = UIShellLayout.FullHeightSides };
+    public override UIViewOptions Options { get; } = new() { StickyHeader = true, ScrollContentOnly = true, ShellLayout = UIShellLayout.FullHeightSides, SideDrawers = UISideDrawers.BelowXl };
 
     protected abstract string Route { get; }
-    public abstract override string Title { get; }
+    protected abstract string Header { get; }
+
+    /// <summary>The tab's name: the page's header, a key, so it follows a switch.</summary>
+    public override string Title => "grid-demo.title";
+
+    /// <summary>The header, as a key.</summary>
+    public override IReadOnlyDictionary<string, object?>? TitleArguments
+        => new Dictionary<string, object?> { ["page"] = new UIPhrase(Header) };
     protected abstract string Description { get; }
 
     /// <summary>The page band from the preset; the language and theme switchers are on every page, since both are the framework's state.</summary>
     protected override IVisualComponent? CreateHeader()
-        => UIPage.Header(Title, Description,
+        => UIPage.Header(Header, Description,
             new LanguageSwitcherComponent(),
             new ThemeSwitcherComponent()
                 .SetLightIcon(MaterialIcons.Outlined(LightIcon))
@@ -58,7 +67,7 @@ public abstract class DataGridDemoView : UIViewBase
         MenuItem[] entries = new MenuItem[Pages.Length];
 
         for (var i = 0; i < Pages.Length; i++)
-            entries[i] = new MenuItem { Id = Pages[i].Route, Title = Pages[i].Label, Icon = MaterialIcons.Outlined(Pages[i].Icon), Url = Pages[i].Route, Selected = Pages[i].Route == Route };
+            entries[i] = new MenuItem { Id = Pages[i].Route, Title = Pages[i].Title, Icon = MaterialIcons.Outlined(Pages[i].Icon), Url = Pages[i].Route, Selected = Pages[i].Route == Route };
 
         // The width sits on the menu, not the container.
         return new ContainerComponent()
@@ -66,6 +75,7 @@ public abstract class DataGridDemoView : UIViewBase
             .SetPadding(UIThickness.All(16, 16, 16, 24))
             .AddChild(new MenuComponent(SidebarId)
                 .SetShowCollapseToggle(true)
+                .SetDrawerPin(true)
                 .SetSearch()
                 .SetMinWidth(UILayoutLength.Absolute(180))
                 .SetItems(entries)
@@ -107,8 +117,8 @@ public abstract class DataGridDemoView : UIViewBase
             .SetVerticalAlignment(UIAlignment.Center)
             // Smaller than a small button's 28px, to fit the title row a group without the button has.
             .SetAnchor(new ButtonComponent()
-                .SetType(UIButtonType.Ghost)
-                .SetSize(UIButtonSize.Small)
+                .SetVariant(UIButtonVariant.Ghost)
+                .SetSize(UISize.Small)
                 .SetMinHeight(UILayoutLength.Absolute(24))
                 .SetPadding(UIThickness.Uniform(2))
                 .SetIcon(MaterialIcons.Outlined(CodeIcon))
@@ -218,14 +228,15 @@ public abstract class DataGridDemoView : UIViewBase
                 .SetStatusBar(false)
                 .SetSearch(false)
                 .SetCompletions(false)
+                .SetAccessibleName("grid-demo.code")
                 // One row over the text's own: a long line brings a horizontal scrollbar, which would cover the last one.
                 .SetRows(rows)
                 .SetPlacement(1, 1, 24, 1)
             )
             // A literal rather than the field's value: the text is fixed, and a literal needs no id unique across the page.
             .AddChild(new ButtonComponent()
-                .SetType(UIButtonType.Ghost)
-                .SetSize(UIButtonSize.Small)
+                .SetVariant(UIButtonVariant.Ghost)
+                .SetSize(UISize.Small)
                 .SetIcon(MaterialIcons.Outlined(CopyIcon))
                 .SetTooltip("grid-demo.copy")
                 .SetHorizontalAlignment(UIAlignment.End)
@@ -238,10 +249,9 @@ public abstract class DataGridDemoView : UIViewBase
             .SetPlacement(1, 1, 24, 1);
 
     /// <summary>The line under a grid that reads what the controller last noted.</summary>
-    protected static TextComponent CreateStatus(string property)
-        => new TextComponent()
+    protected static TextComponent CreateStatus<TSource>(Expression<Func<TSource, object?>> property)
+        => UIText.Caption()
+            .Muted()
             .BindTitle(property)
-            .SetTitleType(UITextAppearance.Caption)
-            .SetTitleColor(UIThemeColor.FromStyle(UIColorStyle.Muted))
             .SetTitleWrap(true);
 }

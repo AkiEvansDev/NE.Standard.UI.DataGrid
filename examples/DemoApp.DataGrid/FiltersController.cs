@@ -9,7 +9,7 @@ namespace DemoApp.DataGrid;
 internal sealed partial class FiltersController : UIControllerBase
 {
     [RecursiveMember(false)]
-    public RecursiveCollection<Subscription> Subscriptions { get; } = [.. SubscriptionCatalogue.Slice(2_000, 120)];
+    public RecursiveCollection<Subscription> Subscriptions { get; } = [.. SubscriptionCatalogue.Slice(2_000, 120, lockCancelled: true)];
 
     /// <summary>The one row chosen, bound two-way: a click on a row writes its key here.</summary>
     [RecursiveMember]

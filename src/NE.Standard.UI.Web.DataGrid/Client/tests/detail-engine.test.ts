@@ -50,8 +50,12 @@ function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeEle
 
     root.append(grid);
 
+    let nextId = 0;
     const context = {
         root,
+        dom: {
+            ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`)
+        },
         rows: {
             renderVariant: () => {
                 const content = new FakeElement();
@@ -67,6 +71,7 @@ function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeEle
         },
         names,
         states: { isInert: () => false },
+        ownDescendants: (owner: FakeElement, selector: string, boundarySelector: string) => [...owner.querySelectorAll(selector)].filter(element => element.closest(boundarySelector) === owner),
         observeComponents: () => null
     };
 
@@ -215,4 +220,29 @@ test("Right and Left on the keyboard's row are the cell cursor's: they open and 
     fakeWindow.dispatch(grid, right);
     assert.equal(right.defaultPrevented, false);
     assert.equal(detailOf(first), null);
+});
+
+test("a row's chevron is named by its words and the row's header cell, not \"Details\" in every row", () => {
+    const chevron = FakeElement.of("ui-button", { "aria-label": "Details" }, "button");
+    const header = FakeElement.of("cell", { role: "rowheader" });
+    const row = FakeElement.of(names.tableRowClass).append(FakeElement.of(GridClasses.detailCell, { role: "gridcell" }).append(chevron), header);
+    const root = new FakeElement();
+
+    root.append(FakeElement.of("ui-data-grid", { [names.componentId]: "7" }).append(FakeElement.of(names.tableScrollClass).append(FakeElement.of("", { [names.itemsHost]: "" }).append(row))));
+    fakeDocument.body.replaceChildren(root);
+
+    let nextId = 0;
+
+    new DataGridDetailEngine(real<PluginEngineContext>({
+        root,
+        dom: { ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`) },
+        rows: {},
+        names,
+        states: { isInert: () => false },
+        ownDescendants: (owner: FakeElement, selector: string, boundarySelector: string) => [...owner.querySelectorAll(selector)].filter(element => element.closest(boundarySelector) === owner),
+        observeComponents: () => null
+    }));
+
+    assert.equal(chevron.getAttribute("aria-labelledby"), `${chevron.id} ${header.id}`);
+    assert.equal(chevron.getAttribute("aria-expanded"), "false");
 });

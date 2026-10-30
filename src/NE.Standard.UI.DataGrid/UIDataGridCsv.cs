@@ -92,7 +92,7 @@ public static class UIDataGridCsv
     /// </summary>
     private static string Caption(UITableColumn column, UIDataGridCsvOptions settings)
     {
-        if (column.HasCaption && column.Caption is { IsText: true } content && column.IsContent)
+        if (column.HasCaption && column.Caption is { IsText: true } content && (column.IsContent || settings.ContentCaptions))
             return content.Key;
 
         UIPhrase caption = column.HasCaption && column.Caption is { } words ? words : UIPhrase.Text(column is UIDataGridColumn typed ? typed.FallbackCaption : column.Key);

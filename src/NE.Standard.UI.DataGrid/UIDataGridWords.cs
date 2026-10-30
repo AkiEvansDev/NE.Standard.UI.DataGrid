@@ -29,10 +29,4 @@ public static class UIDataGridWords
 
     /// <summary>The detail column's name, in the chooser and on its chevron's tooltip.</summary>
     public const string Details = "ui.grid.details";
-
-    /// <summary>A row's checkbox name for a screen reader.</summary>
-    public const string SelectRow = "ui.grid.select-row";
-
-    /// <summary>The name of the checkbox over the rows, for a screen reader.</summary>
-    public const string SelectAll = "ui.grid.select-all";
 }

@@ -117,20 +117,41 @@ internal sealed record SubscriptionRecord(string Id, string Number, string Custo
             nameof(Started) => Started.ToString("s", CultureInfo.InvariantCulture),
             nameof(Paid) => Paid,
             nameof(Usage) => Usage,
-            nameof(SearchText) => SearchText,
             _ => null
         };
 
-    /// <summary>The number, the customer and the country in one text, for the search box.</summary>
-    public string SearchText => $"{Number} {Customer} {Country}";
+    /// <summary>Whether every word in <paramref name="search"/> appears in one of the subscription's text or numeric columns.</summary>
+    public bool MatchesSearch(string search)
+    {
+        var seatsText = Seats.ToString(CultureInfo.InvariantCulture);
+        var planText = Plan.ToString();
+        var statusText = Status.ToString();
+
+        foreach (var word in search.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var matched = Number.Contains(word, StringComparison.OrdinalIgnoreCase)
+                || Customer.Contains(word, StringComparison.OrdinalIgnoreCase)
+                || Country.Contains(word, StringComparison.OrdinalIgnoreCase)
+                || planText.Contains(word, StringComparison.OrdinalIgnoreCase)
+                || statusText.Contains(word, StringComparison.OrdinalIgnoreCase)
+                || seatsText.Contains(word, StringComparison.OrdinalIgnoreCase);
+
+            if (!matched)
+                return false;
+        }
+
+        return true;
+    }
 }
 
 /// <summary>
 /// One row of every grid on the page: a subscription, with a value of each kind a typed column formats. A row belongs to the one
 /// collection that shows it, so a window builds its rows afresh from the catalogue's records.
 /// </summary>
-internal sealed partial class Subscription(SubscriptionRecord record) : RecursiveObservable, IBindableItem
+internal sealed partial class Subscription(SubscriptionRecord record, bool lockCancelled = false) : RecursiveObservable, IBindableItem
 {
+    private readonly bool _lockCancelled = lockCancelled;
+
     // The seats the row last took, put back by Refresh when a bound collection took a count outside the canon's range.
     private int _seats = record.Seats;
 
@@ -169,23 +190,19 @@ internal sealed partial class Subscription(SubscriptionRecord record) : Recursiv
     [RecursiveMember]
     public partial int Usage { get; set; } = record.Usage;
 
-    /// <summary>The words a viewer would search a subscription by, in one text; the grid's search box matches it. Kept in step by <see cref="Refresh"/>.</summary>
-    [RecursiveMember]
-    public partial string SearchText { get; set; } = record.SearchText;
-
     /// <summary>The status as a badge reads it: its caption's key and its colour, kept in step with <see cref="Status"/> by <see cref="Refresh"/>.</summary>
     [RecursiveMember]
     public partial UIPhrase StatusCaption { get; set; } = CaptionOf(record.Status);
 
     [RecursiveMember]
-    public partial UIBadgeType StatusStyle { get; set; } = StyleOf(record.Status);
+    public partial UIBadgeVariant StatusVariant { get; set; } = VariantOf(record.Status);
 
     /// <summary>
     /// Whether the row may be chosen: a cancelled subscription refuses it, which the table's row template reads by this name
     /// (<c>IItemAbilitiesModel.CanSelect</c>). Kept in step with <see cref="Status"/> by <see cref="Refresh"/>.
     /// </summary>
     [RecursiveMember]
-    public partial bool? CanSelect { get; set; } = CanSelectOf(record.Status);
+    public partial bool? CanSelect { get; set; } = CanSelectOf(record.Status, lockCancelled);
 
     /// <summary>
     /// What the row derives — the price, the badge's words and colour, the choice — read again after a value was written from the
@@ -200,26 +217,25 @@ internal sealed partial class Subscription(SubscriptionRecord record) : Recursiv
         _seats = Seats;
         Monthly = ToRecord().Monthly;
         StatusCaption = CaptionOf(Status);
-        StatusStyle = StyleOf(Status);
-        CanSelect = CanSelectOf(Status);
-        SearchText = ToRecord().SearchText;
+        StatusVariant = VariantOf(Status);
+        CanSelect = CanSelectOf(Status, _lockCancelled);
     }
 
     private static UIPhrase CaptionOf(SubscriptionStatus status)
         => SubscriptionChoices.Statuses.FirstOrDefault(choice => choice.Value == status.ToString())?.Caption ?? UIPhrase.Text(status.ToString());
 
-    private static UIBadgeType StyleOf(SubscriptionStatus status)
+    private static UIBadgeVariant VariantOf(SubscriptionStatus status)
         => status switch
         {
-            SubscriptionStatus.Trial => UIBadgeType.Info,
-            SubscriptionStatus.Active => UIBadgeType.Success,
-            SubscriptionStatus.PastDue => UIBadgeType.Warning,
-            SubscriptionStatus.Suspended => UIBadgeType.Surface,
-            _ => UIBadgeType.Danger
+            SubscriptionStatus.Trial => UIBadgeVariant.Info,
+            SubscriptionStatus.Active => UIBadgeVariant.Success,
+            SubscriptionStatus.PastDue => UIBadgeVariant.Warning,
+            SubscriptionStatus.Suspended => UIBadgeVariant.Surface,
+            _ => UIBadgeVariant.Danger
         };
 
-    private static bool? CanSelectOf(SubscriptionStatus status)
-        => status == SubscriptionStatus.Cancelled ? false : null;
+    private static bool? CanSelectOf(SubscriptionStatus status, bool lockCancelled)
+        => lockCancelled && status == SubscriptionStatus.Cancelled ? false : null;
 
     /// <summary>The row as the catalogue keeps it, after an edit.</summary>
     public SubscriptionRecord ToRecord()
@@ -289,8 +305,8 @@ internal static class SubscriptionCatalogue
     public static IReadOnlyList<SubscriptionRecord> Everything => All.Value;
 
     /// <summary>A run of subscriptions as rows of their own, for a grid that holds them whole; from the middle, so the windowed grid starts elsewhere.</summary>
-    public static List<Subscription> Slice(int start, int count)
-        => [.. Enumerable.Range(start, count).Select(static index => new Subscription(Create(index)))];
+    public static List<Subscription> Slice(int start, int count, bool lockCancelled = false)
+        => [.. Enumerable.Range(start, count).Select(index => new Subscription(Create(index), lockCancelled))];
 
     /// <summary>One subscription from its index: a small mixer scatters the fields so a sort has something to do.</summary>
     public static SubscriptionRecord Create(int index)
@@ -429,6 +445,9 @@ internal sealed class SubscriptionSource : UIItemSourceBase<Subscription>
         IEnumerable<SubscriptionRecord> rows = _edits.Count == 0
             ? SubscriptionCatalogue.Everything
             : SubscriptionCatalogue.Everything.Select(row => _edits.GetValueOrDefault(row.Id, row));
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+            rows = rows.Where(subscription => subscription.MatchesSearch(query.Search));
 
         // Every filter term must hold, through the same comparison the client makes on a list it holds whole.
         for (var i = 0; i < query.Filters.Length; i++)

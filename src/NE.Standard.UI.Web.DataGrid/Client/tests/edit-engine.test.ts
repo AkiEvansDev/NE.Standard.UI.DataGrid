@@ -29,6 +29,7 @@ const names = {
 
 // What the engine asked the page to watch, by selector: a test hands it the components a mutation touched.
 const observers = new Map<string, (components: Iterable<FakeElement>) => void>();
+let onRemoved: (() => void) | undefined;
 
 // What the editor's field refuses, as the framework's validation judges it (`validation.refuses`): nothing unless a test says.
 let refused: (value: string) => boolean = () => false;
@@ -66,6 +67,7 @@ function createGrid(draw: (variant: string) => FakeElement, answers = new CellEd
     fakeDocument.focused = true;
     fakeWindow.listeners.clear();
     fakeWindow.timers.length = 0;
+    observers.clear();
     refused = () => false;
     settled = () => Promise.resolve();
     released = 0;
@@ -94,21 +96,25 @@ function createGrid(draw: (variant: string) => FakeElement, answers = new CellEd
             }
         },
         values: {
-            read: (element: FakeElement) => element instanceof FakeInput ? element.value : null,
+            read: (element: FakeElement) => element instanceof FakeInput ? (element.type === "checkbox" ? element.checked : element.value) : null,
             hold: () => undefined,
             release: () => {
                 released++;
             },
             write: (element: FakeElement, value: unknown) => {
-                if (element instanceof FakeInput)
-                    element.value = String(value);
+                if (element instanceof FakeInput) {
+                    if (element.type === "checkbox")
+                        element.checked = Boolean(value);
+                    else
+                        element.value = String(value);
+                }
 
                 return true;
             },
             whenSettled: () => settled()
         },
         tables: { columnOrder: () => ["Seats", "Plan"], isColumnHidden: () => false },
-        states: { isInert: () => false },
+        states: { isInert: () => false, isInSight: (element: FakeElement) => element.checkVisibility() },
         // The core's first stop of a container, as far as an editor's field goes, and its giving the keyboard back to a row's cell.
         focus: {
             first: (container: FakeElement) => container.querySelector("input, textarea, select, button"),
@@ -124,8 +130,17 @@ function createGrid(draw: (variant: string) => FakeElement, answers = new CellEd
         validation: { refuses: (field: FakeElement) => field instanceof FakeInput && refused(field.value) },
         // The core's reading: Safari's Enter that ends a composition carries the key code alone.
         shortcuts: { isComposing: (event: { isComposing: boolean; keyCode?: number }) => event.isComposing || event.keyCode === 229 },
-        observeComponents: (_root: FakeElement, selector: string, _init: unknown, handler: (components: Iterable<FakeElement>) => void) => {
-            observers.set(selector, handler);
+        ownDescendants: (owner: FakeElement, selector: string, boundarySelector: string) => [...owner.querySelectorAll(selector)].filter(element => element.closest(boundarySelector) === owner),
+        observeComponents: (_root: FakeElement, selector: string, init: { removed?: () => void }, handler: (components: Iterable<FakeElement>) => void) => {
+            const previous = observers.get(selector);
+            observers.set(selector, components => {
+                previous?.(components);
+                handler(components);
+            });
+
+            if (init.removed !== undefined)
+                onRemoved = init.removed;
+
             return null;
         }
     };
@@ -715,8 +730,8 @@ test("a grid that left the page with its editor open lets the editor go, once", 
 
     field.value = "12";
     grid.remove();
-    observers.get("*")?.([]);
-    observers.get("*")?.([]);
+    onRemoved?.();
+    onRemoved?.();
 
     assert.equal(released, 1);
 });
@@ -738,4 +753,66 @@ test("an editor whose row a virtualized host keeps drawn out of range, for the f
     assert.equal(field.value, "12");
     assert.equal(heard.sent, 0);
     assert.equal(released, 0);
+});
+
+test("Enter on a checkbox editor toggles the checkbox, commits the edit and gives the keyboard back to the grid", async () => {
+    const checkboxField = (): FakeInput => {
+        const input = new FakeInput("checkbox");
+
+        input.checked = false;
+        input.attributes.set(names.bindValue, "1");
+
+        return input;
+    };
+    const { grid, cell, heard } = createGrid(() => new FakeElement().append(checkboxField()));
+    const field = open(cell);
+
+    assert.equal(field.selected, false);
+    assert.equal((cell.nextElementSibling as FakeElement).hasAttribute(names.noRowOpen), false);
+
+    fakeWindow.dispatch(field, new FakeKeyboardEvent("Enter"));
+    await answered();
+
+    assert.ok(!isOpen(cell));
+    assert.equal(field.checked, true);
+    assert.equal(heard.sent, 1);
+    assert.equal(heard.edits, 1);
+    assert.equal(fakeDocument.activeElement, grid);
+});
+
+test("a checkbox editor toggled with Space keeps its changed mark across a row redraw and commits on Enter without flipping back", async () => {
+    let checkedOnServer = false;
+    const checkboxField = (): FakeInput => {
+        const input = new FakeInput("checkbox");
+
+        input.checked = checkedOnServer;
+        input.attributes.set(names.bindValue, "1");
+
+        return input;
+    };
+    const { grid, cell, heard } = createGrid(() => new FakeElement().append(checkboxField()));
+    const field = open(cell);
+
+    // Space toggles the checkbox and sends `change`; the server redraws the row with the new state while the editor stays open.
+    field.click();
+    checkedOnServer = true;
+
+    const host = cell.parentElement!.parentElement!;
+    const redrawnCell = editableCell("Seats");
+
+    host.replaceChildren(FakeElement.of(names.tableRowClass, { [names.key]: "r1" }).append(redrawnCell, editableCell("Plan")));
+    observers.get(".ui-data-grid")!([grid]);
+
+    const reopened = fakeDocument.activeElement as FakeInput;
+
+    assert.ok(isOpen(redrawnCell));
+    assert.equal(reopened.checked, true);
+
+    fakeWindow.dispatch(reopened, new FakeKeyboardEvent("Enter"));
+    await answered();
+
+    assert.ok(!isOpen(redrawnCell));
+    assert.equal(reopened.checked, true);
+    assert.equal(heard.sent, 1);
+    assert.equal(heard.edits, 1);
 });

@@ -52,7 +52,9 @@ new DataGridComponent()
 
 Everything a `TableComponent` takes, a grid takes: `SetItems` or `BindItems` for rows the page holds, `BindSource`
 for a window over a `UIItemSourceBase<T>`, `Virtualized()`, `FilterBy`/`SortBy` rules, `SelectionMode`, `Striped`,
-`RowHoverable`, `ResizableColumns`, `ReorderableColumns`, the borders and the surface.
+`RowHoverable`, `ResizableColumns`, `ReorderableColumns`, the borders and the surface. A row is sent with what the grid reads
+off it — its columns' property, sort, edit, filter and total paths, the search path and what its templates bind — not whole:
+a script of your own that reads another member of a row names it with `AddItemReads(path)`.
 
 ### Typed columns
 
@@ -116,8 +118,8 @@ of an items view does; a change to one row's collection reaches that row's cell.
 
 A click on a caption sorts by that column, a second click reverses, a third clears; Shift+click adds a column to
 a multi-column sort, and the marks say the direction and the place. A sortable caption is a stop of the header's keyboard
-(below, not of the Tab order) named *Sort by …* (`ui.grid.sort-by`, its caption looked up as the caption beside it is; a column with
-no caption is named by what it sorts, in words), and Enter or Space presses it as a click does, Shift with them included. A property column sorts unless
+(below, not of the Tab order) named by its caption and described *Sort by …* (`ui.grid.sort-by`, `aria-description`; a column
+with no caption is named by what it sorts, in words), and Enter or Space presses it as a click does, Shift with them included. A property column sorts unless
 it says `sortable: false`; a template column sorts when it names a `sortPath`; `AddTextColumn(caption, path, sortable)` says
 either.
 
@@ -140,14 +142,11 @@ The source answers `UIItemWindowRequest.Query` — its `Sorts` are what the head
 
 A column that says `filterable: true` gets a filter: a text match for a text column, a from and a to for a number, money
 or date column, a select for a boolean or an enum column. A template column filters through `AddFilter(key, kind,
-choices)`, by the property its `sortPath` names. The filters stand behind a **Filters** button in the band over the
-header — a flyout with a captioned filter per column, a **Clear filters** button under them that empties them all, and
-a count of the ones in use on the button.
-`SetSearch(propertyPath)` adds a search box to the band that matches one property as text, its placeholder the page's
-"Search" (`ui.grid.search`) unless `SetSearchPlaceholder(text)` names another — a phrase, a key with its arguments or a text,
-before or after `SetSearch`. The band is a row of
-controls: the box is a field of the page's own shape and the two buttons take the same ground, height and corner, and the
-field's states — the edge under the pointer, and the active edge while the keyboard is on one or its flyout is open. A key
+choices)`, by the property its `sortPath` names. Every grid renders a built-in search bar over its header, matching free-text words across the grid's columns (`UIItemsQuery.Search`)
+unless `SetSearch(propertyPath)` narrows it to a single property; `SetSearchPlaceholder(text)` overrides its "Search"
+(`ui.grid.search`) placeholder. When any column is filterable or `SetColumnChooser` is enabled, the **Filters** (with active-filter
+count badge and **Clear filters** footer) and **Columns** flyout triggers sit inside the trailing end of the search bar as compact
+`Ghost` action buttons named by their tooltips (`ui.grid.filters`, `ui.grid.columns`). A key
 pressed in the band, a flyout or the header is that control's own: the grid's cell cursor, and the Enter, F2 or character that
 opens an editor, answer only on the grid itself or in a row.
 
@@ -160,12 +159,12 @@ opens an editor, answer only on the grid itself or in a row.
 
 Every field is a term of the same `Query` the headers sort by — a text match without regard to case, a
 `GreaterOrEqual`/`LessOrEqual` pair for a range, an `Equal` for a choice — so a grid the page holds narrows in the
-browser, and a windowed one asks its source, which sees the terms in `UIItemWindowRequest.Query.Filters`. A query's
-terms are all required, which is why the search box matches one property: compose it on the row from the words a
-viewer would look for (`$"{Number} {Customer} {Country}"`) rather than expect the grid to guess which columns are text.
+browser, and a windowed one asks its source, which sees the terms in `UIItemWindowRequest.Query.Filters` and `Query.Search`. A query's
+terms are all required: by default the built-in search bar writes `UIItemsQuery.Search` across the row's columns, while `SetSearch(propertyPath)` narrows it to one composed or indexed property (`$"{Number} {Customer} {Country}"`).
+
 A date term compares the picker's ISO text against the row's, so a date property reaches the wire in that shape; the end of a
 date range is written as *before the next day*, so a row with a time, a fraction or a zone on its last day is still in.
-A term a field could have written is that field's: it shows in the field, and gives way to what the field says when the viewer
+A windowed grid offers its source only the terms its viewer can write (`QueryTerms`): free-text `Search` (when `SetSearch(propertyPath)` did not narrow it to a single property), the filterable columns' and any narrowed search property by `GreaterOrEqual`, `LessOrEqual`, `Less`, `Equal` or `LikeIgnoreCase`, and the sortable columns'; any other term a page sends refuses the window. A term a field could have written is that field's: it shows in the field, and gives way to what the field says when the viewer
 edits a filter. Any other term the controller set in `Query` — on a property no field shows, or in a shape no field writes (an
 `Equal` on a text, a `Greater` on a number) — neither shows nor counts, and stays when the viewer edits, since the viewer has no
 way to take it back. A query the controller pushes shows in the fields: each term a field could have written goes into its
@@ -261,8 +260,8 @@ it, Enter or F2 going into it; with `ExpandOnClick`, Enter on the keyboard's row
 inside a detail is that table's, and opens nothing of the grid's. A cell that answers the click itself — the checkbox, an
 editable one while the grid edits — never opens the row. The detail is a child of the row, so it stripes, hides and scrolls with it; it is drawn when the row opens, against the
 row's own item, whether the server painted the row or the browser built it. A press on a button, a field or the text inside an
-open detail is the detail's, not the row's. It fades in as it opens. The detail column's chevron is named *Details* (`ui.grid.details`) for a reader,
-and says whether its detail is out.
+open detail is the detail's, not the row's. It fades in as it opens. The detail column's chevron is named *Details* (`ui.grid.details`)
+and the row's header cell for a reader, as the row's box is, and says whether its detail is out.
 
 ### A column chooser and responsive columns
 
@@ -282,13 +281,13 @@ new DataGridComponent("orders")
 A hidden column keeps its place: its track goes to zero and comes back with its width, so resizing and pinning read as
 before, and the width it gave up goes to the columns that are left rather than off the grid's edge. The viewer's word wins
 over the author's — a column hidden from the start or below a tier; a word that only repeats the author's is not kept.
-`selection` is the key of the grid's own column of checkboxes and is refused for an author's column.
+`selection` (`TableComponent.SelectionColumnKey`) is the key of the table's own column of checkboxes and is refused for an author's column.
 
 ### Rows the viewer moves
 
 The grid's rows move as a table's do. With `SetDraggable(true)` a row whose item does not refuse it (`CanDrag = false`) is dragged
 between two others — a line marks where it would land — or moved one place by Alt+Up and Alt+Down, and the command named by
-`OnRowMoveWithItemKey` gets the row's key and the index it now takes, which is where `RecursiveCollection.Move` puts it. The row
+`OnItemMoveWithItemKey` gets the row's key and the index it now takes, which is where `RecursiveCollection.Move` puts it. The row
 stands in its new place as soon as it is dropped; the command's answer says where it stays, and a controller that refuses, fails
 or loses the connection puts it back.
 
@@ -296,7 +295,7 @@ or loses the connection puts it back.
 new DataGridComponent("steps")
     .BindItems(nameof(StepsController.Steps))
     .SetDraggable(true)
-    .OnRowMoveWithItemKey(nameof(StepsController.MoveStep))
+    .OnItemMoveWithItemKey(nameof(StepsController.MoveStep))
 
 [UICommand]
 public void MoveStep(string id, int index)
@@ -367,7 +366,7 @@ column takes the editor the author bound:
 
 ```csharp
 .AddNumberColumn("Quantity", nameof(Order.Quantity), "N0", editable: true)
-.AddEditableColumn("Status", new TextComponent().BindBadgeText(nameof(Order.StatusCaption), UIBindingScope.Relative), new SelectComponent().SetOptions(statuses).BindValue(nameof(Order.Status), UIBindingScope.Relative), sortPath: nameof(Order.Status))
+.AddEditableColumn("Status", new TextComponent().BindBadgeTitle(nameof(Order.StatusCaption), UIBindingScope.Relative), new SelectComponent().SetOptions(statuses).BindValue(nameof(Order.Status), UIBindingScope.Relative), sortPath: nameof(Order.Status))
 .OnCellEdit(nameof(OrdersController.CellEdited))   // CellEdited(string id, string column)
 ```
 
@@ -391,7 +390,11 @@ and have the old value pushed back. `OnCellEdit` runs after the value has landed
 The grid's own `Editable` switch, on by default, says whether editable cells open their editors at all. It is bindable, so a
 mode can stop the cells editing without touching its columns — the keyboard still chooses and opens rows, and a double click on
 an editable cell opens its row as on any other cell. An editor open when editing turns off, or when the grid turns disabled or
-loading — itself or through a component around it — closes as Escape closes it, sending nothing:
+loading — itself or through a component around it — closes as Escape closes it, sending nothing. The server holds it too: while
+`Editable` is off every editor is closed there, so a forged edit and its `cell-edit` are refused, and an editor whose own
+`Enabled` is false stays closed whatever `Editable` reads. `BindEditable` binds from the root or the grid's own context, never
+`UIBindingScope.Parent`, and an editor binding its own `Enabled` goes with a static `Editable` of true only (both refused at
+compile):
 
 ```csharp
 new DataGridComponent("orders")
@@ -425,8 +428,9 @@ nothing while `Editable` is off, nor while the keyboard's frame shows, the frame
 
 `SelectionMode = Many` puts a column of checkboxes before every other column, with a three-state one over them that takes or
 clears the rows the grid has drawn — what the filters left of a grid holding all its rows, the rows on the page of a
-virtualized or windowed one, never rows the source has not handed over; a row a filter hid is neither taken nor counted. The boxes are named *Select row* and *Select all rows* for a screen reader (`ui.grid.select-row`,
-`ui.grid.select-all`). The column is the grid's own: it
+virtualized or windowed one, never rows the source has not handed over; a row a filter hid is neither taken nor counted. The boxes are named *Select row* and *Select all rows* for a screen reader (`ui.table.select.row`,
+`ui.table.select.all`), a row's box followed by the row's header cell — *Select row SUB-001001* — which is the first captioned
+column unless `SetRowHeaderColumn(key)` names another. The checkbox column comes from `TableComponent` (`TableComponent.SelectionColumnKey`, placed after the detail column when one is present): it
 carries no resize handle, the chooser never offers it and an export never writes it. While it is there a click on a row chooses
 nothing, that click belonging to the row's detail. The keyboard still chooses, and adds to the ticks rather than replacing them:
 Space on the keyboard's row ticks or unticks it, Shift with an arrow takes the range from the row last clicked or ticked to the
@@ -459,10 +463,10 @@ and the header is a group reached from them — the ARIA grid pattern, cell by c
   a time. The grid keeps the focus and names the cell (`aria-activedescendant`); the row is lit with the framework's keyboard wash
   and the cell wears its frame — only while the keyboard holds the grid, never after a press of the pointer.
 - **Enter, F2 or a character** on an editable cell opens its editor, as above. **Enter or Space** on the chevron's cell opens or
-  closes the detail, and Enter on the checkbox's cell ticks or unticks its row; elsewhere Enter runs the row's click (`OnRowClick…`), as a press of the pointer does, and its `OnRowOpen…`
+  closes the detail, and Enter on the checkbox's cell ticks or unticks its row; elsewhere Enter runs the row's click (`OnItemClick…`), as a press of the pointer does, and its `OnItemOpen…`
   after it. Where the grid chooses, the framework's rule stands: one row at a time follows the arrows, Enter chooses before it
   presses, and Space ticks a row of a grid choosing many — Shift with Up or Down takes the range — rather than pressing it.
-- **Delete** raises the rows' remove where the grid has `OnRowRemove…`.
+- **Delete** raises the rows' remove where the grid has `OnItemRemove…`.
 - **The header.** Up from the first row goes to the header — to the caption of the cursor's column — where Left and Right walk the
   captions in the order the columns stand and Home and End go to the ends; Enter or Space sorts by the caption, Shift with them adds
   it to the sort, Alt with an arrow moves its column, Shift with an arrow sizes it, and Space on the box over the checkboxes takes

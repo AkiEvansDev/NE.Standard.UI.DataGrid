@@ -22,9 +22,7 @@ public sealed partial class DataGridStrings
             [Filters] = "Фильтры",
             [ClearFilters] = "Сбросить фильтры",
             [Columns] = "Столбцы",
-            [Details] = "Подробности",
-            [SelectRow] = "Выбрать строку",
-            [SelectAll] = "Выбрать все строки"
+            [Details] = "Подробности"
         }.ToFrozenDictionary(StringComparer.Ordinal),
         ["zh-Hans"] = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -39,9 +37,7 @@ public sealed partial class DataGridStrings
             [Filters] = "筛选器",
             [ClearFilters] = "清除筛选",
             [Columns] = "列",
-            [Details] = "详情",
-            [SelectRow] = "选择行",
-            [SelectAll] = "选择所有行"
+            [Details] = "详情"
         }.ToFrozenDictionary(StringComparer.Ordinal)
     }.ToFrozenDictionary(StringComparer.Ordinal);
 }

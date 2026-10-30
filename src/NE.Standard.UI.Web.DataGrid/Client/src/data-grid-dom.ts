@@ -1,8 +1,8 @@
 // What every engine of the grid reads off the page: the grid's root, rows and host as the table's renderer lays them out, plus
 // small readings the engines share.
 
-import type { DomNames } from "ne-standard-ui";
-import { GridClasses } from "./data-grid-names.ts";
+import type { DomNames, DomRegistry } from "ne-standard-ui";
+import { ClientNames, GridClasses } from "./data-grid-names.ts";
 
 export const RootSelector = `.${GridClasses.root}`;
 
@@ -14,28 +14,6 @@ export function rowSelector(names: DomNames): string {
 /** The rows' host, inside the box that carries the table's frame and its scroll. */
 export function hostSelector(names: DomNames): string {
     return `:scope > .${names.tableScrollClass} > [${names.itemsHost}]`;
-}
-
-/** The grid's own matching descendants, a nested grid's left to it. */
-export function ownDescendants(grid: HTMLElement, selector: string): HTMLElement[] {
-    const own: HTMLElement[] = [];
-
-    for (const element of grid.querySelectorAll<HTMLElement>(selector)) {
-        if (element.closest(RootSelector) === grid)
-            own.push(element);
-    }
-
-    return own;
-}
-
-/** The grid's first own match inside `within` (the grid itself unless given), a nested grid's left to it. */
-export function ownFirst<T extends HTMLElement = HTMLElement>(grid: HTMLElement, selector: string, within: ParentNode = grid): T | null {
-    for (const element of within.querySelectorAll<T>(selector)) {
-        if (element.closest(RootSelector) === grid)
-            return element;
-    }
-
-    return null;
 }
 
 /** The grid the element stands in, or null outside every grid. */
@@ -61,4 +39,22 @@ export function setAttribute(element: Element, name: string, value: string | nul
         element.removeAttribute(name);
     else if (element.getAttribute(name) !== value)
         element.setAttribute(name, value);
+}
+
+/**
+ * A row's control named by its own words and the row's header cells — "Select row SUB-001001", "Details SUB-001001" — rather than
+ * the same words in every row; a row with no header cell, or a control with no words, keeps its own name alone.
+ */
+export function nameByRow(control: HTMLElement, row: HTMLElement, ensureId: DomRegistry["ensureId"]): void {
+    const headers = [...row.children].filter(cell => cell.getAttribute("role") === "rowheader");
+
+    if (headers.length === 0 || !control.hasAttribute("aria-label")) {
+        control.removeAttribute("aria-labelledby");
+        return;
+    }
+
+    const ids = [control, ...headers].map(element => ensureId(element, ClientNames.nameIdPrefix)).join(" ");
+
+    if (control.getAttribute("aria-labelledby") !== ids)
+        control.setAttribute("aria-labelledby", ids);
 }

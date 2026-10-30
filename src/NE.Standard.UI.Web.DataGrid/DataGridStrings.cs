@@ -47,12 +47,6 @@ public sealed partial class DataGridStrings : IUIStringsSource
     /// <summary>The detail column's name, in the chooser and on its chevron's tooltip.</summary>
     public const string Details = UIDataGridWords.Details;
 
-    /// <summary>A row's checkbox name for a screen reader.</summary>
-    public const string SelectRow = UIDataGridWords.SelectRow;
-
-    /// <summary>The name of the checkbox over the rows, for a screen reader.</summary>
-    public const string SelectAll = UIDataGridWords.SelectAll;
-
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, string> English { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -67,8 +61,6 @@ public sealed partial class DataGridStrings : IUIStringsSource
         [Filters] = "Filters",
         [ClearFilters] = "Clear filters",
         [Columns] = "Columns",
-        [Details] = "Details",
-        [SelectRow] = "Select row",
-        [SelectAll] = "Select all rows"
+        [Details] = "Details"
     }.ToFrozenDictionary(StringComparer.Ordinal);
 }

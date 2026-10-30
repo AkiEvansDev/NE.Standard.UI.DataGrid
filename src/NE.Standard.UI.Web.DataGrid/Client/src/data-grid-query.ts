@@ -14,6 +14,7 @@ export type FilterTerm = {
 export type ItemsQuery = {
     readonly filters?: readonly FilterTerm[] | null;
     readonly sorts?: readonly SortTerm[] | null;
+    readonly search?: string | null;
 };
 
 /** The query's text on the grid, as its attribute `names.itemsQuery` holds it, or null for none. */
@@ -49,7 +50,9 @@ export function writeQuery(grid: Element, names: DomNames, query: ItemsQuery): v
 
     const filters = query.filters ?? [];
     const sorts = query.sorts ?? [];
-    const text = filters.length === 0 && sorts.length === 0 ? null : JSON.stringify({ filters, sorts });
+    const search = query.search?.trim() ?? "";
+    const payload = search.length > 0 ? { filters, sorts, search } : { filters, sorts };
+    const text = filters.length === 0 && sorts.length === 0 && search.length === 0 ? null : JSON.stringify(payload);
 
     if (text === element.getAttribute(names.itemsQuery))
         return;

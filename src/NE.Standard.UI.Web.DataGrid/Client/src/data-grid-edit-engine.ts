@@ -5,7 +5,7 @@
 // over its cell, showing the new value and taking nothing, until the commit is answered: the cell under it still holds the old one.
 
 import type { CellKey, ComponentStates, DomNames, FieldValidation, Focus, ItemRows, PluginEngineContext, ShortcutWords, ValueReading } from "ne-standard-ui";
-import { componentIdOf, gridOf, isOwnRow, ownDescendants, ownFirst, RootSelector, rowSelector } from "./data-grid-dom.ts";
+import { componentIdOf, gridOf, isOwnRow, RootSelector, rowSelector } from "./data-grid-dom.ts";
 import { ClientNames, GridAttributes, GridClasses, GridEvents } from "./data-grid-names.ts";
 
 const EditableCellSelector = `.${GridClasses.editableCell}`;
@@ -30,6 +30,7 @@ type OpenEditor = {
 type EditorPlace = {
     readonly key: string;
     readonly column: string;
+    readonly original: unknown;
     readonly draft: unknown;
     readonly changed: boolean;
 };
@@ -64,8 +65,11 @@ export class DataGridEditEngine {
     private readonly focus: Focus;
     private readonly validation: FieldValidation;
     private readonly shortcuts: ShortcutWords;
+    private readonly ownDescendants: PluginEngineContext["ownDescendants"];
     private readonly rowSelector: string;
     private readonly answers: CellEditAnswers;
+    private readonly handleWindowChange = (domEvent: Event): void => this.holdWindowChange(domEvent);
+    private readonly cleanups: (() => void)[] = [];
     // One editor per grid, in a map that can be walked, since a state change above the grids is checked against every open editor.
     private readonly open = new Map<HTMLElement, OpenEditor>();
     // Committed editors waiting for their answer, by the cell each stands over.
@@ -88,6 +92,7 @@ export class DataGridEditEngine {
         this.focus = context.focus;
         this.validation = context.validation;
         this.shortcuts = context.shortcuts;
+        this.ownDescendants = context.ownDescendants;
         this.rowSelector = rowSelector(context.names);
 
         for (const grid of root.querySelectorAll<HTMLElement>(RootSelector))
@@ -98,12 +103,12 @@ export class DataGridEditEngine {
         for (const cell of root.querySelectorAll<HTMLElement>(EditableCellSelector))
             this.markTwoLine(cell);
 
-        context.observeComponents(root, EditableCellSelector, { childList: true, attributeFilter: [this.names.textDescription] }, cells => {
+        const twoLineObserver = context.observeComponents(root, EditableCellSelector, { childList: true, attributeFilter: [this.names.textDescription] }, cells => {
             for (const cell of cells)
                 this.markTwoLine(cell);
         });
 
-        root.addEventListener("dblclick", domEvent => {
+        const onDoubleClick = (domEvent: Event): void => {
             const cell = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(EditableCellSelector) : null;
 
             if (cell === null || cell.closest(RootSelector) === null)
@@ -111,10 +116,10 @@ export class DataGridEditEngine {
 
             domEvent.preventDefault();
             this.openEditor(cell);
-        }, true);
+        };
 
         // Noted, since a select or checkbox sends as it's chosen and Escape must still take it back.
-        root.addEventListener("change", domEvent => {
+        const onChange = (domEvent: Event): void => {
             const grid = gridOf(domEvent.target);
             const state = grid === null ? undefined : this.open.get(grid);
 
@@ -126,17 +131,17 @@ export class DataGridEditEngine {
             // Once the list has closed behind the choice, which its engine does after the change.
             if (domEvent.target === state.field)
                 window.setTimeout(() => this.followChoice(grid, state), 0);
-        }, true);
+        };
 
         // On the window, ahead of the value binding: it listens on the root and starts before any package, so there it has already sent.
-        window.addEventListener("change", domEvent => this.holdWindowChange(domEvent), true);
+        window.addEventListener("change", this.handleWindowChange, true);
 
-        root.addEventListener("keydown", domEvent => this.handleKeyDown(domEvent), true);
-        root.addEventListener(this.names.cellKey, domEvent => this.handleCellKey(domEvent));
+        const onKeyDown = (domEvent: Event): void => this.handleKeyDown(domEvent);
+        const onCellKey = (domEvent: Event): void => this.handleCellKey(domEvent);
 
         // An editor whose row was redrawn reopens on the new row's cell with the draft put back, rather than losing the edit; a row
-        // drawn while editing is off gives its double click back too.
-        context.observeComponents(root, RootSelector, { childList: true }, grids => {
+        // drawn while editing is off gives its double click back too. A grid that left the page takes its open editor with it.
+        const rowObserver = context.observeComponents(root, RootSelector, { childList: true, removed: () => this.prune() }, grids => {
             for (const grid of grids) {
                 this.followRow(grid);
                 this.syncClaims(grid);
@@ -145,7 +150,7 @@ export class DataGridEditEngine {
 
         // Editing off, or the grid or anything holding it disabled, loading or inert: the open editor closes as Escape closes it. A
         // change above a grid counts only while an editor is open.
-        context.observeComponents(root, RootSelector, {
+        const stateObserver = context.observeComponents(root, RootSelector, {
             attributeFilter: [ReadOnlyAttribute, "class", "inert"],
             relevant: mutation => mutation.target instanceof Element && (mutation.target.matches(RootSelector) || this.editsUnder(mutation.target))
         }, grids => {
@@ -161,7 +166,7 @@ export class DataGridEditEngine {
         // A press on a part with no focus of its own would focus the grid's root and commit the editor under the pointer; only its
         // default is prevented, since the press still reaches the field's engine. The focusable is searched inside the editor only,
         // since climbing past it would always find the grid's own tab stop.
-        root.addEventListener("mousedown", domEvent => {
+        const onMouseDown = (domEvent: Event): void => {
             const grid = gridOf(domEvent.target);
             const state = grid === null ? undefined : this.open.get(grid);
 
@@ -172,10 +177,10 @@ export class DataGridEditEngine {
 
             if (focusable === null || !state.editor.contains(focusable))
                 domEvent.preventDefault();
-        }, true);
+        };
 
         // Focus leaving the editor commits what was typed, as a field's blur does, unless the grid stops editing by then.
-        root.addEventListener("focusout", domEvent => {
+        const onFocusOut = (domEvent: Event): void => {
             if (!(domEvent instanceof FocusEvent) || !(domEvent.target instanceof Element))
                 return;
 
@@ -192,14 +197,48 @@ export class DataGridEditEngine {
 
             // A part that hid under the focus drops it to nothing rather than where the reader went: Chromium blurs an element as it
             // loses its box or turns invisible; Firefox keeps the focus on it and raises nothing, which needs no guard.
-            const hid = next === null && domEvent.target.isConnected && !isShown(domEvent.target);
+            const hid = next === null && domEvent.target.isConnected && !this.states.isInSight(domEvent.target);
 
             // After the blur's own change has been dispatched, which the browser does before the focus moves on.
             window.setTimeout(() => this.followFocusOut(grid, state, hid), 0);
-        }, true);
+        };
 
-        // A grid that left the page takes its open editor with it; a removal is a childList change above every selector.
-        context.observeComponents(root, "*", { childList: true }, () => this.prune());
+        root.addEventListener("dblclick", onDoubleClick, true);
+        root.addEventListener("change", onChange, true);
+        root.addEventListener("keydown", onKeyDown, true);
+        root.addEventListener(this.names.cellKey, onCellKey);
+        root.addEventListener("mousedown", onMouseDown, true);
+        root.addEventListener("focusout", onFocusOut, true);
+        this.cleanups.push(
+            () => twoLineObserver?.disconnect(),
+            () => rowObserver?.disconnect(),
+            () => stateObserver?.disconnect(),
+            () => root.removeEventListener("dblclick", onDoubleClick, true),
+            () => root.removeEventListener("change", onChange, true),
+            () => root.removeEventListener("keydown", onKeyDown, true),
+            () => root.removeEventListener(this.names.cellKey, onCellKey),
+            () => root.removeEventListener("mousedown", onMouseDown, true),
+            () => root.removeEventListener("focusout", onFocusOut, true)
+        );
+    }
+
+    public dispose(): void {
+        window.removeEventListener("change", this.handleWindowChange, true);
+
+        for (const cleanup of this.cleanups)
+            cleanup();
+
+        this.cleanups.length = 0;
+
+        for (const state of this.open.values()) {
+            if (state.field !== null)
+                this.values.release(state.field);
+        }
+
+        this.open.clear();
+
+        for (const state of [...this.settling.values()])
+            this.finishSettling(state);
     }
 
     /** Drops the editor of a grid that left the page, as `followRow` drops one whose cell went: a commit would reach nobody. */
@@ -240,7 +279,7 @@ export class DataGridEditEngine {
         if (claims && !this.unclaimed.has(grid))
             return;
 
-        for (const cell of ownDescendants(grid, EditableCellSelector))
+        for (const cell of this.ownDescendants(grid, EditableCellSelector, RootSelector))
             cell.toggleAttribute(this.names.noRowOpen, claims);
 
         if (claims)
@@ -397,9 +436,10 @@ export class DataGridEditEngine {
         const focusable = this.focus.first(editor);
 
         focusable?.focus({ preventScroll: true });
+        state.original = this.fieldValue(field);
 
         // Selected whole: a character typed on the closed cell lands here and replaces the value, as a spreadsheet's does.
-        if (focusable instanceof HTMLInputElement || focusable instanceof HTMLTextAreaElement)
+        if ((focusable instanceof HTMLInputElement && focusable.type !== "checkbox" && focusable.type !== "radio") || focusable instanceof HTMLTextAreaElement)
             focusable.select();
 
         // A choice cell opens its list with the editor, since a second press would say nothing new; through the framework's trigger,
@@ -449,6 +489,7 @@ export class DataGridEditEngine {
         // The cell's id is the one the grid names as its cursor, and the cursor stays on the cell.
         editor.removeAttribute("id");
         editor.removeAttribute(this.names.cellFocus);
+        editor.removeAttribute(this.names.noRowOpen);
         // Its keys are its own: no row cursor or detail of the grid acts on them, and its Escape takes the edit back — no dialog, flyout
         // or drawer the grid stands in closes on it first.
         editor.setAttribute(this.names.ownsKeys, "");
@@ -589,6 +630,7 @@ export class DataGridEditEngine {
         const place: EditorPlace = {
             key: state.cell.closest<HTMLElement>(this.rowSelector)?.getAttribute(this.names.key) ?? "",
             column: state.cell.getAttribute(ColumnAttribute) ?? "",
+            original: state.original,
             draft: this.fieldValue(state.field),
             changed: state.changed
         };
@@ -599,7 +641,7 @@ export class DataGridEditEngine {
         if (state.field !== null)
             this.values.release(state.field);
 
-        const row = place.key.length === 0 ? null : ownFirst(grid, `${this.rowSelector}[${this.names.key}="${CSS.escape(place.key)}"]`);
+        const row = place.key.length === 0 ? null : (this.ownDescendants(grid, `${this.rowSelector}[${this.names.key}="${CSS.escape(place.key)}"]`, RootSelector)[0] ?? null);
         const cell = row?.querySelector<HTMLElement>(`:scope > ${EditableCellSelector}[${ColumnAttribute}="${CSS.escape(place.column)}"]`) ?? null;
 
         if (cell === null)
@@ -609,7 +651,15 @@ export class DataGridEditEngine {
 
         const reopened = this.open.get(grid);
 
-        if (reopened === undefined || reopened.field === null || place.draft === reopened.original)
+        if (reopened === undefined || reopened.field === null)
+            return;
+
+        if (place.changed) {
+            reopened.original = place.original;
+            reopened.changed = true;
+        }
+
+        if (place.draft === this.fieldValue(reopened.field))
             return;
 
         // Through the field's own binding, so a composed field (a select, a date) shows the draft its hidden input holds.
@@ -643,6 +693,10 @@ export class DataGridEditEngine {
         switch (domEvent.key) {
             case "Enter":
                 domEvent.preventDefault();
+                // Enter on a checkbox editor that has not been toggled yet flips it and commits in one step, as Enter on a selection checkbox does.
+                if (state.field instanceof HTMLInputElement && state.field.type === "checkbox" && !state.changed)
+                    state.field.click();
+
                 this.commitEditor(grid, state);
                 break;
             case "Escape":
@@ -698,7 +752,7 @@ export class DataGridEditEngine {
     private typeInto(grid: HTMLElement, character: string): void {
         const field = document.activeElement;
 
-        if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) || this.open.get(grid)?.editor.contains(field) !== true || field.readOnly)
+        if (!((field instanceof HTMLInputElement && field.type !== "checkbox" && field.type !== "radio") || field instanceof HTMLTextAreaElement) || this.open.get(grid)?.editor.contains(field) !== true || field.readOnly)
             return;
 
         field.value = character;
@@ -768,9 +822,4 @@ function siblingRow(row: Element, step: 1 | -1): HTMLElement | null {
 /** Whether the popup open in an editor is a list: the one the focus stands in, else the one its opener names. */
 function isList(popup: Element | null, opener: Element | null): boolean {
     return popup === null ? opener?.getAttribute("aria-haspopup") === "listbox" : popup.getAttribute("role") === "listbox";
-}
-
-/** Whether an element can still be seen: laid out, and not `visibility: hidden`, as a column hidden at a narrower width is. */
-function isShown(element: Element): boolean {
-    return element.getClientRects().length > 0 && getComputedStyle(element).visibility === "visible";
 }

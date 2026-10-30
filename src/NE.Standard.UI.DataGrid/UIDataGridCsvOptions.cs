@@ -18,10 +18,16 @@ public sealed record UIDataGridCsvOptions
     public CultureInfo? Culture { get; init; }
 
     /// <summary>
-    /// Translates a column's caption — an author's text, unless the column says it is content, or a key with its arguments; a cell's
-    /// choices are <see cref="Format"/>'s to translate.
+    /// Translates a column's caption — an author's text, unless the column or <see cref="ContentCaptions"/> says it is content, or a key
+    /// with its arguments; a cell's choices are <see cref="Format"/>'s to translate.
     /// </summary>
     public Func<UIPhrase, string>? Translate { get; init; }
+
+    /// <summary>
+    /// Whether every column's author-text caption is content and written as it stands, matching <c>AsContent(TableComponent.ColumnsProperty)</c>
+    /// when exporting standalone columns not owned by a grid instance.
+    /// </summary>
+    public bool ContentCaptions { get; init; }
 
     /// <summary>The field separator; a semicolon suits a spreadsheet whose culture writes decimals with a comma.</summary>
     public char Separator { get; init; } = ',';

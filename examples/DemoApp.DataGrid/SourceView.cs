@@ -10,7 +10,7 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
 
     protected override string Route => SourceRoute;
 
-    public override string Title => "grid-demo.page.source";
+    protected override string Header => "grid-demo.page.source";
 
     protected override string Description
         => "grid-demo.page.source.description";
@@ -18,8 +18,8 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
     protected override IVisualComponent[] CreateSections()
         =>
         [
-            Example("As the viewer scrolls",
-                "The window follows the scroll: nearing its end asks the source for the next one, and the rows behind are given up again. This is the windowed table's own behaviour and the grid adds nothing to it. Given room enough to run past the page, the grid scrolls sideways as a whole, the number and the customer pinned at its edge while the rest slide under them; drag a caption to move its column, or its edge to size it — the pinned ones keep the head of the row. The query the headers and the filters write is bound to the controller, so the source sorts, narrows and adds up the whole hundred thousand and hands back only the window the viewer is looking at.",
+            Example("Virtual scrolling over 100,000 rows",
+                "A windowed source loads slices on demand as you scroll while keeping ID and Customer pinned during horizontal scroll. Search, column filters and multi-column sorts bind through UIItemsQuery so filtering, ordering and footer totals execute on the server.",
                 new StackPanelComponent()
                     .SetOrientation(UIOrientation.Vertical)
                     .SetSpacing(8)
@@ -29,21 +29,21 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
                         .SetSpacing(8)
                         .AddChild(new ButtonComponent()
                             .SetTitle("grid-demo.source.past-due")
-                            .SetType(UIButtonType.Ghost)
-                            .SetSize(UIButtonSize.Small)
+                            .SetVariant(UIButtonVariant.Ghost)
+                            .SetSize(UISize.Small)
                             .OnClick(nameof(SourceController.ShowPastDue))
                         )
                         .AddChild(new ButtonComponent()
                             .SetTitle("grid-demo.source.no-filters")
-                            .SetType(UIButtonType.Ghost)
-                            .SetSize(UIButtonSize.Small)
+                            .SetVariant(UIButtonVariant.Ghost)
+                            .SetSize(UISize.Small)
                             .OnClick(nameof(SourceController.ClearFilters))
                         )
                     )
                     .AddChild(SubscriptionGrid.Create("subscriptions-scrolling", wide: true, band: true, totals: true)
-                        .BindSource(nameof(SourceController.ScrollingSource))
+                        .BindSource<SourceController>(c => c.ScrollingSource)
                         .SetWindowSize(20)
-                        .BindQuery(nameof(SourceController.ScrollingQuery))
+                        .BindQuery<SourceController>(c => c.ScrollingQuery)
                         .OnQueryChange(nameof(SourceController.ScrollingQueryChanged))
                         .OnCellEdit(nameof(SourceController.CellEdited))
                         .SetResizableColumns(true)
@@ -51,22 +51,17 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
                         .SetHorizontalScroll(UIScrollMode.Auto)
                         .SetMaxHeight(UILayoutLength.Absolute(420))
                     )
-                    .AddChild(new TextComponent()
-                        .BindTitle(nameof(SourceController.ScrollingStatus))
-                        .SetTitleWrap(true)
-                        .SetTitleType(UITextAppearance.Caption)
-                        .SetTitleColor(UIThemeColor.FromStyle(UIColorStyle.Muted))
-                    )
+                    .AddChild(CreateStatus<SourceController>(c => c.ScrollingStatus))
             ),
-            Example("A page at a time",
-                "With Paging on, the window is a page: the scroll asks for nothing, and the pager under the rows — the framework's, the one a list or a table pages with — asks for another by offset, as Page Up and Page Down in the grid do. `ConfigurePager` offers the page sizes here. Cells edit here too: a windowed source takes the write and reads the subscription anew.",
+            Example("Server-side paging",
+                "Enabling Paging switches the windowed source from continuous scroll to discrete pages driven by the built-in PagerComponent (or Page Up / Page Down), with page-size options configured via ConfigurePager.",
                 new StackPanelComponent()
                     .SetOrientation(UIOrientation.Vertical)
                     .SetSpacing(8)
                     .AddChild(SubscriptionGrid.Create("subscriptions-paged", wide: true, band: true, totals: true)
-                        .BindSource(nameof(SourceController.PagedSource))
+                        .BindSource<SourceController>(c => c.PagedSource)
                         .SetWindowSize(20)
-                        .BindQuery(nameof(SourceController.PagedQuery))
+                        .BindQuery<SourceController>(c => c.PagedQuery)
                         .OnQueryChange(nameof(SourceController.PagedQueryChanged))
                         .OnCellEdit(nameof(SourceController.CellEdited))
                         .SetResizableColumns(true)
@@ -76,14 +71,9 @@ internal sealed class SourceView : DataGridDemoView, IUIViewDefinition
                         .SetPaging(true)
                         .ConfigurePager(pager => pager.SetPageSizes([20, 50, 100]))
                     )
-                    .AddChild(new TextComponent()
-                        .BindTitle(nameof(SourceController.PagedStatus))
-                        .SetTitleWrap(true)
-                        .SetTitleType(UITextAppearance.Caption)
-                        .SetTitleColor(UIThemeColor.FromStyle(UIColorStyle.Muted))
-                    )
+                    .AddChild(CreateStatus<SourceController>(c => c.PagedStatus))
             ),
             // One line for both grids: whichever cell was committed, the source took the write.
-            CreateStatus(nameof(SourceController.EditStatus))
+            CreateStatus<SourceController>(c => c.EditStatus)
         ];
 }

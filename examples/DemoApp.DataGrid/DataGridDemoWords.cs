@@ -16,6 +16,7 @@ internal static class DataGridDemoWords
 
     private static readonly Dictionary<string, string> English = new(StringComparer.Ordinal)
     {
+        ["grid-demo.title"] = "{page} · NE.Standard.UI.DataGrid",
         ["grid-demo.column.customer"] = "Customer",
         ["grid-demo.column.country"] = "Country",
         ["grid-demo.column.plan"] = "Plan",
@@ -84,6 +85,7 @@ internal static class DataGridDemoWords
     // Chinese has one plural form, so a plural key has only its ".other".
     private static readonly Dictionary<string, string> Chinese = new(StringComparer.Ordinal)
     {
+        ["grid-demo.title"] = "{page} · NE.Standard.UI.DataGrid",
         ["grid-demo.column.customer"] = "客户",
         ["grid-demo.column.country"] = "国家",
         ["grid-demo.column.plan"] = "套餐",

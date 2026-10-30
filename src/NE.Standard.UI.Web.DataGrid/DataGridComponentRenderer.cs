@@ -4,10 +4,9 @@ using System.Globalization;
 using System.Text.Json;
 using NE.Standard.UI.Abstractions.Identity;
 using NE.Standard.UI.Abstractions.Items;
-using NE.Standard.UI.Abstractions.Styling;
-using NE.Standard.UI.Authoring.Components;
 using NE.Standard.UI.Compiled.Models;
 using NE.Standard.UI.Compiled.Views;
+using NE.Standard.UI.Components.BuiltIns.Items;
 using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Primitives.Constants;
 using NE.Standard.UI.Primitives.Localization;
@@ -64,14 +63,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
     /// <summary>On a range filter's part: which end of the range it is, <c>from</c> or <c>to</c>.</summary>
     public const string FilterBoundAttribute = "data-ui-grid-filter-bound";
 
-    /// <summary>On the cells of the column of checkboxes.</summary>
-    public const string SelectCellAttribute = "data-ui-grid-select";
-
-    /// <summary>On that column's header cell, which carries the box over the rows the grid has drawn.</summary>
-    public const string SelectAllAttribute = "data-ui-grid-select-all";
-
     protected const string GridClassName = "ui-data-grid";
-    protected const string SelectCellClassName = "ui-data-grid__cell--select";
     protected const string FooterClassName = "ui-data-grid__footer";
     protected const string TotalClassName = "ui-data-grid__total";
     protected const string BandClassName = "ui-data-grid__band";
@@ -102,11 +94,6 @@ public class DataGridComponentRenderer : TableComponentRenderer
         // So a language switch writes both packs again, and the cells draw again from the values they keep.
         _ = root.Attribute(WebAttributes.PageCulture);
         RenderFlagAttribute(context, root, DataGridComponent.EditableProperty, ReadOnlyAttribute, WebValueCondition.IsFalse);
-
-        // While the checkboxes are there they are the only way to choose: a click on a row is the detail's and the editor's.
-        if (HasSelectionColumn(context))
-            _ = root.Attribute(WebAttributes.NoRowSelect);
-
         RenderFlagAttribute(context, root, DataGridComponent.ExpandOnClickProperty, ExpandOnClickAttribute);
         RenderFlagAttribute(context, root, DataGridComponent.MultipleDetailsProperty, MultipleDetailsAttribute);
         RenderCellRules(context, root);
@@ -140,31 +127,30 @@ public class DataGridComponentRenderer : TableComponentRenderer
     /// <summary>An editable column's editor, by its component, and the row property it writes.</summary>
     private sealed record CellRules(int Editor, string Path);
 
+    /// <summary>A leading detail chevron column stands before the table's own checkbox column, both fixed at the row's start.</summary>
+    protected override IReadOnlyList<UITableColumn> ResolveColumns(WebRenderContext context)
+    {
+        IReadOnlyList<UITableColumn> columns = base.ResolveColumns(context);
+
+        if (columns.Count < 2 || columns[0].Key != TableComponent.SelectionColumnKey || columns[1] is not UIDataGridColumn { DetailToggle: true } detail)
+            return columns;
+
+        UITableColumn[] ordered = new UITableColumn[columns.Count];
+        ordered[0] = detail;
+        ordered[1] = columns[0];
+
+        for (var i = 2; i < columns.Count; i++)
+            ordered[i] = columns[i];
+
+        return ordered;
+    }
+
     /// <summary>A grid is one whatever its rows do: the keyboard walks its header and its rows.</summary>
     protected override bool ActsAsGrid(WebRenderContext context)
         => true;
 
-    /// <summary>Whether the grid draws its column of checkboxes: only where the rows may be chosen, many at a time.</summary>
-    private static bool HasSelectionColumn(WebRenderContext context)
-        => ReadRenderValue<UISelectionMode?>(context, ISelectableItemsComponent.SelectionModeProperty, null) is UISelectionMode.Many;
-
     /// <summary>A grid sorts on the client by what the rows hold, so a static grid publishes its values as a virtualized one does.</summary>
     protected override bool PublishItemValues => true;
-
-    /// <summary>The author's columns, after the grid's own checkbox column while rows may be chosen.</summary>
-    protected override IReadOnlyList<UITableColumn> ResolveColumns(WebRenderContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
-        IReadOnlyList<UITableColumn> columns = base.ResolveColumns(context);
-
-        if (!HasSelectionColumn(context) || columns.Count == 0)
-            return columns;
-
-        UITableColumn selection = new(DataGridComponent.SelectionColumnKey, null, UIGridUnit.Absolute(44), UITextAlignment.Center) { Fixed = true, Pinned = columns[0].Pinned };
-
-        return [selection, .. columns];
-    }
 
     /// <summary>
     /// The band over the table, outside its scrolling frame: the search box, the filters button and the columns button.
@@ -175,19 +161,14 @@ public class DataGridComponentRenderer : TableComponentRenderer
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(columns);
 
-        var search = !string.IsNullOrEmpty(ReadRenderValue<string?>(context, DataGridComponent.SearchPathProperty, null));
         var flyout = HasFilters(columns);
         var chooser = ReadRenderValue(context, DataGridComponent.ColumnChooserProperty, false) && columns.Count > 0;
-
-        if (!search && !flyout && !chooser)
-            return;
 
         _ = root.Element("div", band =>
         {
             _ = band.Class(BandClassName);
 
-            if (search)
-                RenderRegion(context, band, DataGridComponent.SearchRegionName);
+            RenderRegion(context, band, DataGridComponent.SearchRegionName);
 
             if (flyout)
             {
@@ -202,6 +183,9 @@ public class DataGridComponentRenderer : TableComponentRenderer
                     // Disabled the framework's way rather than natively, so the focused button keeps the focus as it turns off.
                     _ = panel.Element("button", clear =>
                     {
+                        _ = clear.Class(WebClassNames.Button);
+                        _ = clear.Class(WebClassNames.ButtonVariant(UIButtonVariant.Ghost));
+                        _ = clear.Class(WebClassNames.ButtonSize(UISize.Small));
                         _ = clear.Class(FiltersClearClassName);
                         _ = clear.Class(WebClassNames.Disabled);
                         _ = clear.Attribute("type", "button");
@@ -236,20 +220,34 @@ public class DataGridComponentRenderer : TableComponentRenderer
         {
             _ = anchor.Element("button", button =>
             {
+                _ = button.Class(WebClassNames.Button);
+                _ = button.Class(WebClassNames.ButtonVariant(UIButtonVariant.Ghost));
+                _ = button.Class(WebClassNames.ButtonSize(UISize.Small));
                 _ = button.Class(BandButtonClassName);
                 _ = button.Attribute("type", "button");
+                WebWords.Write(context, button, "aria-label", wordKey);
+                WebWords.Write(context, button, WebAttributes.Tooltip, wordKey);
                 IconValueRenderer.RenderIcon(button, icon);
-                _ = button.Element("span", word => WebWords.Write(context, word, null, wordKey));
 
                 // The count of the filters in use, the framework's bare count badge, which the engine writes and hides at none.
                 if (counted)
-                    BadgeRenderer.RenderCountBadge(button, UIBadgeType.Primary, configure: count => count.Class(FiltersCountClassName).Attribute("hidden"));
+                    BadgeRenderer.RenderCountBadge(button, UIBadgeVariant.Primary, configure: count => count.Class(FiltersCountClassName).Attribute("hidden"));
             });
-        }, content => content.Element("div", panel =>
+        }, content =>
         {
-            _ = panel.Class(panelClassName);
-            renderPanel(panel);
-        }));
+            if (!counted)
+            {
+                _ = content.Class(panelClassName);
+                renderPanel(content);
+                return;
+            }
+
+            _ = content.Element("div", panel =>
+            {
+                _ = panel.Class(panelClassName);
+                renderPanel(panel);
+            });
+        });
 
     /// <summary>
     /// The caption, the sort mark when the column sorts, then the resize handle; a sorting cell is a named stop of the header's keyboard.
@@ -260,11 +258,9 @@ public class DataGridComponentRenderer : TableComponentRenderer
         ArgumentNullException.ThrowIfNull(cell);
         ArgumentNullException.ThrowIfNull(column);
 
-        // The box over the checkboxes takes the rows the grid has drawn: what the filters left, or the page of a windowed grid.
-        if (column.Key == DataGridComponent.SelectionColumnKey)
+        if (column.Key == TableComponent.SelectionColumnKey)
         {
-            _ = cell.Attribute(SelectAllAttribute);
-            RenderRegion(context, cell, DataGridComponent.SelectAllRegionName);
+            base.RenderHeaderCellContent(context, cell, column, index);
             return;
         }
 
@@ -282,7 +278,8 @@ public class DataGridComponentRenderer : TableComponentRenderer
             // Focusable, but no stop of the Tab order: the grid is the one stop, and its header is reached by Up from the first row.
             _ = cell.Attribute("tabindex", "-1");
             _ = cell.Attribute("aria-sort", "none");
-            WebWords.Write(context, cell, "aria-label", DataGridStrings.SortBy, new Dictionary<string, object?>(StringComparer.Ordinal) { ["column"] = caption });
+            // The caption stays the cell's name, as on every column; what a press does is said after it.
+            WebWords.Write(context, cell, "aria-description", DataGridStrings.SortBy, new Dictionary<string, object?>(StringComparer.Ordinal) { ["column"] = caption });
 
             // Two marks, one drawn at a time: the idle two-way mark while unsorted, the framework's arrow once sorted — one mark
             // alone would misread as "up" on an unsorted column.
@@ -375,7 +372,11 @@ public class DataGridComponentRenderer : TableComponentRenderer
         RenderRegion(context, root, DataGridComponent.PagerRegionName);
     }
 
-    /// <summary>Marks an editable, a detail and a checkbox column's cells, for the engine and the pointer.</summary>
+    /// <summary>A detail's chevron says nothing of its row: the first column of words heads the rows instead.</summary>
+    protected override bool HeadsRows(UITableColumn column)
+        => base.HeadsRows(column) && column is not UIDataGridColumn { DetailToggle: true };
+
+    /// <summary>Marks an editable and a detail column's cells, for the engine and the pointer.</summary>
     protected override string CellClass(UITableColumn column)
     {
         ArgumentNullException.ThrowIfNull(column);
@@ -384,14 +385,13 @@ public class DataGridComponentRenderer : TableComponentRenderer
         {
             UIDataGridColumn { Editable: true } => $"{base.CellClass(column)} {EditableCellClassName}",
             UIDataGridColumn { DetailToggle: true } => $"{base.CellClass(column)} {DetailCellClassName}",
-            { Key: DataGridComponent.SelectionColumnKey } => $"{base.CellClass(column)} {SelectCellClassName}",
             _ => base.CellClass(column)
         };
     }
 
     /// <summary>
     /// The column's key on every cell, and an editable cell's editor variant and its claim on the double click, which the client
-    /// drops while <c>Editable</c> is off; the chevron's and the checkbox's cells claim theirs always.
+    /// drops while <c>Editable</c> is off; the chevron's cell claims its own always.
     /// </summary>
     protected override IReadOnlyDictionary<string, string>? CellAttributes(IReadOnlyList<UITableColumn> columns, int index)
     {
@@ -412,16 +412,9 @@ public class DataGridComponentRenderer : TableComponentRenderer
         }
 
         // The chevron answers the click itself, so it never stands for the row the keyboard presses (`soleControlOf`); the detail
-        // engine opens it from the keyboard by Right and Left.
+        // engine opens it from the keyboard by Enter and Space on the chevron cell.
         if (columns[index] is UIDataGridColumn { DetailToggle: true })
             attributes[WebAttributes.NoRowOpen] = string.Empty;
-
-        // The checkbox answers the click itself: neither the row's detail nor anything else opens under it.
-        if (columns[index].Key == DataGridComponent.SelectionColumnKey)
-        {
-            attributes[SelectCellAttribute] = string.Empty;
-            attributes[WebAttributes.NoRowOpen] = string.Empty;
-        }
 
         return attributes;
     }

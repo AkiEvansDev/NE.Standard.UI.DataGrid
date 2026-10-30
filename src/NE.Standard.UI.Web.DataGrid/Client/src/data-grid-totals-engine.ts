@@ -27,8 +27,11 @@ export class DataGridTotalsEngine {
     private readonly totalSelector: string;
     // The rows the filters leave: a hidden one stays in the page under the framework's class.
     private readonly shownRowSelector: string;
+    private readonly observer: MutationObserver | null;
+    private readonly stopStrings: (() => void) | void;
     private readonly pending = new Set<HTMLElement>();
-    private scheduled = false;
+    private queued = false;
+    private frameId: number | null = null;
     // A virtualized host's totals, and a window's, are read again only when what they stand on moved (`movedSince`): a scroll swaps the
     // rows drawn batch after batch, and a hundred thousand items read per batch is the cost this spares.
     private readonly bases = new WeakMap<HTMLElement, TotalsBasis>();
@@ -44,10 +47,24 @@ export class DataGridTotalsEngine {
 
         // Rows come and go, a filter hides one (its class), an edit changes a cell's value (its raw attribute), a window brings its
         // answer (the host's attribute), a column is hidden or shown (the root's).
-        context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, context.names.windowAggregates, context.names.tableHidden] }, grids => this.queue(grids));
+        this.observer = context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, context.names.windowAggregates, context.names.tableHidden] }, grids => this.queue(grids));
 
         // A language switch wrote the grid's packs again: a total is a number or a date in them too, whatever it was read from.
-        context.strings.onChange(() => this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector), true));
+        this.stopStrings = context.strings.onChange(() => this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector), true));
+    }
+
+    public dispose(): void {
+        this.observer?.disconnect();
+
+        if (typeof this.stopStrings === "function")
+            this.stopStrings();
+
+        if (this.frameId !== null && typeof cancelAnimationFrame === "function")
+            cancelAnimationFrame(this.frameId);
+
+        this.queued = false;
+        this.frameId = null;
+        this.pending.clear();
     }
 
     private syncAll(grids: Iterable<HTMLElement>, rewrite = false): void {
@@ -121,18 +138,23 @@ export class DataGridTotalsEngine {
         for (const grid of grids)
             this.pending.add(grid);
 
-        if (this.scheduled)
+        if (this.queued)
             return;
 
-        this.scheduled = true;
-        requestAnimationFrame(() => {
-            this.scheduled = false;
+        this.queued = true;
+
+        const handle = requestAnimationFrame(() => {
+            this.queued = false;
+            this.frameId = null;
 
             const due = [...this.pending];
 
             this.pending.clear();
             this.syncAll(due.filter(grid => grid.isConnected));
         });
+
+        if (this.queued && typeof handle === "number")
+            this.frameId = handle;
     }
 }
 

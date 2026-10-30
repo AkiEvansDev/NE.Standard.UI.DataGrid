@@ -51,7 +51,7 @@ internal sealed partial class SourceController : UIControllerBase
             new(nameof(Subscription.Monthly), UIComparisonOperator.GreaterOrEqual, 100m)
         ];
 
-        UIItemsQuery query = new(filters, ScrollingQuery?.Sorts ?? []);
+        UIItemsQuery query = new(filters, ScrollingQuery?.Sorts ?? [], ScrollingQuery?.Search);
 
         ScrollingQuery = query;
         ScrollingStatus = Describe(query, ScrollingSource.CountMatching(query));
@@ -97,6 +97,11 @@ internal sealed partial class SourceController : UIControllerBase
             UIItemSortTerm sort = query.Sorts[i];
 
             _ = terms.Append(i == 0 ? "" : ", ").Append(sort.ItemProperty).Append(sort.Direction == UIItemsSortDirection.Descending ? " ↓" : " ↑");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            _ = terms.Append(terms.Length > 0 ? "; " : "").Append(CultureInfo.InvariantCulture, $"search ~ \"{query.Search}\"");
         }
 
         for (var i = 0; i < query.Filters.Length; i++)
