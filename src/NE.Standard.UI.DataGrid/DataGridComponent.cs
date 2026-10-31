@@ -763,12 +763,25 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IPressab
     /// <summary>
     /// Adds a column whose cells render <paramref name="template"/> against the row, sortable by <paramref name="sortPath"/>.
     /// </summary>
+    public T AddColumn<TRow>(UIPhrase caption, IVisualComponent template, Expression<Func<TRow, object?>> sortPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+        => AddColumn(caption, template, RecursivePath.FromExpression(sortPath).ToString(), width, alignment, key, pinned, icon, hidden, content);
+
+    /// <summary>
+    /// Adds a column whose cells render <paramref name="template"/> against the row, sortable by <paramref name="sortPath"/>.
+    /// </summary>
     public T AddColumn(UIPhrase caption, IVisualComponent template, string sortPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sortPath);
 
         return AddColumn(new UIDataGridColumn(key ?? PropertyColumnKey(sortPath), caption, width ?? UIGridUnit.Auto(), alignment) { SortPath = sortPath, Sortable = true, Pinned = pinned, Icon = icon, Hidden = hidden, IsContent = content }, template);
     }
+
+    /// <summary>
+    /// Adds a column rendering <paramref name="template"/>, opening <paramref name="editor"/> on a double click or F2, sortable by <paramref name="sortPath"/>.
+    /// </summary>
+    public T AddEditableColumn<TRow, TInput>(UIPhrase caption, IVisualComponent template, TInput editor, Expression<Func<TRow, object?>> sortPath, UIGridUnit? width = null, UITextAlignment? alignment = null, string? key = null, bool pinned = false, string? icon = null, bool hidden = false, bool content = false)
+        where TInput : VisualComponentBase<TInput>, IInputComponent, IUIComponentDefinition
+        => AddEditableColumn(caption, template, editor, RecursivePath.FromExpression(sortPath).ToString(), width, alignment, key, pinned, icon, hidden, content);
 
     /// <summary>
     /// Adds a column rendering <paramref name="template"/>, opening <paramref name="editor"/> on a double click or F2. Sortable by
