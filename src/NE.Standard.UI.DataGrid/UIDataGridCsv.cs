@@ -184,7 +184,10 @@ public static class UIDataGridCsv
         if (value is Enum || (formatted && column is UIDataGridColumn { Kind: UIDataGridColumnKind.Boolean or UIDataGridColumnKind.Enum }))
             return (value is Enum || IsNumber(value)) && IsPlainNumber(text);
 
-        return IsNumber(value) || IsNumberText(column, value);
+        if (!IsNumber(value) && !IsNumberText(column, value))
+            return false;
+
+        return formatted ? IsFormattedNegativeNumber(text) : IsPlainNumber(text);
     }
 
     /// <summary>A number a spreadsheet reads as one: never a NaN or an infinity, which a cell writes empty.</summary>
@@ -197,8 +200,32 @@ public static class UIDataGridCsv
 
     /// <summary>A number column's numeric text, which the column writes as the number it reads.</summary>
     private static bool IsNumberText(UITableColumn column, object value)
-        => column is UIDataGridColumn { Kind: UIDataGridColumnKind.Number or UIDataGridColumnKind.Money } && value is string text
-            && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number);
+        => column is UIDataGridColumn { Kind: UIDataGridColumnKind.Number or UIDataGridColumnKind.Money } && value is string text && IsPlainNumber(text);
+
+    /// <summary>A negative number written in a culture's digits or currency, carrying no formula operator or cell split.</summary>
+    private static bool IsFormattedNegativeNumber(string text)
+    {
+        var hasDigit = false;
+
+        for (var i = 1; i < text.Length; i++)
+        {
+            var ch = text[i];
+
+            if (char.IsAsciiDigit(ch))
+            {
+                hasDigit = true;
+                continue;
+            }
+
+            if (ch is '=' or '@' or '*' or '/' or '^' or '&' or ';' or '|' or '!' or '(' or ')' or '\t' or '\r' or '\n')
+                return false;
+
+            if (ch is '+' or '-' && (text[i - 1] is not ('e' or 'E') || i + 1 >= text.Length || !char.IsAsciiDigit(text[i + 1])))
+                return false;
+        }
+
+        return hasDigit && FormulaStart(text, 1) < 0;
+    }
 
     /// <summary>A field, quoted where it holds the separator, a quote or a line break, with its own quotes doubled (RFC 4180).</summary>
     private static void WriteField(TextWriter writer, UIDataGridCsvOptions settings, int index, string text)

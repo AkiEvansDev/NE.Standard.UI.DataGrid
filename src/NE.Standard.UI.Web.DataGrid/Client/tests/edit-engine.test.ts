@@ -54,7 +54,7 @@ function editableCell(column: "Seats" | "Plan"): FakeElement {
  * One editable grid on the page, a row of a servers cell and a plan cell (and a second row of the same where `rows` is 2), each editor
  * drawn by `draw` for the cell's variant, and what the page heard: the binding's sends and the cell edits.
  */
-function createGrid(draw: (variant: string) => FakeElement, answers = new CellEditAnswers(), rows = 1): { grid: FakeElement; cell: FakeElement; next: FakeElement; heard: { sent: number; edits: number } } {
+function createGrid(draw: (variant: string) => FakeElement, answers = new CellEditAnswers(), rows = 1): { grid: FakeElement; cell: FakeElement; next: FakeElement; heard: { sent: number; edits: number }; engine: DataGridEditEngine } {
     const root = new FakeElement();
     const grid = FakeElement.of("ui-data-grid", { [names.componentId]: "7", tabindex: "0" });
     const cell = editableCell("Seats");
@@ -145,9 +145,9 @@ function createGrid(draw: (variant: string) => FakeElement, answers = new CellEd
         }
     };
 
-    new DataGridEditEngine(real<PluginEngineContext>(context), answers);
+    const engine = new DataGridEditEngine(real<PluginEngineContext>(context), answers);
 
-    return { grid, cell, next, heard };
+    return { grid, cell, next, heard, engine };
 }
 
 /** A number field holding 33, as the servers column's editor draws it. */
@@ -815,4 +815,47 @@ test("a checkbox editor toggled with Space keeps its changed mark across a row r
     assert.equal(reopened.checked, true);
     assert.equal(heard.sent, 1);
     assert.equal(heard.edits, 1);
+});
+
+test("typing a character onto an empty cell commits the typed character on Enter even after mount timers settle", async () => {
+    const emptyField = (): FakeInput => {
+        const input = new FakeInput("text");
+
+        input.value = "";
+        input.attributes.set(names.bindValue, "1");
+
+        return input;
+    };
+    const { grid, cell, heard } = createGrid(() => new FakeElement().append(emptyField()));
+
+    grid.focus();
+    offerCellKey(cell, "a");
+    await answered();
+    fakeWindow.runTimers();
+
+    const field = fakeDocument.activeElement as FakeInput;
+
+    assert.equal(field.value, "a");
+    fakeWindow.dispatch(field, new FakeKeyboardEvent("Enter"));
+    await answered();
+
+    assert.ok(!isOpen(cell));
+    assert.equal(heard.sent, 1);
+    assert.equal(heard.edits, 1);
+});
+
+test("disposing the edit engine removes open editor elements and clears the editing class on cells", () => {
+    const { cell, engine } = createGrid(() => new FakeElement().append(numberField()));
+    const field = open(cell);
+    const editor = field.parent?.parent as FakeElement;
+
+    field.value = "48";
+    assert.ok(isOpen(cell));
+    assert.notEqual(editor.parent, null);
+
+    engine.dispose();
+
+    assert.ok(!isOpen(cell));
+    assert.equal(editor.parent, null);
+    assert.equal(released, 1);
 });

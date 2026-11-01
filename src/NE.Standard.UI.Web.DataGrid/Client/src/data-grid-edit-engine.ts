@@ -24,6 +24,7 @@ type OpenEditor = {
     readonly field: HTMLElement | null;
     original: unknown;
     changed: boolean;
+    drafted?: boolean;
 };
 
 /** Where an editor stood when its row was drawn again under it: the row's key and the cell's column, to open the same cell anew. */
@@ -118,6 +119,14 @@ export class DataGridEditEngine {
             this.openEditor(cell);
         };
 
+        const onInput = (domEvent: Event): void => {
+            const grid = gridOf(domEvent.target);
+            const state = grid === null ? undefined : this.open.get(grid);
+
+            if (state !== undefined && domEvent.target instanceof Node && state.editor.contains(domEvent.target))
+                state.drafted = true;
+        };
+
         // Noted, since a select or checkbox sends as it's chosen and Escape must still take it back.
         const onChange = (domEvent: Event): void => {
             const grid = gridOf(domEvent.target);
@@ -204,6 +213,7 @@ export class DataGridEditEngine {
         };
 
         root.addEventListener("dblclick", onDoubleClick, true);
+        root.addEventListener("input", onInput, true);
         root.addEventListener("change", onChange, true);
         root.addEventListener("keydown", onKeyDown, true);
         root.addEventListener(this.names.cellKey, onCellKey);
@@ -214,6 +224,7 @@ export class DataGridEditEngine {
             () => rowObserver?.disconnect(),
             () => stateObserver?.disconnect(),
             () => root.removeEventListener("dblclick", onDoubleClick, true),
+            () => root.removeEventListener("input", onInput, true),
             () => root.removeEventListener("change", onChange, true),
             () => root.removeEventListener("keydown", onKeyDown, true),
             () => root.removeEventListener(this.names.cellKey, onCellKey),
@@ -230,10 +241,8 @@ export class DataGridEditEngine {
 
         this.cleanups.length = 0;
 
-        for (const state of this.open.values()) {
-            if (state.field !== null)
-                this.values.release(state.field);
-        }
+        for (const state of [...this.open.values()])
+            this.takeOff(state);
 
         this.open.clear();
 
@@ -458,7 +467,7 @@ export class DataGridEditEngine {
         // its next turn, and a commit measured against the empty one would send a value nobody changed.
         if (state.original === null || state.original === "") {
             window.setTimeout(() => {
-                if (this.open.get(grid) === state && !state.changed)
+                if (this.open.get(grid) === state && !state.changed && !state.drafted)
                     state.original = this.fieldValue(field);
             }, 0);
         }
@@ -662,6 +671,7 @@ export class DataGridEditEngine {
         if (place.draft === this.fieldValue(reopened.field))
             return;
 
+        reopened.drafted = true;
         // Through the field's own binding, so a composed field (a select, a date) shows the draft its hidden input holds.
         this.values.write(reopened.field, place.draft);
         reopened.changed = place.changed;
@@ -751,10 +761,12 @@ export class DataGridEditEngine {
      */
     private typeInto(grid: HTMLElement, character: string): void {
         const field = document.activeElement;
+        const state = this.open.get(grid);
 
-        if (!((field instanceof HTMLInputElement && field.type !== "checkbox" && field.type !== "radio") || field instanceof HTMLTextAreaElement) || this.open.get(grid)?.editor.contains(field) !== true || field.readOnly)
+        if (!((field instanceof HTMLInputElement && field.type !== "checkbox" && field.type !== "radio") || field instanceof HTMLTextAreaElement) || state?.editor.contains(field) !== true || field.readOnly)
             return;
 
+        state.drafted = true;
         field.value = character;
         field.dispatchEvent(new Event("input", { bubbles: true }));
     }

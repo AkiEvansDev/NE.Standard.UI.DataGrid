@@ -2,7 +2,7 @@
 // when the grid says so, by a click or Enter on the row. The template is drawn when opened and removed when closed, so only shown details
 // exist. An open detail is a cell spanning its row, a line of its own in the core's cell cursor.
 
-import type { DomNames, DomRegistry, ItemRows, OwnDescendants, PluginEngineContext } from "ne-standard-ui";
+import type { ComponentStates, DomNames, DomRegistry, ItemRows, OwnDescendants, PluginEngineContext } from "ne-standard-ui";
 import { componentIdOf, gridOf, isOwnRow, nameByRow, RootSelector, rowSelector } from "./data-grid-dom.ts";
 import { ClientNames, DetailColumnKey, GridAttributes, GridClasses } from "./data-grid-names.ts";
 
@@ -23,6 +23,7 @@ type DetailsBefore = {
 
 export class DataGridDetailEngine {
     private readonly rows: ItemRows;
+    private readonly states: ComponentStates;
     private readonly names: DomNames;
     private readonly ownDescendants: OwnDescendants;
     private readonly ensureId: DomRegistry["ensureId"];
@@ -39,6 +40,7 @@ export class DataGridDetailEngine {
         const root = context.root;
 
         this.rows = context.rows;
+        this.states = context.states;
         this.names = context.names;
         this.ownDescendants = context.ownDescendants;
         this.ensureId = context.dom.ensureId;
@@ -50,7 +52,7 @@ export class DataGridDetailEngine {
         // Enter on the cursor's cell, which the core offers before it acts (`names.cellKey`): left to the row, it raises the row's open.
         // Enter on the chevron's cell presses the chevron instead, and one an editor took raises nothing.
         const onCellKey = (domEvent: Event): void => {
-            if (domEvent.defaultPrevented || !(domEvent instanceof CustomEvent) || (domEvent.detail as { readonly key: string }).key !== "Enter")
+            if (domEvent.defaultPrevented || !(domEvent instanceof CustomEvent) || (domEvent.detail as { readonly key: string }).key !== "Enter" || (domEvent.target instanceof Element && this.states.isInert(domEvent.target)))
                 return;
 
             this.enterDown = true;
@@ -63,7 +65,7 @@ export class DataGridDetailEngine {
             const row = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(this.rowSelector) : null;
             const grid = gridOf(row);
 
-            if (row === null || grid === null || !grid.hasAttribute(ExpandOnClickAttribute) || !isOwnRow(grid, row, this.names))
+            if (row === null || grid === null || !grid.hasAttribute(ExpandOnClickAttribute) || !isOwnRow(grid, row, this.names) || this.states.isInert(row))
                 return;
 
             if (this.enterDown)
@@ -82,7 +84,7 @@ export class DataGridDetailEngine {
             const row = domEvent.target.closest<HTMLElement>(this.rowSelector);
 
             // A row of a table inside a detail is that table's, not one this grid opens.
-            if (grid === null || row === null || !isOwnRow(grid, row, this.names))
+            if (grid === null || row === null || !isOwnRow(grid, row, this.names) || this.states.isInert(row))
                 return;
 
             // A second click is a double click's: its own toggle stands until the `open` puts the first click's state back. A first

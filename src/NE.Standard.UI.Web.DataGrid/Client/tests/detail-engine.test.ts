@@ -246,3 +246,45 @@ test("a row's chevron is named by its words and the row's header cell, not \"Det
     assert.equal(chevron.getAttribute("aria-labelledby"), `${chevron.id} ${header.id}`);
     assert.equal(chevron.getAttribute("aria-expanded"), "false");
 });
+
+test("an inert grid ignores clicks, chevron presses and Enter detail toggles", () => {
+    let inert = true;
+    const chevron = new FakeElement("button");
+    const first = FakeElement.of(names.tableRowClass).append(FakeElement.of("cell", { role: "gridcell" }), FakeElement.of(GridClasses.detailCell, { role: "gridcell" }).append(chevron));
+    const root = new FakeElement();
+    const grid = FakeElement.of("ui-data-grid", { [names.componentId]: "7", [GridAttributes.expandOnClick]: "" })
+        .append(FakeElement.of(names.tableScrollClass).append(FakeElement.of("", { [names.itemsHost]: "" }).append(first)));
+
+    root.append(grid);
+    fakeDocument.body.replaceChildren(root);
+    fakeWindow.listeners.clear();
+    fakeWindow.timers.length = 0;
+
+    let nextId = 0;
+    new DataGridDetailEngine(real<PluginEngineContext>({
+        root,
+        dom: { ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`) },
+        rows: {
+            renderVariant: () => new FakeElement(),
+            isKeyTarget: () => true,
+            cellsOf: (row: FakeElement) => row.children.filter(child => child.getAttribute("role") === "gridcell"),
+            moveCursor: () => undefined
+        },
+        names,
+        states: { isInert: () => inert },
+        ownDescendants: (owner: FakeElement, selector: string, boundarySelector: string) => [...owner.querySelectorAll(selector)].filter(element => element.closest(boundarySelector) === owner),
+        observeComponents: () => null
+    }));
+
+    click(first, 1);
+    fakeWindow.dispatch(chevron, new FakeMouseEvent(1));
+    offerEnter(first);
+    fakeWindow.dispatch(first, new FakeEvent("open"));
+    fakeWindow.runTimers();
+
+    assert.equal(detailOf(first), null);
+
+    inert = false;
+    click(first, 1);
+    assert.notEqual(detailOf(first), null);
+});
