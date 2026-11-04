@@ -82,7 +82,7 @@ internal static class SubscriptionGrid
         {
             _ = grid
                 // A template column filters too: the status by its choices, read through the sort path the column names.
-                .AddFilter(nameof(Subscription.Status), UIDataGridColumnKind.Enum, SubscriptionChoices.Statuses)
+                .AddFilter<Subscription>(s => s.Status, UIDataGridColumnKind.Enum, SubscriptionChoices.Statuses)
                 .HideColumnBelow(nameof(Subscription.Country), UIResponsiveTier.Xxl)
                 .HideColumnBelow(nameof(Subscription.Paid), UIResponsiveTier.Xl);
         }
@@ -104,7 +104,7 @@ internal static class SubscriptionGrid
             .SetSpacing(32)
             .AddChild(new DefaultTextTemplate()
                 .SetTitle("grid-demo.column.customer")
-                .BindDescription(nameof(Subscription.Customer), UIBindingScope.Relative)
+                .BindDescription<Subscription>(s => s.Customer, UIBindingScope.Relative)
             )
             .AddChild(new DefaultTextTemplate()
                 .SetTitle("grid-demo.column.country")

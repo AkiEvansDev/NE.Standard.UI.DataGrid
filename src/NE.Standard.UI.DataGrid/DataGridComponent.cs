@@ -814,6 +814,13 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IPressab
     }
 
     /// <summary>
+    /// Puts a filter field for a template column, keyed by <paramref name="propertyPath"/>: a text match, a number/date range, or a
+    /// choice among <paramref name="choices"/> by <paramref name="kind"/>.
+    /// </summary>
+    public T AddFilter<TRow>(Expression<Func<TRow, object?>> propertyPath, UIDataGridColumnKind kind, IReadOnlyList<UIChoice>? choices = null)
+        => AddFilter(RecursivePath.FromExpression(propertyPath).ToString(), kind, choices);
+
+    /// <summary>
     /// Puts a filter field for a template column, keyed by <paramref name="columnKey"/>: a text match, a number/date range, or a
     /// choice among <paramref name="choices"/> by <paramref name="kind"/>.
     /// </summary>

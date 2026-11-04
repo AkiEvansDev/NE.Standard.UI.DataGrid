@@ -142,7 +142,7 @@ The source answers `UIItemWindowRequest.Query` — its `Sorts` are what the head
 
 A column that says `filterable: true` gets a filter: a text match for a text column, a from and a to for a number, money
 or date column, a select for a boolean or an enum column. A template column filters through `AddFilter(key, kind,
-choices)`, by the property its `sortPath` names. Every grid renders a built-in search bar over its header, matching free-text words across the grid's columns (`UIItemsQuery.Search`)
+choices)` (or `AddFilter<TRow>(r => r.Property, kind, choices)`), by the property its `sortPath` names. Every grid renders a built-in search bar over its header, matching free-text words across the grid's columns (`UIItemsQuery.Search`)
 unless `SetSearch(propertyPath)` narrows it to a single property; `SetSearchPlaceholder(text)` overrides its "Search"
 (`ui.grid.search`) placeholder. When any column is filterable or `SetColumnChooser` is enabled, the **Filters** (with active-filter
 count badge and **Clear filters** footer) and **Columns** flyout triggers sit inside the trailing end of the search bar as compact
