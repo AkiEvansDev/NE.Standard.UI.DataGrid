@@ -69,13 +69,12 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IPressab
     // Built with the grid: the search box is a standard part of every grid, matching all columns unless SetSearch narrows it to one.
     private readonly TextInputComponent _searchField;
     private readonly DataGridFilterComponent _searchFilter;
-    private UIPhrase _searchPlaceholder = UIDataGridWords.Search;
 
     /// <summary>Initializes the grid.</summary>
     protected DataGridComponent(string? id = null) : base(id)
     {
         _pager = new PagerComponent().SetTarget(Id);
-        _searchField = new TextInputComponent().SetSearch(_searchPlaceholder).SetShowFocusEdge(false).SetDebounceMilliseconds(300);
+        _searchField = new TextInputComponent().SetSearch(UIDataGridWords.Search).SetShowFocusEdge(false).SetDebounceMilliseconds(300);
         _searchFilter = new DataGridFilterComponent().SetKind(UIDataGridColumnKind.Text).AddChild(_searchField);
         SetRegion(SearchRegionName, _searchFilter);
     }
@@ -351,8 +350,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IPressab
     }
 
     /// <summary>
-    /// Draws a search box over the grid; what is typed matches <paramref name="propertyPath"/> as case-insensitive text, with every
-    /// term required.
+    /// Narrows the grid's built-in search box to <paramref name="propertyPath"/> as case-insensitive text, with every term required.
     /// </summary>
     public T SetSearch<TRow>(Expression<Func<TRow, object?>> propertyPath)
         => SetSearch(RecursivePath.FromExpression(propertyPath).ToString());
@@ -372,8 +370,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IPressab
     }
 
     /// <summary>
-    /// Sets the search box's placeholder in place of the grid's own word, before or after <see cref="SetSearch"/>; a string is the
-    /// author's text, a key with arguments a phrase.
+    /// Sets the search box's placeholder in place of the grid's default word; a string is the author's text, a key with arguments a phrase.
     /// </summary>
     public T SetSearchPlaceholder(UIPhrase text)
     {
@@ -382,7 +379,6 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IPressab
         if (!UIPhrase.HasWords(text))
             throw new ArgumentException("A placeholder needs words.", nameof(text));
 
-        _searchPlaceholder = text;
         _ = _searchField.SetPlaceholder(text);
 
         return Self;
