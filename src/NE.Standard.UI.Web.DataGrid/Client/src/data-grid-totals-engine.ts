@@ -45,9 +45,9 @@ export class DataGridTotalsEngine {
         this.shownRowSelector = `:scope > ${rowSelector(context.names)}:not(.${context.names.hiddenClass})`;
         this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector));
 
-        // Rows come and go, a filter hides one (its class), an edit changes a cell's value (its raw attribute), a window brings its
-        // answer (the host's attribute), a column is hidden or shown (the root's).
-        this.observer = context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, context.names.windowAggregates, context.names.tableHidden] }, grids => this.queue(grids));
+        // Rows come and go, a filter hides one (its class), an edit changes a cell's value (its raw attribute), a virtualized host
+        // patches or re-projects its items (its version attribute), a window brings its answer (the host's attribute), a column is hidden or shown (the root's).
+        this.observer = context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: ["class", RawValueAttribute, context.names.itemsVersion, context.names.windowAggregates, context.names.tableHidden] }, grids => this.queue(grids));
 
         // A language switch wrote the grid's packs again: a total is a number or a date in them too, whatever it was read from.
         this.stopStrings = context.strings.onChange(() => this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector), true));
@@ -92,20 +92,37 @@ export class DataGridTotalsEngine {
         const answered = windowed ? readAggregates(host, this.names) : null;
         // A virtualized host draws only the rows in view: the reading is over the items it holds, not over the page.
         const held = windowed ? null : this.rows.itemsOf(host);
-        const numbers = this.formatting.numbers.readCulture(grid);
-        const dates = this.formatting.temporal.readCulture(grid);
-
-        for (const total of totals) {
+        const specs = Array.from(totals, total => {
             const column = total.getAttribute(ColumnAttribute) ?? "";
-            const property = total.getAttribute(GridAttributes.property) ?? column;
-            const aggregate = (total.getAttribute(AggregateAttribute) ?? "") as Aggregate;
+
+            return {
+                total,
+                column,
+                property: total.getAttribute(GridAttributes.property) ?? column,
+                aggregate: (total.getAttribute(AggregateAttribute) ?? "") as Aggregate
+            };
+        });
+        const heldByProperty = !windowed && held !== null ? collectHeldValues(held, specs, this.rows, this.formatting.numbers) : null;
+        const domReading = !windowed && held === null ? collectDomValues(host, specs, this.shownRowSelector) : null;
+        let numbers: ReturnType<NumberFormatting["readCulture"]> | null = null;
+        let dates: ReturnType<CellFormatting["temporal"]["readCulture"]> | null = null;
+
+        for (const { total, column, property, aggregate } of specs) {
             // A window is one of many: only the source can total it, and a blank beats the window's sum shown as the column's.
             const value = windowed
-                ? answered?.[property] ?? null
+                ? answered !== null && Object.hasOwn(answered, property) ? answered[property] : null
                 : held !== null
-                    ? aggregate === "count" ? held.length : aggregateOf(aggregate, heldValues(held, property, this.rows, this.formatting.numbers))
-                    : aggregate === "count" ? host.querySelectorAll(this.shownRowSelector).length : aggregateOf(aggregate, rawValues(host, column, this.shownRowSelector));
-            const text = value === null ? "" : formatCellValue(value, readCellShape(total), numbers, dates, this.formatting);
+                    ? aggregate === "count" ? held.length : aggregateOf(aggregate, heldByProperty!.get(property) ?? [])
+                    : aggregate === "count" ? domReading!.count : aggregateOf(aggregate, domReading!.byColumn.get(column) ?? []);
+            let text = "";
+
+            if (value !== null) {
+                const shape = readCellShape(total);
+                const numberCulture = shape.kind === "number" || shape.kind === "money" ? (numbers ??= this.formatting.numbers.readCulture(grid)) : (null as never);
+                const dateCulture = shape.kind === "date" ? (dates ??= this.formatting.temporal.readCulture(grid)) : (null as never);
+
+                text = formatCellValue(value, shape, numberCulture, dateCulture, this.formatting);
+            }
 
             if (total.textContent !== text)
                 total.textContent = text;
@@ -173,33 +190,60 @@ function readAggregates(host: Element, names: DomNames): Readonly<Record<string,
     }
 }
 
-/** The values of one property over the items a host holds whole, read as a cell reads its number; an item with none is skipped. */
-function heldValues(items: readonly unknown[], property: string, rows: ItemRows, numbers: NumberFormatting): number[] {
-    const values: number[] = [];
+/** Collects numeric values for all non-count totals in a single pass over `items`. */
+function collectHeldValues(items: readonly unknown[], specs: readonly { readonly property: string; readonly aggregate: Aggregate }[], rows: ItemRows, numbers: NumberFormatting): Map<string, number[]> {
+    const byProperty = new Map<string, number[]>();
+
+    for (const spec of specs) {
+        if (spec.aggregate !== "count" && !byProperty.has(spec.property))
+            byProperty.set(spec.property, []);
+    }
+
+    if (byProperty.size === 0)
+        return byProperty;
+
+    const entries = [...byProperty.entries()];
 
     for (const item of items) {
-        const value = toNumber(rows.readPath(item, property), numbers);
+        for (const [property, bucket] of entries) {
+            const value = toNumber(rows.readPath(item, property), numbers);
 
-        if (value !== null)
-            values.push(value);
+            if (value !== null)
+                bucket.push(value);
+        }
     }
 
-    return values;
+    return byProperty;
 }
 
-/** The raw values of one column's cells, over the rows the filters leave; a cell with no number is skipped. */
-function rawValues(host: Element, column: string, shownRowSelector: string): number[] {
-    const values: number[] = [];
+/** Collects raw cell numbers for all non-count totals in a single pass over visible DOM rows. */
+function collectDomValues(host: Element, specs: readonly { readonly column: string; readonly aggregate: Aggregate }[], shownRowSelector: string): { readonly count: number; readonly byColumn: Map<string, number[]> } {
+    const shownRows = host.querySelectorAll<HTMLElement>(shownRowSelector);
+    const byColumn = new Map<string, number[]>();
+    const selectors: { readonly selector: string; readonly bucket: number[] }[] = [];
 
-    for (const row of host.querySelectorAll<HTMLElement>(shownRowSelector)) {
-        const cell = row.querySelector(`:scope > [${ColumnAttribute}="${CSS.escape(column)}"] [${RawValueAttribute}]`);
-        const value = cell === null ? Number.NaN : Number(cell.getAttribute(RawValueAttribute));
+    for (const spec of specs) {
+        if (spec.aggregate !== "count" && !byColumn.has(spec.column)) {
+            const bucket: number[] = [];
 
-        if (Number.isFinite(value))
-            values.push(value);
+            byColumn.set(spec.column, bucket);
+            selectors.push({ selector: `:scope > [${ColumnAttribute}="${CSS.escape(spec.column)}"] [${RawValueAttribute}]`, bucket });
+        }
     }
 
-    return values;
+    if (selectors.length > 0) {
+        for (const row of shownRows) {
+            for (const { selector, bucket } of selectors) {
+                const cell = row.querySelector(selector);
+                const value = cell === null ? Number.NaN : Number(cell.getAttribute(RawValueAttribute));
+
+                if (Number.isFinite(value))
+                    bucket.push(value);
+            }
+        }
+    }
+
+    return { count: shownRows.length, byColumn };
 }
 
 /** One number over the values, or null with none to work from — a count is the one that is never null. */

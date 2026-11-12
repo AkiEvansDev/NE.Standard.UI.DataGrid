@@ -114,3 +114,40 @@ test("a language switch draws a number and a date cell again in the packs writte
     assert.equal(amount.textContent, "1.234,5");
     assert.equal(due.textContent, "сентябрь 2026");
 });
+
+test("enum and boolean choice lookups ignore Object.prototype keys and plain text cells do not walk ancestors for cultures", () => {
+    const choice = { kind: "enum", format: null, currency: null, choices: { Open: "Open" } };
+
+    assert.equal(formatCellValue("constructor", choice, corpus.numberCulture, corpus.temporalCulture, formatting), "constructor");
+    assert.equal(formatCellValue("toString", choice, corpus.numberCulture, corpus.temporalCulture, formatting), "toString");
+    assert.equal(formatCellValue("__proto__", choice, corpus.numberCulture, corpus.temporalCulture, formatting), "__proto__");
+
+    let cultureReads = 0;
+    const countingFormatting: CellFormatting = {
+        ...formatting,
+        numbers: {
+            ...formatting.numbers,
+            readCulture: cell => {
+                cultureReads++;
+                return formatting.numbers.readCulture(cell);
+            }
+        },
+        temporal: {
+            ...formatting.temporal,
+            readCulture: cell => {
+                cultureReads++;
+                return formatting.temporal.readCulture(cell);
+            }
+        }
+    };
+    const textCell = FakeElement.of("", { "data-ui-grid-kind": "text" });
+    const enumCell = FakeElement.of("", { "data-ui-grid-kind": "enum", "data-ui-grid-choices": "{\"constructor\":\"Ctor\"}" });
+
+    applyCellValue(real(textCell), "plain", countingFormatting);
+    applyCellValue(real(enumCell), "toString", countingFormatting);
+    assert.equal(cultureReads, 0);
+    assert.equal(enumCell.textContent, "toString");
+
+    applyCellValue(real(enumCell), "constructor", countingFormatting);
+    assert.equal(enumCell.textContent, "Ctor");
+});

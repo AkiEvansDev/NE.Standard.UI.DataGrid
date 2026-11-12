@@ -116,7 +116,7 @@ public class DataGridComponentRenderer : TableComponentRenderer
                 continue;
             }
 
-            rules ??= new(StringComparer.Ordinal);
+            rules ??= [with(StringComparer.Ordinal)];
             rules[editable.Key] = new CellRules(slot.RootComponentId.Value, path);
         }
 

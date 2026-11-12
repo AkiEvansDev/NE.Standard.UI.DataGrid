@@ -358,7 +358,7 @@ internal sealed class SubscriptionSource : UIItemSourceBase<Subscription>
     private UIItemsQuery? _query;
 
     // The rows this page's viewer edited, over the catalogue every page reads.
-    private readonly Dictionary<string, SubscriptionRecord> _edits = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SubscriptionRecord> _edits = [with(StringComparer.Ordinal)];
     private SubscriptionRecord[] _ordered = [];
 
     // What the footer asks over the whole query — the count, the seats, the monthly total — computed once per query beside the order.

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NE.Standard.UI.Abstractions.Items;
 using NE.Standard.UI.Abstractions.Styling;
@@ -73,7 +74,7 @@ public record UIDataGridColumn(string Key, UIPhrase? Caption, UIGridUnit Width, 
     /// What a column with no caption is called — by the sort's name, the chooser and a CSV's header: the last step of
     /// <see cref="EffectiveSortPath"/> in words, else its key.
     /// </summary>
-    public string FallbackCaption => EffectiveSortPath is { } path ? UINaming.Humanize(path[(path.LastIndexOf('.') + 1)..]) : Key;
+    public string FallbackCaption => EffectiveSortPath is { } path ? UINaming.Humanize(path[(path.LastIndexOf('.', StringComparison.Ordinal) + 1)..]) : Key;
 
     /// <summary>The template-variant key an editable column's editor renders through.</summary>
     public string EditTemplateKey => $"{EditTemplatePrefix}:{Key}";

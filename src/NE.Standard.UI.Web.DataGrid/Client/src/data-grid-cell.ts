@@ -28,22 +28,45 @@ export function readCellShape(cell: Element): CellShape {
     };
 }
 
+const MaxChoicesCache = 256;
+const choicesCache = new Map<string, Readonly<Record<string, WrittenWords>> | null>();
+
 function parseChoices(text: string | null): Readonly<Record<string, WrittenWords>> | null {
     if (text === null || text.length === 0)
         return null;
 
+    if (choicesCache.has(text))
+        return choicesCache.get(text) ?? null;
+
+    let parsed: Readonly<Record<string, WrittenWords>> | null = null;
+
     try {
-        return JSON.parse(text) as Record<string, WrittenWords>;
+        const raw = JSON.parse(text) as unknown;
+
+        if (raw !== null && typeof raw === "object" && !Array.isArray(raw))
+            parsed = Object.freeze(Object.assign(Object.create(null) as Record<string, WrittenWords>, raw));
     }
     catch {
-        return null;
+        parsed = null;
     }
+
+    if (choicesCache.size >= MaxChoicesCache)
+        choicesCache.clear();
+
+    choicesCache.set(text, parsed);
+
+    return parsed;
 }
+
+const UnusedNumberCulture = null as unknown as NumberCulturePack;
+const UnusedTemporalCulture = null as unknown as TemporalCulturePack;
 
 /** Writes the value into the cell, formatted; guarded by what the cell already shows, since an attach replays the whole change set. */
 export function applyCellValue(cell: Element, value: unknown, formatting: CellFormatting): void {
     const shape = readCellShape(cell);
-    const text = formatCellValue(value, shape, formatting.numbers.readCulture(cell), formatting.temporal.readCulture(cell), formatting);
+    const numbers = shape.kind === "number" || shape.kind === "money" ? formatting.numbers.readCulture(cell) : UnusedNumberCulture;
+    const dates = shape.kind === "date" ? formatting.temporal.readCulture(cell) : UnusedTemporalCulture;
+    const text = formatCellValue(value, shape, numbers, dates, formatting);
 
     if (cell.textContent !== text)
         cell.textContent = text;
@@ -126,13 +149,14 @@ export function formatCellValue(value: unknown, shape: CellShape, numbers: Numbe
         case "boolean": {
             // The captions are keyed by the two words; they come as the author wrote them, and are the page's words once looked up or filled.
             const flag = isTrue(value);
-            const caption = shape.choices?.[flag ? "true" : "false"];
+            const key = flag ? "true" : "false";
+            const caption = shape.choices !== null && Object.hasOwn(shape.choices, key) ? shape.choices[key] : undefined;
 
             return caption === undefined ? formatting.strings.text(flag ? GridWords.yes : GridWords.no) : formatting.strings.resolve(caption);
         }
         case "enum": {
             const text = String(value);
-            const caption = shape.choices?.[text];
+            const caption = shape.choices !== null && Object.hasOwn(shape.choices, text) ? shape.choices[text] : undefined;
 
             return caption === undefined ? text : formatting.strings.resolve(caption);
         }

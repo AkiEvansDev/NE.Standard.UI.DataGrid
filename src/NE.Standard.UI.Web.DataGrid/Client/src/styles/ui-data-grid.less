@@ -160,6 +160,17 @@
         flex: 0 0 auto;
     }
 
+    // Divided from the search box like a field's trailing control (`.ui-field-divided-end` in mixins/field.less): a 1 px rule inset
+    // 4 px from the band's outer edge, drawn only on the first flyout after the search box.
+    .ui-data-grid__band > .ui-data-grid__filter + .ui-flyout {
+        align-self: stretch;
+        align-content: center;
+        height: auto;
+        margin-block: calc(@ui-space-1 - var(--ui-border-width, 1px));
+        padding-inline-start: @ui-space-1;
+        border-inline-start: 1px solid var(--ui-color-border);
+    }
+
 // Trailing action buttons inside the search bar (`UIButtonVariant.Ghost`, `UISize.Small`), square when alone and widened when the filter count shows.
 .ui-data-grid__band-button {
     min-width: @ui-button-height-sm;

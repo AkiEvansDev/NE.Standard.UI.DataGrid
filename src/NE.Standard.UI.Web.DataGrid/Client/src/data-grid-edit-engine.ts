@@ -104,7 +104,7 @@ export class DataGridEditEngine {
         for (const cell of root.querySelectorAll<HTMLElement>(EditableCellSelector))
             this.markTwoLine(cell);
 
-        const twoLineObserver = context.observeComponents(root, EditableCellSelector, { childList: true, attributeFilter: [this.names.textDescription] }, cells => {
+        const twoLineObserver = context.observeComponents(root, EditableCellSelector, { childList: true, addedOnly: true, attributeFilter: [this.names.textDescription] }, cells => {
             for (const cell of cells)
                 this.markTwoLine(cell);
         });

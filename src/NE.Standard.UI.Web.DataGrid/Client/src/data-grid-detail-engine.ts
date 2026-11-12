@@ -140,6 +140,9 @@ export class DataGridDetailEngine {
      */
     private markAll(grids: Iterable<HTMLElement>): void {
         for (const grid of grids) {
+            if (grid.querySelector(ChevronSelector) === null)
+                continue;
+
             for (const chevron of this.ownDescendants(grid, ChevronSelector, RootSelector)) {
                 const row = chevron.closest<HTMLElement>(this.rowSelector);
 

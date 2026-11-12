@@ -34,7 +34,7 @@ export class DataGridVerdictEngine {
 
         // A row drawn, a cell written anew, an editor taken off: the row is judged again, before the page paints. The verdict's own
         // box and words are no change of the row's.
-        this.observer = context.observeComponents(context.root, rowSelector(context.names), { childList: true, characterData: true, relevant: mutation => !this.isVerdictWrite(mutation) }, rows => {
+        this.observer = context.observeComponents(context.root, `${RootSelector} ${rowSelector(context.names)}`, { childList: true, characterData: true, relevant: mutation => !this.isVerdictWrite(mutation) }, rows => {
             for (const row of rows)
                 this.judgeRow(row);
         });
@@ -59,9 +59,20 @@ export class DataGridVerdictEngine {
         if (target !== null && target.closest(`.${ClientNames.verdictClass}`) !== null)
             return true;
 
-        const nodes = [...mutation.addedNodes, ...mutation.removedNodes];
+        if (mutation.addedNodes.length === 0 && mutation.removedNodes.length === 0)
+            return false;
 
-        return nodes.length > 0 && nodes.every(node => node instanceof Element && node.classList.contains(ClientNames.verdictClass));
+        for (const node of mutation.addedNodes) {
+            if (!(node instanceof Element) || !node.classList.contains(ClientNames.verdictClass))
+                return false;
+        }
+
+        for (const node of mutation.removedNodes) {
+            if (!(node instanceof Element) || !node.classList.contains(ClientNames.verdictClass))
+                return false;
+        }
+
+        return true;
     }
 
     /** Each editable cell of one of a grid's own rows, judged by its editor's rules against the row's value. */

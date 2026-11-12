@@ -29,7 +29,7 @@ test("a least or greatest over more values than a call can take as arguments sti
 });
 
 /** A grid over a virtualized host holding `items`, a sum of their seats in its footer, and how often its totals read the items. */
-function virtualizedGrid(items: readonly { readonly Seats: number }[]): { grid: FakeElement; total: FakeElement; reads: () => number; mutate: () => void; switchLanguage: () => void; held: { version: number } } {
+function virtualizedGrid(items: readonly { readonly Seats: number }[]): { grid: FakeElement; total: FakeElement; reads: () => number; mutate: () => void; switchLanguage: () => void; held: { version: number }; observedAttributes: readonly string[] } {
     const total = FakeElement.of(GridClasses.total, { [GridAttributes.aggregate]: "sum", [GridAttributes.column]: "Seats" });
     const host = FakeElement.of("", { "data-ui-items-host": "", "data-ui-host-mode": "virtualized" });
     const grid = FakeElement.of("ui-data-grid").append(FakeElement.of("ui-table__scroll").append(host, FakeElement.of(GridClasses.footer).append(total)));
@@ -37,6 +37,7 @@ function virtualizedGrid(items: readonly { readonly Seats: number }[]): { grid: 
     const held = { version: 1 };
     let reads = 0;
     let observed: ((grids: Iterable<FakeElement>) => void) | null = null;
+    let observedAttributes: readonly string[] = [];
     let switched: (() => void) | null = null;
 
     fakeDocument.body.replaceChildren(root);
@@ -49,6 +50,7 @@ function virtualizedGrid(items: readonly { readonly Seats: number }[]): { grid: 
             tableRowClass: "ui-table__row",
             itemsHost: "data-ui-items-host",
             hostMode: "data-ui-host-mode",
+            itemsVersion: "data-ui-items-version",
             windowAggregates: "data-ui-window-aggregates",
             tableHidden: "data-ui-table-hidden"
         },
@@ -60,7 +62,8 @@ function virtualizedGrid(items: readonly { readonly Seats: number }[]): { grid: 
             itemsVersion: () => held.version,
             readPath: (item: Record<string, unknown>, path: string) => item[path]
         },
-        observeComponents: (_root: FakeElement, _selector: string, _init: unknown, handler: (grids: Iterable<FakeElement>) => void) => {
+        observeComponents: (_root: FakeElement, _selector: string, init: { attributeFilter?: readonly string[] }, handler: (grids: Iterable<FakeElement>) => void) => {
+            observedAttributes = init.attributeFilter ?? [];
             observed = handler;
             return null;
         },
@@ -75,13 +78,14 @@ function virtualizedGrid(items: readonly { readonly Seats: number }[]): { grid: 
 
     new DataGridTotalsEngine(real<PluginEngineContext>(context), real<CellFormatting>(formatting));
 
-    return { grid, total, reads: () => reads, mutate: () => observed?.([grid]), switchLanguage: () => switched?.(), held };
+    return { grid, total, reads: () => reads, mutate: () => observed?.([grid]), switchLanguage: () => switched?.(), held, observedAttributes };
 }
 
 test("a virtualized grid's totals read its items again only when they moved, a column was hidden or the language switched; never for a scroll", () => {
     const items = [{ Seats: 3 }, { Seats: 4 }];
-    const { grid, total, reads, mutate, switchLanguage, held } = virtualizedGrid(items);
+    const { grid, total, reads, mutate, switchLanguage, held, observedAttributes } = virtualizedGrid(items);
 
+    assert.ok(observedAttributes.includes("data-ui-items-version"));
     assert.equal(total.textContent, "7");
     assert.equal(reads(), 1);
 

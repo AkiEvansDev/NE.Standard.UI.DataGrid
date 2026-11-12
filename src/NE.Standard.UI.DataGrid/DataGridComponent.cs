@@ -219,7 +219,7 @@ public abstract partial class DataGridComponent<T> : TableComponent<T>, IPressab
     /// <summary>The chooser's menu, built once the chooser is asked for and kept level with the columns as they are added.</summary>
     private void RefreshChooser()
     {
-        List<MenuItem> entries = new(Columns.Count);
+        List<MenuItem> entries = [with(Columns.Count)];
 
         for (var i = 0; i < Columns.Count; i++)
         {

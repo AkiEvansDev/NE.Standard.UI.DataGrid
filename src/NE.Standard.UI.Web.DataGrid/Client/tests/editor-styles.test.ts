@@ -98,3 +98,14 @@ test("the filters' panel keeps no cap of its own: the core holds the flyout insi
     assert.doesNotMatch(panel, /max-width/);
     assert.match(declarations(".ui-data-grid__filter-panel > .ui-data-grid__filter") ?? "", /flex-wrap: wrap;/);
 });
+
+test("the search band divides its trailing flyout buttons from the search input with a 4 px-inset 1 px rule", () => {
+    const divider = declarations(".ui-data-grid__band > .ui-data-grid__filter + .ui-flyout") ?? "";
+
+    assert.match(divider, /align-self: stretch;/);
+    assert.match(divider, /align-content: center;/);
+    assert.match(divider, /height: auto;/);
+    assert.match(divider, /margin-block: calc\(0\.25rem - var\(--ui-border-width, 1px\)\);/);
+    assert.match(divider, /padding-inline-start: 0\.25rem;/);
+    assert.match(divider, /border-inline-start: 1px solid var\(--ui-color-border\);/);
+});
