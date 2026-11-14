@@ -109,3 +109,9 @@ test("the search band divides its trailing flyout buttons from the search input 
     assert.match(divider, /padding-inline-start: 0\.25rem;/);
     assert.match(divider, /border-inline-start: 1px solid var\(--ui-color-border\);/);
 });
+
+test("an expand-on-click grid offers a pointer cursor only while neither the grid nor the row is disabled or loading", () => {
+    const expandClick = declarations(".ui-data-grid:not(.ui-disabled, .ui-loading)[data-ui-grid-expand-click] > .ui-table__scroll > [data-ui-items-host] > .ui-table__row:where(:not(.ui-disabled, .ui-loading, [data-ui-row-idle])) > .ui-table__cell:not([data-ui-no-row-open])") ?? "";
+
+    assert.match(expandClick, /cursor: pointer;/);
+});

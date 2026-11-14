@@ -467,7 +467,7 @@
 
     // A row that opens on a click says so under the pointer, except over a cell that answers the click itself. The grid's own
     // rows only: a grid in a row's detail says so for itself.
-    .ui-data-grid[data-ui-grid-expand-click] > .ui-table__scroll > [data-ui-items-host] > .ui-table__row > .ui-table__cell:not([data-ui-no-row-open]) {
+    .ui-data-grid:not(.ui-disabled, .ui-loading)[data-ui-grid-expand-click] > .ui-table__scroll > [data-ui-items-host] > .ui-table__row@{ui-row-live} > .ui-table__cell:not([data-ui-no-row-open]) {
         cursor: pointer;
     }
 
