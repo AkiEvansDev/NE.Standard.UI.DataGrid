@@ -8,6 +8,7 @@
 
   <Folder Name="/examples/">
     <Project Path="examples/DemoApp.DataGrid/DemoApp.DataGrid.csproj" />
+    <Project Path="examples/DemoApp.DataGrid.Desktop/DemoApp.DataGrid.Desktop.csproj" />
     <Project Path="examples/DemoApp.DataGrid.Web/DemoApp.DataGrid.Web.csproj" />
   </Folder>
 
