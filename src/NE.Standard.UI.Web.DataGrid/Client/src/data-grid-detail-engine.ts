@@ -46,8 +46,8 @@ export class DataGridDetailEngine {
         this.ensureId = context.dom.ensureId;
         this.rowSelector = rowSelector(context.names);
 
-        this.markAll(root.querySelectorAll<HTMLElement>(RootSelector));
-        this.observer = context.observeComponents(root, RootSelector, { childList: true }, grids => this.markAll(grids));
+        this.markChevrons(root.querySelectorAll<HTMLElement>(`${RootSelector} ${ChevronSelector}`));
+        this.observer = context.observeComponents(root, `${RootSelector} ${ChevronSelector}`, { childList: true, addedOnly: true }, chevrons => this.markChevrons(chevrons));
 
         // Enter on the cursor's cell, which the core offers before it acts (`names.cellKey`): left to the row, it raises the row's open.
         // Enter on the chevron's cell presses the chevron instead, and one an editor took raises nothing.
@@ -138,20 +138,18 @@ export class DataGridDetailEngine {
      * Every chevron says its detail is in until it is opened, so a reader hears it as a disclosure from the start, and is named after
      * its row, as the row's box is, rather than "Details" in every row.
      */
-    private markAll(grids: Iterable<HTMLElement>): void {
-        for (const grid of grids) {
-            if (grid.querySelector(ChevronSelector) === null)
+    private markChevrons(chevrons: Iterable<HTMLElement>): void {
+        for (const chevron of chevrons) {
+            const row = chevron.closest<HTMLElement>(this.rowSelector);
+            const grid = gridOf(chevron);
+
+            if (row === null || grid === null || !isOwnRow(grid, row, this.names))
                 continue;
 
-            for (const chevron of this.ownDescendants(grid, ChevronSelector, RootSelector)) {
-                const row = chevron.closest<HTMLElement>(this.rowSelector);
+            if (!chevron.hasAttribute("aria-expanded"))
+                chevron.setAttribute("aria-expanded", "false");
 
-                if (!chevron.hasAttribute("aria-expanded"))
-                    chevron.setAttribute("aria-expanded", "false");
-
-                if (row !== null)
-                    nameByRow(chevron, row, this.ensureId);
-            }
+            nameByRow(chevron, row, this.ensureId);
         }
     }
 

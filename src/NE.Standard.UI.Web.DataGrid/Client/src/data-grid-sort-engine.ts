@@ -1,7 +1,7 @@
 // Sorting by header: a click writes the viewer's query, and the header cells show the sort the query holds, whoever wrote it.
 
 import type { ComponentStates, DomNames, PluginEngineContext } from "ne-standard-ui";
-import { gridOf, RootSelector, setAttribute } from "./data-grid-dom.ts";
+import { gridOf, outsideHostOrAddsGrid, RootSelector, setAttribute } from "./data-grid-dom.ts";
 import { ClientNames, GridAttributes, GridClasses } from "./data-grid-names.ts";
 import { readQuery, writeQuery } from "./data-grid-query.ts";
 import { cycleSort, sortStateOf } from "./data-grid-sort.ts";
@@ -25,7 +25,11 @@ export class DataGridSortEngine {
 
         this.syncAll(root.querySelectorAll<HTMLElement>(RootSelector));
         // The grids a navigation brings, and a query the server pushed: the attribute lives on an element inside the root.
-        this.observer = context.observeComponents(root, RootSelector, { childList: true, attributeFilter: [context.names.itemsQuery] }, grids => this.syncAll(grids));
+        this.observer = context.observeComponents(root, RootSelector, {
+            childList: true,
+            attributeFilter: [context.names.itemsQuery],
+            relevant: mutation => outsideHostOrAddsGrid(mutation, context.names)
+        }, grids => this.syncAll(grids));
 
         const onClick = (domEvent: Event): void => this.handleHeaderPress(domEvent, domEvent instanceof MouseEvent && domEvent.shiftKey);
         // Shift adds the column to the sort; another chord on a caption is not its press.

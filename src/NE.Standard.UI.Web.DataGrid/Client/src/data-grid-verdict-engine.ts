@@ -34,7 +34,7 @@ export class DataGridVerdictEngine {
 
         // A row drawn, a cell written anew, an editor taken off: the row is judged again, before the page paints. The verdict's own
         // box and words are no change of the row's.
-        this.observer = context.observeComponents(context.root, `${RootSelector} ${rowSelector(context.names)}`, { childList: true, characterData: true, relevant: mutation => !this.isVerdictWrite(mutation) }, rows => {
+        this.observer = context.observeComponents(context.root, `${RootSelector} ${rowSelector(context.names)}`, { childList: true, addedOnly: true, characterData: true, relevant: mutation => !this.isVerdictWrite(mutation) }, rows => {
             for (const row of rows)
                 this.judgeRow(row);
         });

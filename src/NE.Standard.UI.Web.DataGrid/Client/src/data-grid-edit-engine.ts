@@ -5,7 +5,7 @@
 // over its cell, showing the new value and taking nothing, until the commit is answered: the cell under it still holds the old one.
 
 import type { CellKey, ComponentStates, DomNames, FieldValidation, Focus, ItemRows, PluginEngineContext, ShortcutWords, ValueReading } from "ne-standard-ui";
-import { componentIdOf, gridOf, isOwnRow, RootSelector, rowSelector } from "./data-grid-dom.ts";
+import { componentIdOf, gridOf, isOwnRow, outsideHostOrAddsGrid, RootSelector, rowSelector } from "./data-grid-dom.ts";
 import { ClientNames, GridAttributes, GridClasses, GridEvents } from "./data-grid-names.ts";
 
 const EditableCellSelector = `.${GridClasses.editableCell}`;
@@ -150,7 +150,7 @@ export class DataGridEditEngine {
 
         // An editor whose row was redrawn reopens on the new row's cell with the draft put back, rather than losing the edit; a row
         // drawn while editing is off gives its double click back too. A grid that left the page takes its open editor with it.
-        const rowObserver = context.observeComponents(root, RootSelector, { childList: true, removed: () => this.prune() }, grids => {
+        const rowObserver = context.observeComponents(root, RootSelector, { childList: true, relevant: mutation => this.open.size > 0 || outsideHostOrAddsGrid(mutation, context.names), removed: () => this.prune() }, grids => {
             for (const grid of grids) {
                 this.followRow(grid);
                 this.syncClaims(grid);
@@ -264,6 +264,12 @@ export class DataGridEditEngine {
     }
 
     private markTwoLine(cell: HTMLElement): void {
+        const grid = gridOf(cell);
+
+        if (grid !== null && grid.hasAttribute(ReadOnlyAttribute)) {
+            this.unclaimed.add(grid);
+            cell.removeAttribute(this.names.noRowOpen);
+        }
         const twoLine = cell.querySelector(`[${this.names.textDescription}]`) !== null;
 
         if (cell.hasAttribute(ClientNames.twoLine) !== twoLine)

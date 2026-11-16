@@ -2,7 +2,7 @@
 // holds, and writes a pushed query back into them so they say what filters.
 
 import type { Badges, ComponentStates, DomNames, NumberFormatting, PluginEngineContext, PropertyWriting, ValueReading } from "ne-standard-ui";
-import { gridOf, RootSelector } from "./data-grid-dom.ts";
+import { gridOf, outsideHostOrAddsGrid, RootSelector } from "./data-grid-dom.ts";
 import { GridAttributes, GridClasses, ClientNames } from "./data-grid-names.ts";
 import { readQuery, readQueryText, writeQuery } from "./data-grid-query.ts";
 import type { FilterTerm } from "./data-grid-query.ts";
@@ -50,7 +50,11 @@ export class DataGridFilterEngine {
         this.fieldSelector = `[${context.names.componentId}]`;
 
         this.fillAll(root.querySelectorAll<HTMLElement>(RootSelector));
-        this.observer = context.observeComponents(root, RootSelector, { childList: true, attributeFilter: [context.names.itemsQuery] }, grids => this.fillAll(grids));
+        this.observer = context.observeComponents(root, RootSelector, {
+            childList: true,
+            attributeFilter: [context.names.itemsQuery],
+            relevant: mutation => outsideHostOrAddsGrid(mutation, context.names)
+        }, grids => this.fillAll(grids));
 
         const onClick = (domEvent: Event): void => {
             const clear = domEvent.target instanceof Element ? domEvent.target.closest<HTMLElement>(FiltersClearSelector) : null;

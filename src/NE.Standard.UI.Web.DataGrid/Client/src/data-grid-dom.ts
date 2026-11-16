@@ -23,7 +23,35 @@ export function gridOf(target: EventTarget | null): HTMLElement | null {
 
 /** One of the grid's own rows — in its host, not a table's inside a row's detail. */
 export function isOwnRow(grid: HTMLElement, row: Element, names: DomNames): boolean {
-    return row.parentElement !== null && row.parentElement === grid.querySelector(hostSelector(names));
+    const host = row.parentElement;
+    const scroll = host?.parentElement ?? null;
+
+    return host !== null && host.hasAttribute(names.itemsHost) && scroll !== null && scroll.classList.contains(names.tableScrollClass) && scroll.parentElement === grid;
+}
+
+/** Whether a node stands inside a grid's own items host rather than in its band, header, footer or pager. */
+function isInsideOwnHost(node: Node | null, names: DomNames): boolean {
+    const target = node instanceof Element ? node : node?.parentElement ?? null;
+
+    if (target === null)
+        return false;
+
+    const nearest = target.closest(`[${names.itemsHost}], ${RootSelector}`);
+
+    return nearest !== null && nearest.hasAttribute(names.itemsHost);
+}
+
+/** Skips row and spacer childList churn inside an items host unless a nested grid was mounted. */
+export function outsideHostOrAddsGrid(mutation: MutationRecord, names: DomNames): boolean {
+    if (mutation.type !== "childList" || !isInsideOwnHost(mutation.target, names))
+        return true;
+
+    for (const node of mutation.addedNodes) {
+        if (node instanceof Element && (node.matches(RootSelector) || node.querySelector(RootSelector) !== null))
+            return true;
+    }
+
+    return false;
 }
 
 /** The grid's component id, which the framework draws its variants by; null when the root carries none. */

@@ -2,7 +2,7 @@
 // hides below its tier unchecks itself.
 
 import type { ComponentStates, DomNames, OwnDescendants, PluginEngineContext, TableColumns } from "ne-standard-ui";
-import { gridOf, RootSelector } from "./data-grid-dom.ts";
+import { gridOf, outsideHostOrAddsGrid, RootSelector } from "./data-grid-dom.ts";
 import { DetailColumnKey, GridClasses } from "./data-grid-names.ts";
 
 export class DataGridChooserEngine {
@@ -45,7 +45,13 @@ export class DataGridChooserEngine {
         this.syncAll(context.root.querySelectorAll<HTMLElement>(RootSelector));
         // The style holds the viewer's column order (the framework's columns engine writes a variable per column), so the menu
         // follows a dragged column too.
-        this.observer = context.observeComponents(context.root, RootSelector, { childList: true, attributeFilter: [context.names.tableHidden, "style"] }, grids => this.syncAll(grids));
+        this.observer = context.observeComponents(context.root, RootSelector, {
+            childList: true,
+            attributeFilter: [context.names.tableHidden, "style"],
+            relevant: mutation => mutation.type === "attributes"
+                ? mutation.target instanceof Element && mutation.target.matches(RootSelector)
+                : outsideHostOrAddsGrid(mutation, context.names)
+        }, grids => this.syncAll(grids));
     }
 
     public dispose(): void {
