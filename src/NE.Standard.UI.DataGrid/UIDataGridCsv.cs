@@ -31,7 +31,10 @@ public static class UIDataGridCsv
 
     private static readonly ConcurrentDictionary<(Type RowType, string PropertyPath, bool IsNumericColumn), TypedCellReader?> TypedReaders = new();
 
-    /// <summary>Streams the CSV as UTF-8 behind a byte-order mark directly into <paramref name="destination"/> without buffering a full byte array.</summary>
+    private const int AsyncFlushCharThreshold = 8 * 1024;
+    private static readonly byte[] Utf8Preamble = [0xEF, 0xBB, 0xBF];
+
+    /// <summary>Streams the CSV as UTF-8 behind a byte-order mark directly into <paramref name="destination"/> without buffering a full byte array or synchronously flushing to the stream.</summary>
     public static async ValueTask WriteAsync(Stream destination, IReadOnlyList<UITableColumn> columns, IEnumerable rows, UIDataGridCsvOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(destination);
@@ -40,13 +43,75 @@ public static class UIDataGridCsv
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        StreamWriter writer = new(destination, Encoding.UTF8, bufferSize: 16 * 1024, leaveOpen: true);
+        StringBuilder chunk = new(AsyncFlushCharThreshold * 2);
+        using StringWriter writer = new(chunk, CultureInfo.InvariantCulture);
+        var encoded = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(AsyncFlushCharThreshold) + Utf8Preamble.Length);
+        var wrotePreamble = false;
 
-        await using (writer.ConfigureAwait(false))
+        try
         {
-            WriteCore(writer, columns, rows, options, cancellationToken);
-            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            UIDataGridCsvOptions settings = options ?? new UIDataGridCsvOptions();
+            List<(UITableColumn Column, string PropertyPath, bool IsNumericColumn)> written = CollectColumns(columns);
+
+            if (written.Count > 0)
+            {
+                WriteHeader(writer, settings, written);
+
+                Type? lastRowType = null;
+                TypedCellReader?[]? lastReaders = settings.Format is null ? new TypedCellReader?[written.Count] : null;
+                var rowIndex = 0;
+
+                foreach (var row in rows)
+                {
+                    if ((++rowIndex & 255) == 0)
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                    WriteRow(writer, settings, written, row, ref lastRowType, lastReaders);
+
+                    if (chunk.Length >= AsyncFlushCharThreshold)
+                    {
+                        encoded = await FlushChunkAsync(destination, chunk, encoded, !wrotePreamble, cancellationToken).ConfigureAwait(false);
+                        wrotePreamble = true;
+                    }
+                }
+            }
+
+            if (chunk.Length > 0 || !wrotePreamble)
+            {
+                encoded = await FlushChunkAsync(destination, chunk, encoded, !wrotePreamble, cancellationToken).ConfigureAwait(false);
+                wrotePreamble = true;
+            }
         }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(encoded);
+        }
+    }
+
+    private static async ValueTask<byte[]> FlushChunkAsync(Stream destination, StringBuilder chunk, byte[] encoded, bool writePreamble, CancellationToken cancellationToken)
+    {
+        if (writePreamble)
+            await destination.WriteAsync(Utf8Preamble, cancellationToken).ConfigureAwait(false);
+
+        foreach (ReadOnlyMemory<char> segment in chunk.GetChunks())
+        {
+            if (segment.IsEmpty)
+                continue;
+
+            var maxBytes = Encoding.UTF8.GetMaxByteCount(segment.Length);
+
+            if (encoded.Length < maxBytes)
+            {
+                ArrayPool<byte>.Shared.Return(encoded);
+                encoded = ArrayPool<byte>.Shared.Rent(maxBytes);
+            }
+
+            var byteCount = Encoding.UTF8.GetBytes(segment.Span, encoded);
+            await destination.WriteAsync(encoded.AsMemory(0, byteCount), cancellationToken).ConfigureAwait(false);
+        }
+
+        _ = chunk.Clear();
+        return encoded;
     }
 
     /// <summary>The file as UTF-8 behind a byte-order mark, which is what a spreadsheet needs to read it as UTF-8 at all.</summary>
@@ -84,6 +149,28 @@ public static class UIDataGridCsv
     private static void WriteCore(TextWriter writer, IReadOnlyList<UITableColumn> columns, IEnumerable rows, UIDataGridCsvOptions? options, CancellationToken cancellationToken)
     {
         UIDataGridCsvOptions settings = options ?? new UIDataGridCsvOptions();
+        List<(UITableColumn Column, string PropertyPath, bool IsNumericColumn)> written = CollectColumns(columns);
+
+        if (written.Count == 0)
+            return;
+
+        WriteHeader(writer, settings, written);
+
+        Type? lastRowType = null;
+        TypedCellReader?[]? lastReaders = settings.Format is null ? new TypedCellReader?[written.Count] : null;
+        var rowIndex = 0;
+
+        foreach (var row in rows)
+        {
+            if ((++rowIndex & 255) == 0)
+                cancellationToken.ThrowIfCancellationRequested();
+
+            WriteRow(writer, settings, written, row, ref lastRowType, lastReaders);
+        }
+    }
+
+    private static List<(UITableColumn Column, string PropertyPath, bool IsNumericColumn)> CollectColumns(IReadOnlyList<UITableColumn> columns)
+    {
         List<(UITableColumn Column, string PropertyPath, bool IsNumericColumn)> written = [];
 
         for (var i = 0; i < columns.Count; i++)
@@ -97,50 +184,45 @@ public static class UIDataGridCsv
             }
         }
 
-        if (written.Count == 0)
-            return;
+        return written;
+    }
 
+    private static void WriteHeader(TextWriter writer, UIDataGridCsvOptions settings, List<(UITableColumn Column, string PropertyPath, bool IsNumericColumn)> written)
+    {
         for (var i = 0; i < written.Count; i++)
             WriteField(writer, settings, i, Disarmed(Caption(written[i].Column, settings), settings));
 
         writer.Write("\r\n");
+    }
 
-        Type? lastRowType = null;
-        TypedCellReader?[]? lastReaders = settings.Format is null ? new TypedCellReader?[written.Count] : null;
-        var rowIndex = 0;
-
-        foreach (var row in rows)
+    private static void WriteRow(TextWriter writer, UIDataGridCsvOptions settings, List<(UITableColumn Column, string PropertyPath, bool IsNumericColumn)> written, object? row, ref Type? lastRowType, TypedCellReader?[]? lastReaders)
+    {
+        if (lastReaders is not null && row is not null and not IDictionary and not IDictionary<string, object?> and not IReadOnlyDictionary<string, object?>)
         {
-            if ((++rowIndex & 255) == 0)
-                cancellationToken.ThrowIfCancellationRequested();
-
-            if (lastReaders is not null && row is not null and not IDictionary and not IReadOnlyDictionary<string, object?>)
+            Type rowType = row.GetType();
+            if (rowType != lastRowType)
             {
-                Type rowType = row.GetType();
-                if (rowType != lastRowType)
-                {
-                    lastRowType = rowType;
-                    for (var i = 0; i < written.Count; i++)
-                        lastReaders[i] = GetTypedReader(rowType, written[i].PropertyPath, written[i].IsNumericColumn);
-                }
-
+                lastRowType = rowType;
                 for (var i = 0; i < written.Count; i++)
-                {
-                    TypedCellReader? reader = lastReaders[i];
-                    var cellText = reader is not null
-                        ? FormatFast(reader(row), settings)
-                        : CellSlow(written[i].Column, written[i].PropertyPath, row, settings);
-                    WriteField(writer, settings, i, cellText);
-                }
-            }
-            else
-            {
-                for (var i = 0; i < written.Count; i++)
-                    WriteField(writer, settings, i, CellSlow(written[i].Column, written[i].PropertyPath, row, settings));
+                    lastReaders[i] = GetTypedReader(rowType, written[i].PropertyPath, written[i].IsNumericColumn);
             }
 
-            writer.Write("\r\n");
+            for (var i = 0; i < written.Count; i++)
+            {
+                TypedCellReader? reader = lastReaders[i];
+                var cellText = reader is not null
+                    ? FormatFast(reader(row), settings)
+                    : CellSlow(written[i].Column, written[i].PropertyPath, row, settings);
+                WriteField(writer, settings, i, cellText);
+            }
         }
+        else
+        {
+            for (var i = 0; i < written.Count; i++)
+                WriteField(writer, settings, i, CellSlow(written[i].Column, written[i].PropertyPath, row, settings));
+        }
+
+        writer.Write("\r\n");
     }
 
     /// <summary>
@@ -253,7 +335,7 @@ public static class UIDataGridCsv
                 current = refVar;
             }
 
-            PropertyInfo? prop = ownerType.GetProperty(segment, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            PropertyInfo? prop = ItemContext.FindProperty(ownerType, segment);
             if (prop is null || !prop.CanRead || prop.GetIndexParameters().Length != 0)
                 return null;
 
