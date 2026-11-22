@@ -32,6 +32,8 @@ const names = {
 
 /** Where the core's cell cursor was moved to by the engine (`rows.moveCursor`): the rows, in order. */
 const moved: FakeElement[] = [];
+/** Which scopes were invalidated in the core's DOM registry (`dom.invalidate`) when restoring expanded details. */
+const invalidated: (FakeElement | undefined)[] = [];
 
 /** A grid whose rows open their detail on a click, one at a time, and the rows' cells to press; the first row has a chevron. */
 function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeElement[]; grid: FakeElement; chevron: FakeElement } {
@@ -45,6 +47,7 @@ function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeEle
     fakeWindow.listeners.clear();
     fakeWindow.timers.length = 0;
     moved.length = 0;
+    invalidated.length = 0;
     const grid = FakeElement.of("ui-data-grid", { [names.componentId]: "7", [GridAttributes.expandOnClick]: "" })
         .append(FakeElement.of(names.tableScrollClass).append(FakeElement.of("", { [names.itemsHost]: "" }).append(first, second)));
 
@@ -54,7 +57,8 @@ function createGrid(): { first: FakeElement; second: FakeElement; drawn: FakeEle
     const context = {
         root,
         dom: {
-            ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`)
+            ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`),
+            invalidate: (scope?: FakeElement) => invalidated.push(scope)
         },
         rows: {
             renderVariant: () => {
@@ -108,6 +112,7 @@ test("a double click puts the details back as they stood before its first click,
     assert.notEqual(shown, null);
     assert.equal(detailOf(first), shown);
     assert.equal(detailOf(second), null);
+    assert.deepEqual(invalidated, [first]);
 });
 
 test("an open detail is marked as no part of the row to lift, so a press in it never drags the row", () => {
@@ -235,7 +240,7 @@ test("a row's chevron is named by its words and the row's header cell, not \"Det
 
     new DataGridDetailEngine(real<PluginEngineContext>({
         root,
-        dom: { ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`) },
+        dom: { ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`), invalidate: () => undefined },
         rows: {},
         names,
         states: { isInert: () => false },
@@ -263,7 +268,7 @@ test("an inert grid ignores clicks, chevron presses and Enter detail toggles", (
     let nextId = 0;
     new DataGridDetailEngine(real<PluginEngineContext>({
         root,
-        dom: { ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`) },
+        dom: { ensureId: (element: FakeElement, prefix: string) => (element.id ||= `${prefix}${++nextId}`), invalidate: () => undefined },
         rows: {
             renderVariant: () => new FakeElement(),
             isKeyTarget: () => true,

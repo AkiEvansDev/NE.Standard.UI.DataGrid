@@ -45,7 +45,8 @@ public static class UIDataGridCsv
 
         StringBuilder chunk = new(AsyncFlushCharThreshold * 2);
         using StringWriter writer = new(chunk, CultureInfo.InvariantCulture);
-        var encoded = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(AsyncFlushCharThreshold) + Utf8Preamble.Length);
+        Encoder encoder = Encoding.UTF8.GetEncoder();
+        var encoded = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(AsyncFlushCharThreshold + 1) + Utf8Preamble.Length);
         var wrotePreamble = false;
 
         try
@@ -70,17 +71,13 @@ public static class UIDataGridCsv
 
                     if (chunk.Length >= AsyncFlushCharThreshold)
                     {
-                        encoded = await FlushChunkAsync(destination, chunk, encoded, !wrotePreamble, cancellationToken).ConfigureAwait(false);
+                        encoded = await FlushChunkAsync(destination, chunk, encoder, encoded, !wrotePreamble, finalFlush: false, cancellationToken).ConfigureAwait(false);
                         wrotePreamble = true;
                     }
                 }
             }
 
-            if (chunk.Length > 0 || !wrotePreamble)
-            {
-                encoded = await FlushChunkAsync(destination, chunk, encoded, !wrotePreamble, cancellationToken).ConfigureAwait(false);
-                wrotePreamble = true;
-            }
+            encoded = await FlushChunkAsync(destination, chunk, encoder, encoded, !wrotePreamble, finalFlush: true, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -88,7 +85,7 @@ public static class UIDataGridCsv
         }
     }
 
-    private static async ValueTask<byte[]> FlushChunkAsync(Stream destination, StringBuilder chunk, byte[] encoded, bool writePreamble, CancellationToken cancellationToken)
+    private static async ValueTask<byte[]> FlushChunkAsync(Stream destination, StringBuilder chunk, Encoder encoder, byte[] encoded, bool writePreamble, bool finalFlush, CancellationToken cancellationToken)
     {
         if (writePreamble)
             await destination.WriteAsync(Utf8Preamble, cancellationToken).ConfigureAwait(false);
@@ -98,7 +95,7 @@ public static class UIDataGridCsv
             if (segment.IsEmpty)
                 continue;
 
-            var maxBytes = Encoding.UTF8.GetMaxByteCount(segment.Length);
+            var maxBytes = Encoding.UTF8.GetMaxByteCount(segment.Length + 1);
 
             if (encoded.Length < maxBytes)
             {
@@ -106,8 +103,18 @@ public static class UIDataGridCsv
                 encoded = ArrayPool<byte>.Shared.Rent(maxBytes);
             }
 
-            var byteCount = Encoding.UTF8.GetBytes(segment.Span, encoded);
-            await destination.WriteAsync(encoded.AsMemory(0, byteCount), cancellationToken).ConfigureAwait(false);
+            encoder.Convert(segment.Span, encoded, flush: false, out _, out var byteCount, out _);
+
+            if (byteCount > 0)
+                await destination.WriteAsync(encoded.AsMemory(0, byteCount), cancellationToken).ConfigureAwait(false);
+        }
+
+        if (finalFlush)
+        {
+            encoder.Convert([], encoded, flush: true, out _, out var finalBytes, out _);
+
+            if (finalBytes > 0)
+                await destination.WriteAsync(encoded.AsMemory(0, finalBytes), cancellationToken).ConfigureAwait(false);
         }
 
         _ = chunk.Clear();
@@ -335,6 +342,9 @@ public static class UIDataGridCsv
                 current = refVar;
             }
 
+            if (IsDictionaryType(ownerType))
+                return null;
+
             PropertyInfo? prop = ItemContext.FindProperty(ownerType, segment);
             if (prop is null || !prop.CanRead || prop.GetIndexParameters().Length != 0)
                 return null;
@@ -375,6 +385,35 @@ public static class UIDataGridCsv
         }
 
         return Expression.Lambda<TypedCellReader>(body, rowParam).Compile();
+    }
+
+    private static bool IsDictionaryType(Type type)
+    {
+        if (typeof(IDictionary).IsAssignableFrom(type)
+            || typeof(IDictionary<string, object?>).IsAssignableFrom(type)
+            || typeof(IReadOnlyDictionary<string, object?>).IsAssignableFrom(type))
+        {
+            return true;
+        }
+
+        if (type.IsInterface && type.IsGenericType)
+        {
+            Type definition = type.GetGenericTypeDefinition();
+            if (definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>))
+                return true;
+        }
+
+        foreach (Type implemented in type.GetInterfaces())
+        {
+            if (!implemented.IsGenericType)
+                continue;
+
+            Type definition = implemented.GetGenericTypeDefinition();
+            if (definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>))
+                return true;
+        }
+
+        return false;
     }
 
     private static Expression? CreateFormatExpression(Expression valueExpr, Type leafType, bool isNumericColumn)

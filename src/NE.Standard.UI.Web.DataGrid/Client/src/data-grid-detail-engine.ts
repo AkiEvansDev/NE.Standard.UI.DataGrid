@@ -26,7 +26,7 @@ export class DataGridDetailEngine {
     private readonly states: ComponentStates;
     private readonly names: DomNames;
     private readonly ownDescendants: OwnDescendants;
-    private readonly ensureId: DomRegistry["ensureId"];
+    private readonly dom: DomRegistry;
     private readonly rowSelector: string;
     private readonly observer: MutationObserver | null;
     private readonly cleanups: (() => void)[] = [];
@@ -43,7 +43,7 @@ export class DataGridDetailEngine {
         this.states = context.states;
         this.names = context.names;
         this.ownDescendants = context.ownDescendants;
-        this.ensureId = context.dom.ensureId;
+        this.dom = context.dom;
         this.rowSelector = rowSelector(context.names);
 
         this.markChevrons(root.querySelectorAll<HTMLElement>(`${RootSelector} ${ChevronSelector}`));
@@ -149,7 +149,7 @@ export class DataGridDetailEngine {
             if (!chevron.hasAttribute("aria-expanded"))
                 chevron.setAttribute("aria-expanded", "false");
 
-            nameByRow(chevron, row, this.ensureId);
+            nameByRow(chevron, row, this.dom.ensureId);
         }
     }
 
@@ -214,6 +214,7 @@ export class DataGridDetailEngine {
             row.appendChild(detail);
             row.setAttribute(ExpandedAttribute, "");
             markExpanded(row, true);
+            this.dom.invalidate(row);
         }
     }
 
