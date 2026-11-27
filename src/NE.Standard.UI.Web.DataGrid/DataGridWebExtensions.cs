@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NE.Standard.UI.DataGrid;
 using NE.Standard.UI.Shell.Localization;
 using NE.Standard.UI.Web.Abstractions.Rendering;
 using NE.Standard.UI.Web.Renderers.Foundation;
@@ -24,6 +25,6 @@ public static class DataGridWebExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWebComponentRenderer, DataGridFilterRenderer>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IUIStringsSource, DataGridStrings>());
 
-        return services.AddPackageClient(AssemblyName, "ui-data-grid");
+        return services.AddPackageClient(AssemblyName, "ui-data-grid", DataGridComponent.ComponentTypeKey, DataGridCellComponent.ComponentTypeKey, DataGridFilterComponent.ComponentTypeKey);
     }
 }
